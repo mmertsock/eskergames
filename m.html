@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>Game</title>
+    <script defer src="g.js"></script>
+    <script defer src="g-m.js"></script>
+    <style type="text/css">
+    body {
+        font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
+        font-weight: 300;
+        margin: 0;
+        padding: 0;
+        color: hsl(0, 0%, 0%);
+        background-color: hsl(0, 0%, 100%);
+    }
+    controls, .board, main {
+        display: block;
+    }
+    main {
+        margin: 1em auto;
+        padding: 0;
+        width: 866px;
+    }
+
+    kbd {
+        font-family: "Menlo", "Monaco", "Source Code Pro", monospace;
+        font-size: 90%;
+    }
+
+    options {
+        display: block;
+    }
+    presets, custom {
+        display: block;
+    }
+    size, density, size canvas {
+        display: block;
+    }
+    value {
+        display: inline;
+    }
+    density canvas {
+        display: inline-block;
+        width: 8em;
+        height: .8em;
+    }
+
+    mineState:before {
+        content: ", ";
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    .perfect, buttons .go {
+        color: hsl(120, 50%, 40%);
+    }
+    .warning, buttons .warning {
+        color: hsl(0, 75%, 50%);
+    }
+
+    controls, options, .board {
+        margin: 1em auto;
+    }
+
+    buttons {
+        display: block;
+        margin: 0.5em;
+        text-align: left;
+    }
+    options buttons {
+        display: inline;
+    }
+    buttons a {
+        display: inline-block;
+        margin: 0.5em 0.5em 1em 0;
+        padding: 0.25em 0.5em;
+        border-radius: 0.35em;
+        border: 1px solid hsl(0, 0%, 50%);
+        background-color: hsl(0, 0%, 95%);
+        color: hsl(0, 0%, 0%);
+    }
+    buttons a:link, buttons a:hover, buttons a:active, buttons a:visited {
+        text-decoration: none;
+    }
+    buttons a:hover {
+        background-color: hsl(0, 0%, 85%);
+    }
+
+    prompt {
+        display: flex;
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        align-items: center;
+        font-size: 80%;
+        background-color: hsla(0, 0%, 0%, 0.3);
+    }
+    prompt panel {
+        display: block;
+        width: 30em;
+        max-width: 90%;
+        margin: 0 auto;
+        padding: 0.5em;
+        border-radius: 0.5em;
+        border: 1px solid hsl(0, 0%, 50%);
+        background-color: hsl(0, 0%, 100%);
+    }
+    h1 {
+        margin: 0.75em;
+        padding: 0;
+        text-align: center;
+        font-size: 120%;
+        font-weight: bolder;
+    }
+    prompt p, prompt div {
+        margin: 0.5em;
+        padding: 0;
+    }
+
+    buttons.promptButtons :first-child {
+        font-weight: bolder;
+    }
+    .unprioritized buttons.promptButtons {
+        text-align: center;
+    }
+    .unprioritized buttons.promptButtons :first-child {
+        font-weight: inherit;
+    }
+    buttons.promptButtons {
+        text-align: right;
+    }
+    buttons.promptButtons a {
+        margin-left: 0.5em;
+        margin-right: 0;
+    }
+    .unprioritized buttons.promptButtons a {
+        margin-left: 0.5em;
+        margin-right: 0.5em;
+    }
+    </style>
+</head>
+<body>
+
+<main>
+
+    <section id="root-Minesweeper" class="hidden">
+        <h1>Minesweeper</h1>
+        <controls>
+            <buttons>
+                <a href="#" class="newGameOptions">Options</a>
+                <a href="#" class="startNewGame hidden">New Game</a>
+                <a href="#" class="reset hidden">Start Over</a>
+                <a href="#" class="hint hidden">Hint</a>
+                <a href="#" class="help">Help</a>
+            </buttons>
+            <gameState></gameState><mineState class="hidden"></mineState>
+        </controls>
+        <canvas class="board"></canvas>
+        <help class="hidden">
+            <ul>
+                <li><kbd>Click</kbd> on a covered tile: reveal the tile</li>
+                <li><kbd>Shift-Click</kbd> on a covered tile: toggle flag</li>
+                <li><kbd>Shift-Click</kbd> on a cleared tile: clear neighbors if it has the correct number of flags</li>
+            </ul>
+        </help>
+        <options class="hidden">
+            <buttons class="presets"></buttons>
+            <custom>
+                <size>Size: <value></value> <canvas></canvas></size>
+                <density>Mines: <canvas></canvas> <value></value></density>
+            </custom>
+        </options>
+    </section>
+</main>
+
+<prompt class="hidden">
+    <panel>
+        <h1>(prompt title)</h1>
+        <p>(prompt message)</p>
+        <div>(custom content)</div>
+        <buttons class="promptButtons"></buttons>
+    </panel>
+</prompt>
+
+</body>
+</html>

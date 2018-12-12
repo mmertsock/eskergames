@@ -1,0 +1,34 @@
+terrainLayer:
+
+  # rect is x,y,width,height
+  - type: RectFillItem
+    rect: fillMap
+    fillStyle: hsl(40, 29%, 52%)
+    # the problem with the fillMap rect is that it will Always force a repaint of Everything.
+    # but to paint around an island you need all the crap below.
+    # maybe an item can declare that it "punches a hole" in another item, and in that case,
+    # the map loader will split up the punched item into rects?
+  # - type: RectFillItem
+  #   rect: [0,0,90,10] # bottom
+  #   fillStyle: hsl(35, 29%, 52%)
+  # - type: RectFillItem
+  #   rect: [0,10,7,30] # left
+  #   fillStyle: hsl(40, 29%, 52%)
+  # - type: RectFillItem
+  #   rect: [47,10,43,30] # right
+  #   fillStyle: hsl(45, 29%, 52%)
+  # - type: RectFillItem
+  #   rect: [0,40,90,10] # top
+  #   fillStyle: hsl(50, 29%, 52%)
+  #
+  # main coords of the town
+  - type: ContainerItem
+    rect: [7,10,40,30]
+    children:
+    - type: RectFillItem
+      rect: fillParent
+      fillStyle: hsl(140, 35%, 70%)
+      # TODO need to get the relative rect stuff working for painting.
+    - type: RectFillItem
+      rect: [2,2,3.2,2]
+      fillStyle: hsl(10, 50%, 30%)

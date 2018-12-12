@@ -1,0 +1,226 @@
+# play with stuff here: http://nodeca.github.io/js-yaml/
+
+############### GLOBAL CONFIG #############
+
+simDate:
+  longMonthStrings: [_,January,February,March,April,May,June,July,August,September,October,November,December]
+
+################ GAME RULES ###############
+
+gameRules:
+  difficulties:
+    easy:
+      startingCash: 20000
+  speeds:
+  - name: Snail
+    daysPerSecond: 1
+    glyph: 🐌
+  - name: Turtle
+    daysPerSecond: 2
+    glyph: 🐢
+    isDefault: true
+  - name: Hare
+    daysPerSecond: 6
+    glyph: 🐇
+  - name: Train
+    daysPerSecond: 15
+    glyph: 🚄
+
+################### PLOTS #################
+
+zones:
+  R:
+    genericName: Residential
+    plotSize: &ZONEPLOTSIZE
+      width: 3
+      height: 3
+    newPlotCost: 100
+    maxDensityLevel: 5
+    maxValueLevel: 4
+  C:
+    genericName: Commercial
+    plotSize: *ZONEPLOTSIZE
+    newPlotCost: 100
+    maxDensityLevel: 5
+    maxValueLevel: 5
+  I:
+    genericName: Industrial
+    plotSize: *ZONEPLOTSIZE
+    newPlotCost: 100
+    maxDensityLevel: 4
+    maxValueLevel: 3
+
+terrainProps:
+  tree:
+    genericName: Tree
+    plotSize: &ONEBYONE
+      width: 1
+      height: 1
+
+buildings:
+- id: police
+  genericName: Police Station
+  plotSize: *ZONEPLOTSIZE
+  newPlotCost: 500
+
+################## INPUTS #################
+
+inputController:
+  keyPressEvents:
+    - [[AnyShift,Slash], showGameHelp]
+    - [[Digit0], pauseResume]
+    - [[Digit1], setEngineSpeed, 0]
+    - [[Digit2], setEngineSpeed, 1]
+    - [[Digit3], setEngineSpeed, 2]
+    - [[Digit4], setEngineSpeed, 3]
+    - [[Minus], zoomOut]
+    - [[AnyShift,Minus], zoomOut]
+    - [[Equal], zoomIn]
+    - [[AnyShift,Equal], zoomIn]
+    - [[AnyShift,Digit1], setZoomLevel, 0]
+    - [[AnyShift,Digit2], setZoomLevel, 1]
+    - [[AnyShift,Digit3], setZoomLevel, 2]
+    - [[AnyShift,Digit4], setZoomLevel, 3]
+  continuousKeyEvents:
+    - [[ArrowUp], panMap, N]
+    - [[ArrowUp,ArrowRight], panMap, NE]
+
+################# MAP TOOLS ###############
+
+mapTools:
+  defaultPalette: [bulldozer, query, rZone, cZone, iZone]
+  singleClickMovementTolerance: 3
+  paletteStyle:
+    columns: 2
+    tileWidth: 24
+    fillStyle: gray
+    unselectedBasePainter: toolPaletteUnselectedBase
+    selectedBasePainter: toolPaletteSelectedBase
+  mapHighlightPainter: toolHighlight
+  definitions:
+    navigator:
+      isDefault: true
+      name: Pointer
+      palettePainter: toolPaletteItem
+      highlightGlyph: ◎
+      highlightRectRule: null
+      baseCost: 0
+      canPerformActionRule: always
+      actionCommand: centerMap
+    query:
+      name: Query Tool
+      palettePainter: toolPaletteItem
+      highlightGlyph: 🔍
+      highlightRectRule: singleTile
+      baseCost: 0
+      canPerformActionRule: always
+      hoverCommand: hoverQueryTool
+      actionCommand: performQueryTool
+    bulldozer:
+      name: Bulldozer
+      palettePainter: toolPaletteItem
+      highlightGlyph: 💣
+      highlightRectRule: entirePlotUnderCursor
+      baseCost: 0
+      costPerPropTile: 5
+      costPerEmptyZoneTile: 2
+      costPerBulidingTile: 10
+      canPerformActionRule: notEmpty
+      actionCommand: performBulldozeTool
+    rZone:
+      name: Residential Zone
+      palettePainter: toolPaletteItem
+      highlightGlyph: 🏠
+      highlightRectRule: singleTile #TODO
+      baseCost: 100
+      costPerPropTile: 5
+      canPerformActionRule: notEmpty
+      actionCommand: performPlopZoneTool
+    cZone:
+      name: Commercial Zone
+      palettePainter: toolPaletteItem
+      highlightGlyph: 🏬
+      highlightRectRule: singleTile #TODO
+      baseCost: 100
+      costPerPropTile: 5
+      canPerformActionRule: notEmpty
+      actionCommand: performPlopZoneTool
+    iZone:
+      name: Industrial Zone
+      palettePainter: toolPaletteItem
+      highlightGlyph: 🏭
+      highlightRectRule: singleTile #TODO
+      baseCost: 100
+      costPerPropTile: 5
+      canPerformActionRule: notEmpty
+      actionCommand: performPlopZoneTool
+
+#################### UI ###################
+
+mainMapView:
+  edgePaddingFillStyle: white
+  emptyFillStyle: hsl(33, 37%, 87%)
+  zoomLevels:
+  - tileWidth: 3
+  - tileWidth: 6
+  - tileWidth: 12
+    isDefault: true
+  - tileWidth: 24
+
+################## PAINTERS ###############
+
+# command, args...
+# units: p = device independent pixels. r = 0...1 relative size. px = device pixels.
+# stroke args: style, shape, thickness, thick units, coords, coord units.
+#   e.g. stroke,red,rect,1,p,0.25,0.25,0.5,0.5,r
+# fill args: style, shape, coords, coord units
+# text args: style, text size, size units, center coords, center units, text
+# poly args: stroke style, fill style, width, width units, coord units, x1, y1, x2, y2, ..., [close]
+painters:
+  toolPaletteUnselectedBase:
+    - [innerStroke,black,rect,1,p,0,0,1,1,r]
+  toolPaletteSelectedBase:
+    - [innerStroke,black,rect,2,p,0,0,1,1,r]
+    - [fill,"hsl(0,50%,60%)",rect,0,0,1,1,r]
+  toolPaletteItem:
+    - [text,black,0.5,r,0.5,0.5,r,"<highlightGlyph>"]
+  toolHighlight:
+    - [poly,black,,1,p, r, 0,0.3, 0,0, 0.3,0]
+    - [poly,black,,1,p, r, 0.7,0, 1,0, 1,0.3]
+    - [poly,black,,1,p, r, 1,0.7, 1,1, 0.7,1]
+    - [poly,black,,1,p, r, 0.3,1, 0,1, 0,0.7]
+    - [poly,,black,0,p, r, 1.1,1.1, 1.4,1.4, 1.25,1.4, 1.13,1.52]
+    - [text,black,0.75,tw,1.44,1.8,r,"<highlightGlyph>"]
+  zoneRd0v0:
+    - [fill,"hsl(0,50%,80%)",rect,0,0,1,1,r]
+    - [innerStroke,red,rect,1,p,0,0,1,1,r]
+    - [text,"hsl(0,60%,45%)",0.25,r,0.5,0.5,r,R]
+  zoneCd0v0:
+    - [fill,"hsl(240,50%,80%)",rect,0,0,1,1,r]
+    - [innerStroke,blue,rect,1,p,0,0,1,1,r]
+    - [text,"hsl(240,60%,45%)",0.25,r,0.5,0.5,r,C]
+  zoneId0v0:
+    - [fill,"hsl(50,60%,80%)",rect,0,0,1,1,r]
+    - [innerStroke,yellow,rect,1,p,0,0,1,1,r]
+    - [text,"hsl(50,60%,45%)",0.25,r,0.5,0.5,r,I]
+  proptree:
+    variants:
+      - - [fill,"hsl(35, 76%, 23%)",rect,0.4,0.5,0.2,0.5,r]
+        - [fill,"hsl(120, 35%, 50%)",ellipse,0.25,-0.1,0.5,0.8,r]
+      - - [fill,"hsl(35, 66%, 33%)",rect,0.4,0.5,0.2,0.5,r]
+        - [fill,"hsl(120, 55%, 45%)",ellipse,0.2,0.1,0.6,0.6,r]
+
+################## SCRIPTS ################
+
+scripts:
+- id: _beginGame
+  fireOnce: true
+  actions: []
+
+################## TERRAIN ################
+
+terrains:
+- id: _default
+  sizeInTiles:
+    width: 256
+    height: 256

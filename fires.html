@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title></title>
+    <script defer src="js-yaml.min.js"></script>
+    <script defer src="g.js"></script>
+    <script defer src="fires-content.js"></script>
+    <script defer src="fires.js"></script>
+    <style type="text/css">
+    body {
+        font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
+        font-weight: 300;
+        margin: 0;
+        padding: 0;
+        color: hsl(0, 0%, 0%);
+        background-color: hsl(0, 0%, 100%);
+    }
+    controls, .board, main {
+        display: block;
+    }
+    main {
+        margin: 1em auto;
+        padding: 0;
+        width: 866px;
+    }
+
+    kbd {
+        font-family: "Menlo", "Monaco", "Source Code Pro", monospace;
+        font-size: 90%;
+    }
+
+    options {
+        display: block;
+    }
+    value {
+        display: inline;
+    }
+
+    gameView, status {
+        display: block;
+    }
+    gameView {
+        margin: 1em auto;
+        padding: 0;
+        font-family: "PT Serif", "Baskerville", serif;
+        font-weight: normal;
+    }
+    gameView h2 {
+        height: 1.3em;
+        margin: 0;
+        padding: 0.5em;
+        font-size: 90%;
+        font-weight: bolder;
+        text-align: center;
+    }
+    gameView status {
+        margin: 0;
+        padding: 0.5em;
+        font-size: 80%;
+    }
+    scene {
+        position: relative;
+        background-color: hsl(0, 0%, 0%);
+    }
+    scene dialog {
+        display: flex;
+        position: absolute;
+        opacity: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        align-items: center;
+    }
+    scene dialog.presented {
+        opacity: 1;
+        transition: opacity 0.6s ease-out;
+    }
+    scene dialog.dismissed {
+        opacity: 0;
+        transition: opacity 0.6s ease-in;
+    }
+    scene dialog p {
+        min-width: 60%;
+        max-width: 90%;
+        margin: 0 auto;
+        padding: 0.5em;
+        text-align: center;
+        color: white;
+        background-color: hsla(0, 0%, 0%, 0.1);
+    }
+
+    gameView.willFadeIn h2,
+    canvas.willFadeIn {
+        opacity: 0;
+    }
+    gameView.willFadeIn.fadedIn h2,
+    canvas.willFadeIn.fadedIn {
+        opacity: 1;
+        transition: opacity 0.25s ease-out;
+    }
+    gameView.willFadeIn.fadingOut h2,
+    canvas.willFadeIn.fadingOut {
+        opacity: 0;
+        transition: opacity 0.25s ease-in;
+    }
+
+    .hidden {
+        display: none;
+    }
+
+    .perfect, buttons .go {
+        color: hsl(120, 50%, 40%);
+    }
+    .warning, buttons .warning {
+        color: hsl(0, 75%, 50%);
+    }
+
+    controls, options, .board {
+        margin: 1em auto;
+    }
+    scene {
+        display: block;
+        margin: 1em auto;
+        padding: 0;
+        width: 600px;
+        height: 320px;
+    }
+    scene canvas {
+        display: block;
+        margin: 0;
+        padding: 0;
+    }
+
+    buttons {
+        display: block;
+        margin: 0.5em;
+        text-align: left;
+    }
+    options buttons {
+        display: inline;
+    }
+    buttons a {
+        display: inline-block;
+        margin: 0.5em 0.5em 1em 0;
+        padding: 0.25em 0.5em;
+        border-radius: 0.35em;
+        border: 1px solid hsl(0, 0%, 50%);
+        background-color: hsl(0, 0%, 95%);
+        color: hsl(0, 0%, 0%);
+    }
+    buttons a:link, buttons a:hover, buttons a:active, buttons a:visited {
+        text-decoration: none;
+    }
+    buttons a:hover {
+        background-color: hsl(0, 0%, 85%);
+    }
+
+    frameRate {
+        display: block;
+        position: fixed;
+        bottom: 0.5em;
+        left: 0.5em;
+        height: 1.2em;
+        width: 10em;
+    }
+    frameRate2 {
+        display: block;
+        position: fixed;
+        bottom: 2.5em;
+        left: 0.5em;
+        height: 1.2em;
+        width: 90%;
+    }
+
+    prompt {
+        display: flex;
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        margin: 0;
+        padding: 0;
+        align-items: center;
+        font-size: 80%;
+        background-color: hsla(0, 0%, 0%, 0.3);
+    }
+    prompt panel {
+        display: block;
+        width: 30em;
+        max-width: 90%;
+        margin: 0 auto;
+        padding: 0.5em;
+        border-radius: 0.5em;
+        border: 1px solid hsl(0, 0%, 50%);
+        background-color: hsl(0, 0%, 100%);
+    }
+    h1 {
+        margin: 0.75em;
+        padding: 0;
+        text-align: center;
+        font-size: 120%;
+        font-weight: bolder;
+    }
+    prompt p, prompt div {
+        margin: 0.5em;
+        padding: 0;
+    }
+
+    buttons.promptButtons :first-child {
+        font-weight: bolder;
+    }
+    .unprioritized buttons.promptButtons {
+        text-align: center;
+    }
+    .unprioritized buttons.promptButtons :first-child {
+        font-weight: inherit;
+    }
+    buttons.promptButtons {
+        text-align: right;
+    }
+    buttons.promptButtons a {
+        margin-left: 0.5em;
+        margin-right: 0;
+    }
+    .unprioritized buttons.promptButtons a {
+        margin-left: 0.5em;
+        margin-right: 0.5em;
+    }
+    </style>
+</head>
+<body>
+
+<main>
+    <section id="root-FiresOfEmbora" class="hidden">
+        <h1>Fires of Embora</h1>
+        <controls>
+            <buttons>
+                <a href="#" class="startPauseResume">New Game/Pause/Resume</a>
+                <a href="#" class="help">Help</a>
+            </buttons>
+        </controls>
+        <gameView class="willFadeIn">
+            <h2></h2>
+            <scene></scene>
+            <status></status>
+        </gameView>
+        <frameRate2></frameRate2>
+        <frameRate></frameRate>
+        <options class="hidden">
+        </options>
+        <help class="hidden">
+            <ul>
+                <li><kbd>W S A D</kbd> or <kbd>↑ ↓ ← →</kbd>: Move up/down/left/right</li>
+                <li><kbd>P</kbd>: Pause/resume
+            </ul>
+        </help>
+        <dialog class="hidden">
+            <p>(text)</p>
+        </dialog>
+    </section>
+</main>
+
+<canvas id="testcanvas2" style="width: 400px; height: 100px; border: 1px solid black; position: absolute; bottom: 2.5em; left: 0.2em;"></canvas>
+
+<prompt class="hidden">
+    <panel>
+        <h1>(prompt title)</h1>
+        <p>(prompt message)</p>
+        <div>(custom content)</div>
+        <buttons class="promptButtons"></buttons>
+    </panel>
+</prompt>
+
+</body>
+</html>

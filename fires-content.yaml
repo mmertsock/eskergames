@@ -1,0 +1,172 @@
+# play with stuff here: http://nodeca.github.io/js-yaml/
+
+############### GLOBAL CONFIG #############
+
+game: hi
+
+################ PLAYER ###################
+
+player:
+  walkSpeed: 5
+
+################## MAPS ###################
+
+maps:
+
+- id: _blackScreen
+  name: ""
+  type: blank
+  size:
+    units: point
+    pointsPerUnit: 1
+    width: 900
+    height: 500
+  color: hsl(0, 0%, 0%)
+
+- id: firsensa
+  name: Village of Firsensa
+  type: town
+  size: &TOWNSIZE
+    units: meter
+    pointsPerUnit: 10
+    width: 90
+    height: 50
+  dataFile: map-firsensa.yaml
+
+- id: secondia
+  name: City of Secondia
+  type: town
+  size: *TOWNSIZE
+
+################# SCRIPTS #################
+
+scripts:
+
+- id: _beginGame
+  fireOnce: true
+  actions:
+    - [goToMap,_blackScreen]
+    - [showDialog,0,narration]
+    - [goToMap,firsensa,30,30]
+  dialogs:
+    - |
+      Link.
+
+      Link…
+
+      LINK!
+
+# example of a map item:
+
+temp:
+
+- item: RectFillItem
+  color: cccccc
+  rect: 0 0 90 50
+  # composing SceneItems. children not guaranteed to be within the bbox of the parent;
+  # so do dirtyflagging and stuff separately. But, coordinate values for these are relative
+  # to the parent. e.g. coords could have negative values.
+  children:
+  - item: ChestItem
+    # maybe, to make things more clear, "position" everywhere should be "center"?
+    # only if it really does represent the true center at all times. If not, more 
+    # generic "position" is better.
+    position: 5 10
+    # when doing checkAndExecute for a game script, we should send a "subject" argument
+    # (the Chest in this case), so the Script can act on the Subject (in this case, to 
+    # mark the Subject as opened). Maybe the fireOnce property of a script actually applies
+    # to the Subject: the script runs once for a given Subject (but can run again for others).
+    # Implement via a ScriptSubject mixin, apply it to the subjects (e.g. SceneItem, Game, etc.),
+    # and it implements e.g. hasScriptFired(scriptID) and scriptWillFire(scriptInstance), which
+    # works on a Set of script ID strings.
+    # Note that in order to do this successfully, things like SceneItems would need to save and 
+    # restore state. Since they will go away when you leave a map, and return later.
+    scripts:
+      onPlayerAction: [moneyChest,50]
+      onBecameVisible: ...
+      onPlayerCollision: ...
+  - item: ContainerItem
+      # ContainerItem is not rendered in any way. Just a logical grouping of items,
+      # positioned in a rect so that the child items can have relative coords.
+      # Could give a ContainerItem a unique ID and reuse it in multiple places 
+      # in order to construct reusable complex scene components.
+  - item: SceneryPropItem
+    type: treeMedium
+    position: 4 17
+  - item: ItemGenerator
+    rect: fillParent
+    distribution: centerWeightRandom
+    density: 0.3
+    template:
+      item: InteractiveSceneryPropItem #b/c you can cut the grass
+      type: grassTall
+      position: $generated
+
+# filling a non-rectangular area with copies of an item
+# example: (rotated 90°; columns are 5m each, rows are 10m each)
+# 0 1 2 3 4 5 6
+#0..............
+#1......DDDDDD..
+#2....AAAAAAAAAA
+#3...BAAAAAAAAAA
+#4...BAAAAAAAAAA
+#5..CBAAAAAAAAAA
+#6..CBAAAAAAAAAA
+#7...BAAAAAAAAAA
+#8...BAAAAAAAAAA
+#9....AAAAAAAAAA
+- item: SceneryTerrainItem
+  type: dirt
+  rects:
+    - [20,20,80,50] #A
+    - [30,15,60, 5] #B
+    - [50,10,20, 5] #C
+    - [10,30,10,30] #D
+# or
+- item: SceneryTerrainItem
+  type: dirt
+  rect: [20,20,80,50]
+  children:
+    - item: SceneryTerrainItem
+      type: dirt
+      rect: [10,-5,60,5]
+    # and also children with [30,-10,-20,5] and [-10,10,10,30]
+    # meh this is not great
+#so stick with the "rects" option as a shortcut to dupe an item.
+#could use it to dupe over non-connected regions too, just for brevity
+#the fuller alternative is arbitrary polygon rendering:
+- item: SceneryTerrainItem
+  type: dirt
+  poly: 20,20 30,15 50,10 70,10 90,15 100,20 100,70 20,70 10,60 10,30 20,20
+
+- scriptExample: ok
+  id: moneyChest
+  fireOnce: true
+  action: [winMoney,$arg0]
+- scriptExample: ok
+  id: emptyChest
+  fireOnce: false
+  # ok this is getting wonky. b/c there are many types of chest-contents scripts, but only one
+  # empty-chest script. So, the scriptHasRun thing here won't work well. Might need to actually
+  # have specific knowledge of chests and their empty/full state in the script engine, so there
+  # would be a chestIsEmpty predicate here.
+  predicate:
+    type: scriptHasRunOnSubject
+    scriptID: moneyChest
+# or maybe, the moneyChest script specifies a fallback script to run if its predicate fails.
+# is the concept of onPredicateFail useful for other stuff? maybe; e.g. a primary plot-coupon
+# dialog script for an NPC, but a fallback "hint" script if the player hasn't yet met the 
+# game goals needed to earn the plot coupon.
+- scriptExample: ok
+  id: anotherMoneyChest
+  fireOnce: true
+  onPredicateFail: emptyChest
+  # in addition to randomDialog, could have a cycleDialog option.
+  # cycleDialog stores the lastDialogIndex in the Subject's scriptState, and each 
+  # time you invoke the script on the Subject, you increment lastDialogIndex. Useful
+  # for the standard townfolk-conversation logic.
+  action: randomDialog
+  dialogs:
+    - Dang, nothing in the chest!
+    - Womp Womp
+    - The chest is empty.
