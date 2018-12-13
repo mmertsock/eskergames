@@ -358,7 +358,6 @@ class Game {
     }
 
     start() {
-        MapTool.initialize(this);
         this._configureCommmands();
         KeyInputController.shared.initialize(this);
         this.gameSpeedActivated(this.engineSpeed);
@@ -570,19 +569,6 @@ class MapTool {
 }
 
 MapTool.settings = () => GameContent.shared.mapTools;
-MapTool.initialize = (game) => {
-    var definitions = MapTool.settings().definitions;
-    var ids = Object.getOwnPropertyNames(definitions);
-    MapTool._allTools = [];
-    MapTool._idMap = {};
-    ids.forEach((id) => {
-        var tool = new MapTool(id, definitions[id]);
-        MapTool._allTools.push(tool);
-        MapTool._idMap[id] = tool;
-    });
-};
-MapTool.getAllTools = () => MapTool._allTools;
-MapTool.withID = (id) => MapTool._idMap[id];
 
 class MapToolSession {
     constructor(tool, preemptedSession) {
@@ -662,15 +648,28 @@ MapToolSession.InputResult = {
 
 class MapToolController {
     constructor(config) {
+        this.game = null;
+        this.canvasGrid = null;
+        this.defaultTool = null;
+        this._toolSession = null;
+        this._configureTools();
+    }
+
+    initialize(config) {
         this.game = config.game;
         this.canvasGrid = config.canvasGrid;
-        this.defaultTool = MapTool.getAllTools().find((t) => t.settings.isDefault);
-        this._beginNewSession(this.defaultTool, false);
-        config.canvasInputController.pushDelegate(this);
+        this.canvasInputController = config.canvasInputController;
+        this.canvasInputController.pushDelegate(this);
         // TODO also configure keyboard commands to switch tools
+        this._beginNewSession(this.defaultTool, false);
     }
 
     get activeSession() { return this._toolSession; }
+    get allTools() { return this._allTools; }
+
+    toolWithID(id) {
+        return this._toolIDMap[id];
+    }
 
     shouldPassPointSessionToNextDelegate(inputSequence, inputController) {
         return !this._toolSession;
@@ -699,6 +698,19 @@ class MapToolController {
 
     selectToolID(id) {
         debugLog("TODO selectToolID");
+    }
+
+    _configureTools() {
+        var definitions = MapTool.settings().definitions;
+        var ids = Object.getOwnPropertyNames(definitions);
+        this._allTools = [];
+        this._toolIDMap = {};
+        ids.forEach((id) => {
+            var tool = new MapTool(id, definitions[id]);
+            this._allTools.push(tool);
+            this._toolIDMap[id] = tool;
+        });
+        this.defaultTool = this._allTools.find((t) => t.settings.isDefault);
     }
 
     _endSession() {
@@ -835,20 +847,16 @@ class ChromeRenderer {
         this.state.frameCounter = 0;
         document.title = this.game.city.identity.name;
         this.render();
-        this._updateGameRunningStateLabels();
     }
     
     processFrame(rl) {
-        // this.render();
         if (rl == uiRunLoop) {
             this.state.frameCounter = this.state.frameCounter + 1;
             if (this.state.frameCounter % 60 == 0) {
-                var frameRate = Math.round(rl.getRecentFrameRate());
-                this.elems.frameRate.innerText = `${frameRate} frames/sec`;
+                this._updateFrameRateLabel();
             }
         } else if (rl == engineRunLoop) {
             this.render();
-            this._updateGameRunningStateLabels();
         }
     }
 
@@ -869,35 +877,49 @@ class ChromeRenderer {
         }
         var date = this.game.city.time.date.longString();
         this.elems.container.querySelector("h1").innerText = `${this.game.city.identity.name} — ${date}`;
+        this._updateGameRunningStateLabels();
     }
 
     runLoopWillResume(rl) {
         this._updateGameRunningStateLabels();
+        this.elems.frameRate.innerText = "";
     }
 
     runLoopDidPause(rl) {
         this._updateGameRunningStateLabels();
+        this.elems.frameRate.innerText = "Paused";
     }
 
     _configureCommmands() {
         GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
     }
 
+    _updateFrameRateLabel() {
+        var rates = [];
+        var uiFrameRate = uiRunLoop.getRecentFramesPerSecond();
+        if (!isNaN(uiFrameRate)) {
+            rates.push(`${Math.round(uiFrameRate)} fps`);
+        }
+        var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
+        if (!isNaN(engineFrameRate)) {
+            rates.push(`${Math.round(engineFrameRate)} ms/day`);
+        }
+
+        this.elems.frameRate.innerText = rates.join(". ");
+    }
+
     _updateGameRunningStateLabels() {
         var speedIndex = -1;
         if (!this.game) {
-            this.elems.frameRate.innerText = "";
             this.elems.fileMenu.innerText = "New Game";
             this.elems.fileMenu.addRemClass("hidden", false);
             this.elems.speedControls.addRemClass("hidden", true);
         } else if (this.game.isRunning) {
-            this.elems.frameRate.innerText = "";
             this.elems.fileMenu.addRemClass("hidden", true);
             this.elems.pauseResume.innerText = "Pause";
             this.elems.speedControls.addRemClass("hidden", false);
             speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
         } else {
-            this.elems.frameRate.innerText = "Paused";
             this.elems.fileMenu.addRemClass("hidden", true);
             this.elems.pauseResume.innerText = "Resume";
             this.elems.speedControls.addRemClass("hidden", false);
@@ -966,14 +988,15 @@ class PaletteRenderer {
         ctx.rectFill(this.canvasGrid.rectForAllTiles);
 
         for (var i = 0; i < this.visibleToolIDs.length; i++) {
-            var tool = MapTool.withID(this.visibleToolIDs[i]);
+            var tool = MapToolController.shared.toolWithID(this.visibleToolIDs[i]);
             this._renderTool(ctx, tool, this._rectForToolIndex(i));
         }
         this._canvasDirty = false;
     }
 
     isToolSelected(id) {
-        return false;
+        var session = MapToolController.shared.activeSession;
+        return session ? (session.tool.id == id) : false;
     }
 
     _rectForToolIndex(index) {
@@ -1074,7 +1097,7 @@ class MapRenderer {
         this.canvasInputController = new PointInputController({
             eventTarget: this.canvas
         });
-        this.mapToolController = new MapToolController({
+        MapToolController.shared.initialize({
             game: this.game,
             canvasInputController: this.canvasInputController,
             canvasGrid: this.canvasGrid
@@ -1438,6 +1461,7 @@ var dataIsReady = function(content) {
     GameScriptEngine.shared = new GameScriptEngine();
     ScriptPainterStore.shared = new ScriptPainterStore();
     KeyInputController.shared = new KeyInputController();
+    MapToolController.shared = new MapToolController();
     chromeRenderer.setUp();
 };
 

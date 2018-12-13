@@ -987,17 +987,27 @@ RunLoop.prototype.setTargetFrameRate = function(value) {
     this.targetFrameInterval = 1000 / this.targetFrameRate;
 };
 
-RunLoop.prototype.getRecentFrameRate = function() {
+RunLoop.prototype.getRecentFramesPerSecond = function() {
+    var seconds = this._getRecentSecondsElapsed();
+    return isNaN(seconds) ? NaN : (1000 * this.recentFrameStartDates.length / seconds);
+};
+
+RunLoop.prototype.getRecentMillisecondsPerFrame = function() {
+    var seconds = this._getRecentSecondsElapsed();
+    return isNaN(seconds) ? NaN : (seconds / this.recentFrameStartDates.length);
+};
+
+RunLoop.prototype._getRecentSecondsElapsed = function() {
     if (!this.isRunning() || this.recentFrameStartDates.length < 5) {
-        return 0;
+        return NaN;
     }
     var seconds = (this.recentFrameStartDates[this.recentFrameStartDates.length - 1] - this.recentFrameStartDates[0]);
     if (seconds <= 0) {
         console.warn(`Unexpected recentFrameStartDates interval ${seconds}`);
-        return 0;
+        return NaN;
     }
-    return 1000 * this.recentFrameStartDates.length / seconds;
-};
+    return seconds;
+}
 
 RunLoop.prototype.isRunning = function() {
     return this.runState == RunStates.running;

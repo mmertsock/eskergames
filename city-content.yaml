@@ -149,8 +149,8 @@ painters:
   toolPaletteUnselectedBase:
     - [innerStroke,black,rect,1,p,0,0,1,1,r]
   toolPaletteSelectedBase:
-    - [innerStroke,black,rect,2,p,0,0,1,1,r]
-    - [fill,"hsl(0,50%,60%)",rect,0,0,1,1,r]
+    - [fill,"hsl(120,50%,75%)",rect,0,0,1,1,r]
+    - [innerStroke,black,rect,1,p,0,0,1,1,r]
   toolPaletteItem:
     - [text,black,0.5,r,0.5,0.5,r,"<iconGlyph>"]
   toolHighlight:
