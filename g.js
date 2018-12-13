@@ -1278,10 +1278,10 @@ class FlexCanvasGrid {
 
     _tileForDevicePoint(x, y) {
         if (this.isEmpty) { return null; }
-        var location = {
-            x: Math.floor((x - this._allTilesRect.x) / (this.tileWidth + this.tileSpacing)),
-            y: Math.floor((y - this._allTilesRect.y) / (this.tileWidth + this.tileSpacing))
-        };
+        var location = new Point(
+            Math.floor((x - this._allTilesRect.x) / (this.tileWidth + this.tileSpacing)),
+            Math.floor((y - this._allTilesRect.y) / (this.tileWidth + this.tileSpacing))
+        );
         return this.isTileVisible(location) ? location : null;
     }
 

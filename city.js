@@ -416,7 +416,6 @@ class Game {
         var gse = GameScriptEngine.shared;
         gse.registerCommand("pauseResume", () => this.togglePauseState());
         gse.registerCommand("setEngineSpeed", (index) => this.speedSelection.setSelectedIndex(index));
-        gse.registerCommand("queryMapTile", (info) => debugLog(["TODO queryMapTile", info]));
     }
 }
 Game.rules = function() {
@@ -454,6 +453,7 @@ class PointInputController {
         this.sequence = null;
         this.eventTarget.addEventListener("mousedown", this._mousedDown.bind(this));
         this.eventTarget.addEventListener("mouseup", this._mousedUp.bind(this));
+        this.eventTarget.addEventListener("mousemove", this._mousedUp.bind(this));
     }
 
     pushDelegate(delegate) { this.delegates.push(delegate); }
@@ -548,40 +548,88 @@ class KeyInputController {
     }
 }
 
-class MapTool {
+// ##################### MAP TOOLS ######################
+
+class MapToolPointer {
     constructor(id, settings) {
         this.id = id;
         this.settings = settings;
     }
+    get textTemplateInfo() { return this.settings; }
+    get paletteRenderInfo() { return this.settings; }
+    focusRectForTileCoordinate(tile) { return null; }
 
-    get textTemplateInfo() {
-        return this.settings;
-    }
-
-    // Used by PaletteRenderer
-    get paletteRenderInfo() {
-        return {
-            title: this.settings.paletteTitle, // eg "Residental Zone $(100)"
-            // eg. ["AnyShift","KeyR"]. PaletteRenderer shows this if you hover for more than X seconds.
-            shortcutKeyCodes: this.settings.shortcutKeyCodes
-        };
+    performSingleClickAction(session, tile) {
+        debugLog("TODO center map on " + tile.debugDescription());
     }
 }
 
-MapTool.settings = () => GameContent.shared.mapTools;
+class MapToolQuery {
+    constructor(id, settings) {
+        this.id = id;
+        this.settings = settings;
+    }
+    get textTemplateInfo() { return this.settings; }
+    get paletteRenderInfo() { return this.settings; }
+
+    focusRectForTileCoordinate(tile) {
+        return tile ? new Rect(tile, { width: 1, height: 1 }) : null;
+    }
+
+    performSingleClickAction(session, tile) {
+        debugLog("TODO query " + tile.debugDescription());
+    }
+}
+
+class MapToolBulldozer {
+    constructor(id, settings) {
+        this.id = id;
+        this.settings = settings;
+    }
+    get textTemplateInfo() { return this.settings; }
+    get paletteRenderInfo() { return this.settings; }
+
+    focusRectForTileCoordinate(tile) {
+        return tile ? new Rect(tile, { width: 1, height: 1 }) : null;
+    }
+
+    performSingleClickAction(session, tile) {
+        debugLog("TODO bulldoze " + tile.debugDescription());
+    }
+}
+
+class MapToolPlopZone {
+    constructor(id, settings) {
+        this.id = id;
+        this.settings = settings;
+        this.zoneInfo = Zone.typeSettings(settings.zoneType);
+    }
+    get textTemplateInfo() { return this.settings; }
+    get paletteRenderInfo() { return this.settings; }
+
+    focusRectForTileCoordinate(tile) {
+        return tile ? new Rect(tile, this.zoneInfo.plotSize) : null;
+    }
+
+    performSingleClickAction(session, tile) {
+        debugLog("TODO plop zone on " + tile.debugDescription());
+    }
+}
 
 class MapToolSession {
     constructor(tool, preemptedSession) {
-        this.activationTimestamp = 12345; // some sort of timestamp. note DOM Event object has a timestamp.
         this.tool = tool;
         this.preemptedSession = null;
-        this.singleClickMovementTolerance = MapTool.settings().singleClickMovementTolerance;
+        this.singleClickMovementTolerance = MapToolController.settings().singleClickMovementTolerance;
+        this._activationTimestamp = 12345; // some sort of timestamp. note DOM Event object has a timestamp.
+        this._focusRect = null;
     }
 
     receivedPointInput(inputSequence, tile) {
         if (this._isSingleClick(inputSequence)) {
-            GameScriptEngine.shared.execute(this.tool.settings.clickScriptID, { toolSession: this, tile: tile });
+            this.tool.performSingleClickAction(this, tile);
         }
+        this._updateFocusRect(tile);
         return { code: MapToolSession.InputResult.continueCurrentSession };
     }
 
@@ -598,6 +646,13 @@ class MapToolSession {
 
     }
 
+    _updateFocusRect(tile) {
+        // TODO ask the MapTool to translate the single tile coord to a rect
+        this._focusRect = new Rect(tile, { width: 3, height: 3 });
+    }
+
+    // UI stuff
+
     // modelMetadata dictionary to pass to ScriptPainters
     get textTemplateInfo() {
         return {
@@ -611,22 +666,26 @@ class MapToolSession {
 
     // (optional) List of tiles that may be affected. e.g. to paint with translucent overlay
     get affectedTileRects() {
+        if (!this._focusRect) { return null; }
         return {
             // a zone might be a single 3x3 rect, a road may be a bunch of 1x1s
-            tileRects: [new Rect(1, 1, 1, 1), new Point(1, 2, 1, 1)],
+            tileRects: [this._focusRect],
             // runs the script once per tile rect
-            painterID: this.tool.proposedTileRectOverlayPainter
+            painterID: this.tool.settings.proposedTileRectOverlayPainter
         };
     }
 
-    // (optional) What tiles to show a bracket rectangle over.
-    get selectionBracketTileRect() {
-        return new Rect(1, 1, 1, 1);
+    // (optional) Primary tile rect the tool is pointing to
+    get focusTileRect() {
+        return this.tool.focusRectForTileCoordinate(this._focusRect);
     }
 
-    // (optional) What to render next to the cursor. Note it defines the position 
+    // (optional) What to render next to the cursor. Note it defines the position
     // to paint at; not the current cursor x/y position.
     get hoverStatusRenderInfo() {
+        if (!this._focusRect) { return null; }
+        // TODO some tools may not display a hover status. e.g. the Pointer
+        // or only sometimes, e.g. show tile coords if holding Option key with the Pointer.
         return {
             tileRect: new Rect(1, 1, 1, 1), // determines position to paint below
             // This will likely be quite dynamic; use string templates + painterMetadata
@@ -700,19 +759,6 @@ class MapToolController {
         debugLog("TODO selectToolID");
     }
 
-    _configureTools() {
-        var definitions = MapTool.settings().definitions;
-        var ids = Object.getOwnPropertyNames(definitions);
-        this._allTools = [];
-        this._toolIDMap = {};
-        ids.forEach((id) => {
-            var tool = new MapTool(id, definitions[id]);
-            this._allTools.push(tool);
-            this._toolIDMap[id] = tool;
-        });
-        this.defaultTool = this._allTools.find((t) => t.settings.isDefault);
-    }
-
     _endSession() {
         if (this._toolSession.preemptedSession) {
             this._toolSession = this._toolSession.preemptedSession;
@@ -729,7 +775,35 @@ class MapToolController {
         this._toolSession = new MapToolSession(tool, preempt ? this._toolSession : null);
         this._toolSession.resume();
     }
+
+    _configureTools() {
+        var definitions = MapToolController.settings().definitions;
+        var ids = Object.getOwnPropertyNames(definitions);
+        this._allTools = [];
+        this._toolIDMap = {};
+        ids.forEach((id) => {
+            var tool = this._createTool(id, definitions[id]);
+            if (tool) {
+                this._allTools.push(tool);
+                this._toolIDMap[id] = tool;
+            }
+        });
+        this.defaultTool = this._allTools.find((t) => t.settings.isDefault);
+    }
+
+    _createTool(id, settings) {
+        switch (settings.type) {
+            case "pointer": return new MapToolPointer(id, settings);
+            case "query": return new MapToolQuery(id, settings);
+            case "bulldozer": return new MapToolBulldozer(id, settings);
+            case "plopZone": return new MapToolPlopZone(id, settings);
+            default:
+                debugLog("Unknown tool type " + settings.type);
+                return null;
+        }
+    }
 }
+MapToolController.settings = () => GameContent.shared.mapTools;
 
 // ##################### RENDERERS ######################
 
@@ -958,7 +1032,7 @@ class PaletteRenderer {
     constructor(config) {
         this.canvas = config.containerElem;
         this.game = null;
-        this._style = MapTool.settings().paletteStyle;
+        this._style = MapToolController.settings().paletteStyle;
         this._canvasDirty = true;
     }
 
@@ -975,7 +1049,7 @@ class PaletteRenderer {
             tileWidth: this._style.tileWidth,
             tileSpacing: 0
         });
-        this.visibleToolIDs = MapTool.settings().defaultPalette;
+        this.visibleToolIDs = MapToolController.settings().defaultPalette;
         uiRunLoop.addDelegate(this);
     }
 
@@ -1006,7 +1080,6 @@ class PaletteRenderer {
     }
 
     _renderTool(ctx, tool, rect) {
-        var info = tool.paletteRenderInfo;
         this._basePainter(tool).render(ctx, rect, this.canvasGrid, tool.textTemplateInfo);
         ScriptPainterStore.shared.getPainter(this._style.iconPainter).render(ctx, rect, this.canvasGrid, tool.textTemplateInfo);
     }
@@ -1028,7 +1101,6 @@ class GameControlsRenderer {
     initialize(game) {
         this.game = game;
         this.containerElem.style.backgroundColor = "gray";
-        // TODO attach to run loop
     }
         // var date = this.game.city.time.date.longString();
         // var cash = Simoleon.format(this.game.city.budget.cash);
@@ -1038,21 +1110,6 @@ class GameControlsRenderer {
 
 class MapRenderer {
     constructor(config) {
-        // Yeah i said that the InputController controls the viewport.
-        // We would want to keep that somewhat lightly coupled. Like 
-        // an event model; the appropirate renderer/viewport pair 
-        // listens to changes? eh there's a modality involved too (only 
-        // change the viewport on arrow keys when the main map is visible,
-        // not submenus). etc.
-        // Could implement a responder chain. As you open and close menus, you 
-        // push and pop InputResponders onto the InputController. The first 
-        // responder that handles the event is the one that gets it. If a 
-        // responder isInputModal, then the InputController stops at that 
-        // level and discards any unconsumed input.
-        // OR
-        // Have a hierarchy of InputControllers. One for the main game screen,
-        // separate ones for the menu system. The topmost one in the stack 
-        // is the one that's active.
         this.canvas = config.containerElem;
         var zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
         this.zoomSelection = new SelectableList(zoomers);
@@ -1087,11 +1144,6 @@ class MapRenderer {
             tileWidth: this.zoomLevel.tileWidth,
             tileSpacing: 0
         });
-        var subRendererConfig = { canvasGrid: this.canvasGrid, game: this.game };
-        this._terrainRenderer = new TerrainRenderer(subRendererConfig);
-        this._plotRenderer = new PlotRenderer(subRendererConfig);
-        // this._toolRenderer = new MapToolSessionRenderer(subRendererConfig);
-        debugLog(`MapRenderer: init canvasGrid tw=${this.canvasGrid.tileWidth} sz=${this.canvasGrid.tilesWide}x${this.canvasGrid.tilesHigh}`);
 
         this._configureCommmands();
         this.canvasInputController = new PointInputController({
@@ -1102,6 +1154,12 @@ class MapRenderer {
             canvasInputController: this.canvasInputController,
             canvasGrid: this.canvasGrid
         });
+
+        var subRendererConfig = { canvasGrid: this.canvasGrid, game: this.game };
+        this._terrainRenderer = new TerrainRenderer(subRendererConfig);
+        this._plotRenderer = new PlotRenderer(subRendererConfig);
+        this._toolRenderer = new MapToolSessionRenderer(subRendererConfig);
+        debugLog(`MapRenderer: init canvasGrid tw=${this.canvasGrid.tileWidth} sz=${this.canvasGrid.tilesWide}x${this.canvasGrid.tilesHigh}`);
 
         var ctx = this.drawContext;
         ctx.fillStyle = this.settings.edgePaddingFillStyle;
@@ -1125,7 +1183,6 @@ class MapRenderer {
         gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
         gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
         gse.registerCommand("setZoomLevel", (index) => this.zoomSelection.setSelectedIndex(index));
-        gse.registerCommand("centerMapOnTile", (info) => debugLog(["TODO centerMapOnTile", info]));
     }
 
     _canvasSelected(inputSequence) {
@@ -1146,7 +1203,7 @@ class MapRenderer {
         this._terrainRenderer.render(ctx, this.settings);
         var r = this._plotRenderer;
         this.game.city.map.plots.forEach((plot) => r.render(plot, ctx));
-        // this._toolRenderer.render(this.game.city.map.activeToolSession, ctx);
+        this._toolRenderer.render(ctx);
         /*
     FlexCanvasGrid improvements:
     allow drawing partial tiles at the edges, instead of having blank edge padding:
@@ -1185,7 +1242,6 @@ class PlotRenderer {
         var painter = this._getPainter(plot, ScriptPainterStore.shared);
         if (painter) {
             painter.render(ctx, rect, this.canvasGrid, plot.textTemplateInfo);
-            return;
         }
     }
 
@@ -1201,21 +1257,35 @@ class PlotRenderer {
     }
 }
 
-// class MapToolSessionRenderer {
-//     constructor(config) {
-//         this.canvasGrid = config.canvasGrid;
-//         this.game = config.game;
-//         this.painter = ScriptPainterStore.shared.getPainter(MapTool.settings().mapHighlightPainter);
-//     }
-//     render(session, ctx) {
-//         if (!session || !session.tileLocation) { return; }
-//         var tileRect = session.tool.highlightRectForTile(session.tileLocation);
-//         if (!tileRect || tileRect.isEmpty()) { return; }
-//         var drawRect = this.canvasGrid.rectForTileRect(tileRect);
-//         if (!drawRect || drawRect.isEmpty()) { return; }
-//         this.painter.render(ctx, drawRect, this.canvasGrid, session.tool.textTemplateInfo);
-//     }
-// }
+class MapToolSessionRenderer {
+    constructor(config) {
+        this.game = config.game;
+        this.canvasGrid = config.canvasGrid;
+        this._style = MapToolController.settings().mapOverlayStyle;
+        this._frameCounter = 0;
+        this.focusRectPainter = ScriptPainterStore.shared.getPainter(this._style.focusRectPainter);
+    }
+
+    render(ctx) {
+        this._frameCounter = this._frameCounter + 1;
+        var controller = MapToolController.shared;
+        var session = controller.activeSession;
+        if (!session) { return; }
+        this._paintFocusRect(ctx, session);
+    }
+
+    _paintFocusRect(ctx, session) {
+        var tileRect = session.focusTileRect;
+        if (!tileRect) { return; }
+        var rect = this.canvasGrid.rectForTileRect(tileRect);
+        if (this._frameCounter % 60 == 0) {
+            debugLog([rect, tileRect, this.focusRectPainter]);
+        }
+        if (rect && this.focusRectPainter) {
+            this.focusRectPainter.render(ctx, rect, this.canvasGrid, session.textTemplateInfo);
+        }
+    }
+}
 
 class ScriptPainter {
     constructor(config) {
@@ -1330,7 +1400,6 @@ class ScriptPainter {
         ctx.fillTextCenteredOnPoint(text, new Point(x, y));
     }
 }
-
 
 class ScriptPainterStore {
     constructor() {

@@ -97,32 +97,43 @@ mapTools:
     unselectedBasePainter: toolPaletteUnselectedBase
     selectedBasePainter: toolPaletteSelectedBase
     iconPainter: toolPaletteItem
+  mapOverlayStyle:
+    focusRectPainter: toolFocusRect
   definitions:
     pointer:
       isDefault: true
-      clickScriptID: centerMapOnTile
+      type: pointer
+      # clickScriptID: centerMapOnTile
       iconGlyph: ◎
       paletteTitle: Browse
     query:
-      clickScriptID: queryMapTile
+      type: query
+      # clickScriptID: queryMapTile
       iconGlyph: 🔍
       paletteTitle: Inspect
     bulldozer:
-      clickScriptID: performBulldozeTool
+      type: bulldozer
+      # clickScriptID: performBulldozeTool
       iconGlyph: 💣
       paletteTitle: Bulldozer
     rZone:
-      clickScriptID: performPlopZoneTool
+      type: plopZone
+      # clickScriptID: performPlopZoneTool
       iconGlyph: 🏠
       paletteTitle: "Residential Zone ($100)"
+      zoneType: R
     cZone:
-      clickScriptID: performPlopZoneTool
+      type: plopZone
+      # clickScriptID: performPlopZoneTool
       iconGlyph: 🏬
       paletteTitle: "Commercial Zone ($100)"
+      zoneType: C
     iZone:
-      clickScriptID: performPlopZoneTool
+      type: plopZone
+      # clickScriptID: performPlopZoneTool
       iconGlyph: 🏭
       paletteTitle: "Industrial Zone ($100)"
+      zoneType: I
 
 #################### UI ###################
 
@@ -153,11 +164,12 @@ painters:
     - [innerStroke,black,rect,1,p,0,0,1,1,r]
   toolPaletteItem:
     - [text,black,0.5,r,0.5,0.5,r,"<iconGlyph>"]
-  toolHighlight:
+  toolFocusRect:
     - [poly,black,,1,p, r, 0,0.3, 0,0, 0.3,0]
     - [poly,black,,1,p, r, 0.7,0, 1,0, 1,0.3]
     - [poly,black,,1,p, r, 1,0.7, 1,1, 0.7,1]
     - [poly,black,,1,p, r, 0.3,1, 0,1, 0,0.7]
+  toolHighlightStuff:
     - [poly,,black,0,p, r, 1.1,1.1, 1.4,1.4, 1.25,1.4, 1.13,1.52]
     - [text,black,0.75,tw,1.44,1.8,r,"<highlightGlyph>"]
   zoneRd0v0:
