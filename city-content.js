@@ -44,7 +44,7 @@ class GameScriptEngine {
         // if _scriptables[id] doesn't exist, getScriptable returns a NoopScriptable object that 
         // returns null for all getters and silently swallows all performCommands, to prevent null exceptions.
 
-        once("GameScriptEngine.unknownCommand", () => debugLog("Unknown command ID " + id));
+        once("GameScriptEngine.unknownCommand." + id, () => debugLog("Unknown command ID " + id));
         return undefined;
     }
 }

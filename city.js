@@ -358,7 +358,7 @@ class Game {
     }
 
     start() {
-        MapTool.configureCommands(this);
+        MapTool.initialize(this);
         this._configureCommmands();
         KeyInputController.shared.initialize(this);
         this.gameSpeedActivated(this.engineSpeed);
@@ -417,6 +417,7 @@ class Game {
         var gse = GameScriptEngine.shared;
         gse.registerCommand("pauseResume", () => this.togglePauseState());
         gse.registerCommand("setEngineSpeed", (index) => this.speedSelection.setSelectedIndex(index));
+        gse.registerCommand("queryMapTile", (info) => debugLog(["TODO queryMapTile", info]));
     }
 }
 Game.rules = function() {
@@ -450,14 +451,13 @@ class _PointInputNoopDelegate {
 class PointInputController {
     constructor(config) {
         this.eventTarget = config.eventTarget; // DOM element
-        this.canvasGrid = config.canvasGrid; // optional FlexCanvasGrid
         this.delegates = [new _PointInputNoopDelegate()];
         this.sequence = null;
         this.eventTarget.addEventListener("mousedown", this._mousedDown.bind(this));
         this.eventTarget.addEventListener("mouseup", this._mousedUp.bind(this));
     }
 
-    pushDelegate(delegate) { this.delegates.push(); }
+    pushDelegate(delegate) { this.delegates.push(delegate); }
     popDelegate() {
         if (this.delegates.length <= 1) { return null; }
         return this.delegates.pop();
@@ -550,120 +550,172 @@ class KeyInputController {
 }
 
 class MapTool {
-    constructor(id) {
+    constructor(id, settings) {
         this.id = id;
-        // this.controller = config.controller; // PointInputController
-        this.settings = Object.assign({id: id}, MapTool.settings().definitions[id]);
+        this.settings = settings;
     }
 
-    get name() { return this.settings.name; }
-    get textTemplateInfo() { return this.settings; }
-
-    shouldPassPointSessionToNextDelegate(inputSession, controller) {
-        return (!this.isSelected || (inputSession.event.type != "mouseup"));
+    get textTemplateInfo() {
+        return this.settings;
     }
 
-    pointSessionChanged(inputSession, controller) {
-        if (!this.isSelected || (inputSession.event.type != "mouseup")) { return; }
-        /*
-if (inputSession.totalOffset.magnitude > MapTool.settings.singleClickMovementTolerance) {
-            return null;
-        }
-        */
-    }
-
-    highlightRectForTile(point, game) {
-        // size may vary based on what's at the location
-        return new Rect(point.x, point.y, 1, 1);
-    }
-    priceForTile(point, game) {
-        // check what's at that location, use settings to determine price
-        return 1;
-    }
-    canPerformActionAtTile(point, game) {
-        switch (this.settings.canPerformActionRule) {
-            case "notEmpty":
-                // TODO check for plots
-                return true;
-            case "always":
-                return true;
-            default: return false;
-        }
-    }
-    hoverText(inputSession) {
-        if (this.settings.hoverCommand) {
-            return GameScriptEngine.shared.execute(this.settings.hoverCommand, inputSession);
-        } else {
-            return this.name;
-        }
+    // Used by PaletteRenderer
+    get paletteRenderInfo() {
+        return {
+            title: this.settings.paletteTitle, // eg "Residental Zone $(100)"
+            // eg. ["AnyShift","KeyR"]. PaletteRenderer shows this if you hover for more than X seconds.
+            shortcutKeyCodes: this.settings.shortcutKeyCodes
+        };
     }
 }
-MapTool.settings = function() { return GameContent.shared.mapTools; }
 
-MapTool.configureCommands = (g) => {
-    var gse = GameScriptEngine.shared;
-    gse.registerCommand("performBulldozeTool", (game, session) => {
-        // determine cost
-        // destroy plots
-        return true;
-    });
-    gse.registerCommand("hoverQueryTool", (game, session) => {
-        if (!session.tileLocation) { return session.tool.name; }
-        // find plot
-        // return text to show in status bar
-        var prefix = `Query (${session.tileLocation.x}, ${session.tileLocation.y})`;
-        var plot = game.city.map.plotAtPoint(session.tileLocation);
-        if (!plot) {
-            return `${prefix}: nothing`;
-        } else {
-            return `${prefix}: ${plot.title}`;
-        }
-    });
-    gse.registerCommand("performQueryTool", (game, session) => {
-        if (!session.tileLocation) { return true; }
-        var plot = game.city.map.plotAtPoint(session.tileLocation);
-        if (!plot) { return true; }
-        debugLog("TODO eh no, display a custom modal with lots of graphics.");
-        game.renderer.dialogs.showDialog("hello", null, null);
-        return true;
+MapTool.settings = () => GameContent.shared.mapTools;
+MapTool.initialize = (game) => {
+    var definitions = MapTool.settings().definitions;
+    var ids = Object.getOwnPropertyNames(definitions);
+    MapTool._allTools = [];
+    MapTool._idMap = {};
+    ids.forEach((id) => {
+        var tool = new MapTool(id, definitions[id]);
+        MapTool._allTools.push(tool);
+        MapTool._idMap[id] = tool;
     });
 };
+MapTool.getAllTools = () => MapTool._allTools;
+MapTool.withID = (id) => MapTool._idMap[id];
 
 class MapToolSession {
-    constructor(tool, game) {
+    constructor(tool, preemptedSession) {
+        this.activationTimestamp = 12345; // some sort of timestamp. note DOM Event object has a timestamp.
         this.tool = tool;
-        this.game = game;
-        this.setTileLocation(null);
+        this.preemptedSession = null;
+        this.singleClickMovementTolerance = MapTool.settings().singleClickMovementTolerance;
     }
 
-    get canPerform() {
-        if (!this.tileLocation) { return false; }
-        return this.tool.canPerformActionAtTile(this.tileLocation, this.game);
-    }
-
-    setTileLocation(location) {
-        if (this.tileLocation && location && location.isEqual(this.tileLocation)) { return; }
-        this.tileLocation = location;
-        this._updateStatusBar();
-    }
-
-    performAction() {
-        if (!this.canPerform) { return; }
-        GameScriptEngine.shared.execute(this.tool.settings.actionCommand, this);
-    }
-
-    _updateStatusBar() {
-        var text = null;
-        if (!this.tileLocation) {
-            text = null;
-        } else {
-            text = this.tool.hoverText(this);
+    receivedPointInput(inputSequence, tile) {
+        if (this._isSingleClick(inputSequence)) {
+            GameScriptEngine.shared.execute(this.tool.settings.clickScriptID, { toolSession: this, tile: tile });
         }
-        if (text) {
-            debugLog("TODO set status bar to " + text);
-        } else {
-            debugLog("TODO clear status bar");
+        return { code: MapToolSession.InputResult.continueCurrentSession };
+    }
+
+    _isSingleClick(inputSequence) {
+        return inputSequence.latestEvent.type == "mouseup"
+            && inputSequence.latestPoint.manhattanDistanceFrom(inputSequence.firstPoint).magnitude <= this.singleClickMovementTolerance;
+    }
+
+    pause() {
+
+    }
+
+    resume() {
+
+    }
+
+    // modelMetadata dictionary to pass to ScriptPainters
+    get textTemplateInfo() {
+        return {
+            paletteTitle: this.tool.paletteTitle
+        };
+    }
+
+    // ----- Overlay Rendering -----
+    // All of these getters specify both what and where to paint; the renderer 
+    // does not need any additional position info from this class, input controllers, etc.
+
+    // (optional) List of tiles that may be affected. e.g. to paint with translucent overlay
+    get affectedTileRects() {
+        return {
+            // a zone might be a single 3x3 rect, a road may be a bunch of 1x1s
+            tileRects: [new Rect(1, 1, 1, 1), new Point(1, 2, 1, 1)],
+            // runs the script once per tile rect
+            painterID: this.tool.proposedTileRectOverlayPainter
+        };
+    }
+
+    // (optional) What tiles to show a bracket rectangle over.
+    get selectionBracketTileRect() {
+        return new Rect(1, 1, 1, 1);
+    }
+
+    // (optional) What to render next to the cursor. Note it defines the position 
+    // to paint at; not the current cursor x/y position.
+    get hoverStatusRenderInfo() {
+        return {
+            tileRect: new Rect(1, 1, 1, 1), // determines position to paint below
+            // This will likely be quite dynamic; use string templates + painterMetadata
+            painterID: this.tool.hoverStatusPainter
         }
+        return [];
+    }
+
+    // CSS value, e.g. "crosshair"
+    // get mouseCursorType() {
+    //     return this.tool.mouseCursorType;
+    // }
+}
+MapToolSession.InputResult = {
+    continueCurrentSession: 1,
+    endSession: 2,
+    pauseAndPushNewSession: 3
+};
+
+class MapToolController {
+    constructor(config) {
+        this.game = config.game;
+        this.canvasGrid = config.canvasGrid;
+        this.defaultTool = MapTool.getAllTools().find((t) => t.settings.isDefault);
+        this._beginNewSession(this.defaultTool, false);
+        config.canvasInputController.pushDelegate(this);
+        // TODO also configure keyboard commands to switch tools
+    }
+
+    get activeSession() { return this._toolSession; }
+
+    shouldPassPointSessionToNextDelegate(inputSequence, inputController) {
+        return !this._toolSession;
+    }
+
+    pointSessionChanged(inputSequence, inputController) {
+        var session = this.activeSession;
+        if (!session) { return; }
+        var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
+        if (!tile) { return; }
+        var result = session.receivedPointInput(inputSequence, tile);
+        switch (result.code) {
+            case MapToolSession.InputResult.continueCurrentSession: break;
+            case MapToolSession.InputResult.endSession:
+                this._endSession(); break;
+            case MapToolSession.InputResult.pauseAndPushNewSession:
+                this._beginNewSession(result.tool, true); break;
+            default:
+                once("MapToolSession.InputResult.code" + result.code, () => debugLog("Unknown MapToolSession.InputResult code " + result.code));
+        }
+    }
+
+    selectTool(tool) {
+        this._beginNewSession(tool, false);
+    }
+
+    selectToolID(id) {
+        debugLog("TODO selectToolID");
+    }
+
+    _endSession() {
+        if (this._toolSession.preemptedSession) {
+            this._toolSession = this._toolSession.preemptedSession;
+            this._toolSession.resume();
+        } else {
+            this.beginNewSession(this.defaultTool, false);
+        }
+    }
+
+    _beginNewSession(tool, preempt) {
+        if (preempt) {
+            this._toolSession.pause();
+        }
+        this._toolSession = new MapToolSession(tool, preempt ? this._toolSession : null);
+        this._toolSession.resume();
     }
 }
 
@@ -884,8 +936,6 @@ class PaletteRenderer {
     constructor(config) {
         this.canvas = config.containerElem;
         this.game = null;
-        // TODO
-        this.toolSelection = new SelectableList([]);
         this._style = MapTool.settings().paletteStyle;
         this._canvasDirty = true;
     }
@@ -903,9 +953,7 @@ class PaletteRenderer {
             tileWidth: this._style.tileWidth,
             tileSpacing: 0
         });
-        this.allTools = MapTool.settings().defaultPalette.map(id => new MapTool(id));
-        debugLog("DEBUG ACTIVE TOOL");
-        this.game.city.map.activeToolSession = new MapToolSession(this.allTools[3], this.game);
+        this.visibleToolIDs = MapTool.settings().defaultPalette;
         uiRunLoop.addDelegate(this);
     }
 
@@ -917,8 +965,9 @@ class PaletteRenderer {
         ctx.fillStyle = this._style.fillStyle;
         ctx.rectFill(this.canvasGrid.rectForAllTiles);
 
-        for (var i = 0; i < this.allTools.length; i++) {
-            this._renderTool(ctx, this.allTools[i], this._rectForToolIndex(i));
+        for (var i = 0; i < this.visibleToolIDs.length; i++) {
+            var tool = MapTool.withID(this.visibleToolIDs[i]);
+            this._renderTool(ctx, tool, this._rectForToolIndex(i));
         }
         this._canvasDirty = false;
     }
@@ -934,9 +983,9 @@ class PaletteRenderer {
     }
 
     _renderTool(ctx, tool, rect) {
-        var modelMetadata = tool.textTemplateInfo;
-        this._basePainter(tool).render(ctx, rect, this.canvasGrid, modelMetadata);
-        ScriptPainterStore.shared.getPainter(tool.settings.palettePainter).render(ctx, rect, this.canvasGrid, modelMetadata);
+        var info = tool.paletteRenderInfo;
+        this._basePainter(tool).render(ctx, rect, this.canvasGrid, tool.textTemplateInfo);
+        ScriptPainterStore.shared.getPainter(this._style.iconPainter).render(ctx, rect, this.canvasGrid, tool.textTemplateInfo);
     }
 
     _basePainter(tool) {
@@ -1018,12 +1067,16 @@ class MapRenderer {
         var subRendererConfig = { canvasGrid: this.canvasGrid, game: this.game };
         this._terrainRenderer = new TerrainRenderer(subRendererConfig);
         this._plotRenderer = new PlotRenderer(subRendererConfig);
-        this._toolRenderer = new MapToolSessionRenderer(subRendererConfig);
+        // this._toolRenderer = new MapToolSessionRenderer(subRendererConfig);
         debugLog(`MapRenderer: init canvasGrid tw=${this.canvasGrid.tileWidth} sz=${this.canvasGrid.tilesWide}x${this.canvasGrid.tilesHigh}`);
 
         this._configureCommmands();
         this.canvasInputController = new PointInputController({
-            eventTarget: this.canvas,
+            eventTarget: this.canvas
+        });
+        this.mapToolController = new MapToolController({
+            game: this.game,
+            canvasInputController: this.canvasInputController,
             canvasGrid: this.canvasGrid
         });
 
@@ -1049,11 +1102,12 @@ class MapRenderer {
         gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
         gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
         gse.registerCommand("setZoomLevel", (index) => this.zoomSelection.setSelectedIndex(index));
+        gse.registerCommand("centerMapOnTile", (info) => debugLog(["TODO centerMapOnTile", info]));
     }
 
-    _canvasSelected(sequence) {
-        var tile = this.canvasGrid.tileForCSSPoint(sequence.latestPoint);
-        debugLog(`Clicked map at pt ${sequence.latestPoint.debugDescription()}, tile ${tile}`);
+    _canvasSelected(inputSequence) {
+        var tile = this.canvasGrid.tileForCSSPoint(inputSequence.latestPoint);
+        debugLog(`Clicked map at pt ${inputSequence.latestPoint.debugDescription()}, tile ${tile}`);
         // TODO set coord of the active tool session and 
         // run its performAction thing.
         // TODO also handle canvas-mouse-moved by setting the coord of the active tool
@@ -1069,7 +1123,7 @@ class MapRenderer {
         this._terrainRenderer.render(ctx, this.settings);
         var r = this._plotRenderer;
         this.game.city.map.plots.forEach((plot) => r.render(plot, ctx));
-        this._toolRenderer.render(this.game.city.map.activeToolSession, ctx);
+        // this._toolRenderer.render(this.game.city.map.activeToolSession, ctx);
         /*
     FlexCanvasGrid improvements:
     allow drawing partial tiles at the edges, instead of having blank edge padding:
@@ -1124,21 +1178,21 @@ class PlotRenderer {
     }
 }
 
-class MapToolSessionRenderer {
-    constructor(config) {
-        this.canvasGrid = config.canvasGrid;
-        this.game = config.game;
-        this.painter = ScriptPainterStore.shared.getPainter(MapTool.settings().mapHighlightPainter);
-    }
-    render(session, ctx) {
-        if (!session || !session.tileLocation) { return; }
-        var tileRect = session.tool.highlightRectForTile(session.tileLocation);
-        if (!tileRect || tileRect.isEmpty()) { return; }
-        var drawRect = this.canvasGrid.rectForTileRect(tileRect);
-        if (!drawRect || drawRect.isEmpty()) { return; }
-        this.painter.render(ctx, drawRect, this.canvasGrid, session.tool.textTemplateInfo);
-    }
-}
+// class MapToolSessionRenderer {
+//     constructor(config) {
+//         this.canvasGrid = config.canvasGrid;
+//         this.game = config.game;
+//         this.painter = ScriptPainterStore.shared.getPainter(MapTool.settings().mapHighlightPainter);
+//     }
+//     render(session, ctx) {
+//         if (!session || !session.tileLocation) { return; }
+//         var tileRect = session.tool.highlightRectForTile(session.tileLocation);
+//         if (!tileRect || tileRect.isEmpty()) { return; }
+//         var drawRect = this.canvasGrid.rectForTileRect(tileRect);
+//         if (!drawRect || drawRect.isEmpty()) { return; }
+//         this.painter.render(ctx, drawRect, this.canvasGrid, session.tool.textTemplateInfo);
+//     }
+// }
 
 class ScriptPainter {
     constructor(config) {

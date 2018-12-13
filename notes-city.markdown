@@ -1,9 +1,5 @@
 ## Next tasks
 
-### set up a git repo
-
-yeahhh
-
 ### Map tool refactoring
 
 PaletteRenderer has a SelectableList for the current MapTool?
@@ -11,16 +7,22 @@ hm is it really a SelectableList?
 eh there are multiple types of modalities here.
 eg hold shift and drag to temporarily switch to the pan/click tool.
 Esc key to revert to the pan/click tool.
+tools that may not appear in the current palette.
+Might be better to use the general scripting engine. esp since there will likely be multiple objects that are interested in the selected tool and selection changes; and also since the paletterenderer should not be strongly coupled to the maprenderer. so eg trigger a global event when the selected tool changes, and the paletterenderer can listen for that.
 
 Are there interactions with the map canvas *other* than tools?
 
 figure out the difference between:
 - the core definition/scripting of individual tools
   - this is a model class that exists for the life of the game and can be used in various ways
+  - try to make these stateless
   - independent of the palette (eg tools may not exist on the palette; palette may change, etc.)
   - all the cost and validity calculations, and executing clicks/drags/hovers
 - palette selection/rendering
-- the usage of a specific tool in a given time period as the mouse moves around. shifting between tools with key commands
+- the usage of a specific tool in a given time period as the mouse moves around
+    - responding to dragging and clicking
+    - rendering status bar, hover overlays, etc.
+    - shifting between tools with key commands
     - eg holding shift to pan - should it pause or cancel the existing command (e.g. start dragging a road, then shift to pan, then continue dragging some more to make a longer road)
     - also a hotkey to shift to the query tool temporarily
     - eg pressing escape to cancel a tool drag (but keep the tool selection). escape when not dragging switches to the pan tool
@@ -161,3 +163,9 @@ maybe instead of (or on top of) a FlexCanvasGrid, have a BitCanvasGrid that is s
 
 game items can have an "atmospheric animation" that is a simple repeating loop with no real state or meaning; just makes the game look nice (e.g. waving grass, rotating wheels, puffing smoke, blinking lights). animations are one frame per second or something, small number of frames.
 use the variantKey to choose which of 60 frames per second to increment the animation frame on - this lets each animated item be a little out of phase, for variety. And don't start them all on frame zero, start on frame N and loop, to further offset them.
+
+- - - - - -
+# Resources
+
+http://bucephalus.org/text/CanvasHandbook/CanvasHandbook.html
+

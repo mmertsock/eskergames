@@ -88,7 +88,7 @@ inputController:
 ################# MAP TOOLS ###############
 
 mapTools:
-  defaultPalette: [bulldozer, query, rZone, cZone, iZone]
+  defaultPalette: [pointer, query, bulldozer, rZone, cZone, iZone]
   singleClickMovementTolerance: 3
   paletteStyle:
     columns: 2
@@ -96,64 +96,33 @@ mapTools:
     fillStyle: gray
     unselectedBasePainter: toolPaletteUnselectedBase
     selectedBasePainter: toolPaletteSelectedBase
-  mapHighlightPainter: toolHighlight
+    iconPainter: toolPaletteItem
   definitions:
-    navigator:
+    pointer:
       isDefault: true
-      name: Pointer
-      palettePainter: toolPaletteItem
-      highlightGlyph: ◎
-      highlightRectRule: null
-      baseCost: 0
-      canPerformActionRule: always
-      actionCommand: centerMap
+      clickScriptID: centerMapOnTile
+      iconGlyph: ◎
+      paletteTitle: Browse
     query:
-      name: Query Tool
-      palettePainter: toolPaletteItem
-      highlightGlyph: 🔍
-      highlightRectRule: singleTile
-      baseCost: 0
-      canPerformActionRule: always
-      hoverCommand: hoverQueryTool
-      actionCommand: performQueryTool
+      clickScriptID: queryMapTile
+      iconGlyph: 🔍
+      paletteTitle: Inspect
     bulldozer:
-      name: Bulldozer
-      palettePainter: toolPaletteItem
-      highlightGlyph: 💣
-      highlightRectRule: entirePlotUnderCursor
-      baseCost: 0
-      costPerPropTile: 5
-      costPerEmptyZoneTile: 2
-      costPerBulidingTile: 10
-      canPerformActionRule: notEmpty
-      actionCommand: performBulldozeTool
+      clickScriptID: performBulldozeTool
+      iconGlyph: 💣
+      paletteTitle: Bulldozer
     rZone:
-      name: Residential Zone
-      palettePainter: toolPaletteItem
-      highlightGlyph: 🏠
-      highlightRectRule: singleTile #TODO
-      baseCost: 100
-      costPerPropTile: 5
-      canPerformActionRule: notEmpty
-      actionCommand: performPlopZoneTool
+      clickScriptID: performPlopZoneTool
+      iconGlyph: 🏠
+      paletteTitle: "Residential Zone ($100)"
     cZone:
-      name: Commercial Zone
-      palettePainter: toolPaletteItem
-      highlightGlyph: 🏬
-      highlightRectRule: singleTile #TODO
-      baseCost: 100
-      costPerPropTile: 5
-      canPerformActionRule: notEmpty
-      actionCommand: performPlopZoneTool
+      clickScriptID: performPlopZoneTool
+      iconGlyph: 🏬
+      paletteTitle: "Commercial Zone ($100)"
     iZone:
-      name: Industrial Zone
-      palettePainter: toolPaletteItem
-      highlightGlyph: 🏭
-      highlightRectRule: singleTile #TODO
-      baseCost: 100
-      costPerPropTile: 5
-      canPerformActionRule: notEmpty
-      actionCommand: performPlopZoneTool
+      clickScriptID: performPlopZoneTool
+      iconGlyph: 🏭
+      paletteTitle: "Industrial Zone ($100)"
 
 #################### UI ###################
 
@@ -183,7 +152,7 @@ painters:
     - [innerStroke,black,rect,2,p,0,0,1,1,r]
     - [fill,"hsl(0,50%,60%)",rect,0,0,1,1,r]
   toolPaletteItem:
-    - [text,black,0.5,r,0.5,0.5,r,"<highlightGlyph>"]
+    - [text,black,0.5,r,0.5,0.5,r,"<iconGlyph>"]
   toolHighlight:
     - [poly,black,,1,p, r, 0,0.3, 0,0, 0.3,0]
     - [poly,black,,1,p, r, 0.7,0, 1,0, 1,0.3]
