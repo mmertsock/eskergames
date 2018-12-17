@@ -6,6 +6,8 @@ var Point = Gaming.Point;
 var Rect = Gaming.Rect;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var SimDate = CitySim.SimDate;
+var Dispatch = Gaming.Dispatch;
+var DispatchTarget = Gaming.DispatchTarget;
 
 function appendOutputItem(msg, className) {
     if (!outputElement) { return; }
@@ -104,19 +106,25 @@ class UnitTest {
         this.expectations += 1;
         if (typeof(value) === "undefined") {
             this.logFailure(this._assertMessage("unexpected undefined value", msg));
+            return false;
         }
+        return true;
     }
     assertEqual(a, b, msg) {
         this.expectations += 1;
         if (a != b) {
             this.logFailure(this._assertMessage(`assertEqual failure: ${a} != ${b}`, msg));
+            return false;
         }
+        return true;
     }
     assertTrue(value, msg) {
         this.expectations += 1;
         if (value != true) {
             this.logFailure(this._assertMessage("assertTrue failure", msg));
+            return false;
         }
+        return true;
     }
     _assertMessage(main, supplement) {
         var messages = [main];
@@ -174,6 +182,20 @@ var randomTest = function() {
         }
         this.assertTrue(range.min >= 0);
         this.assertTrue(range.max < 1);
+
+        var str = sut.nextHexString(0);
+        this.assertEqual(str, "");
+        str = sut.nextHexString(3);
+        this.assertEqual(str.length, 3);
+        str = sut.nextHexString(4);
+        this.assertEqual(str.length, 4);
+        str = sut.nextHexString(5);
+        this.assertEqual(str.length, 5);
+        str = sut.nextHexString(17);
+        this.assertEqual(str.length, 17);
+        // logTestMsg(str);
+        var strs = [sut.nextHexString(4), sut.nextHexString(4), sut.nextHexString(4)];
+        this.assertTrue((strs[0] != strs[1]) && (strs[1] != strs[2]));
     }).build()({ iterations: 1000 }, null);
 }
 
@@ -252,12 +274,67 @@ var simDateTest = function() {
                 failedDays.push([ymd.daysSinceEpoch, d.daysSinceEpoch]);
             }
         }
-        this.assertEqual(failedDays.length, 0);
-        if (failedDays.length > 0) {
+        if (!this.assertEqual(failedDays.length, 0)) {
             debugDump(failedDays);
         }
     }).build()({ days: 1000 }, null);
 };
+
+function dispatchTest() {
+    new UnitTest("Dispatch", function() {
+        var sut = Dispatch.shared;
+        // Make sure nothing breaks when there are zero targets
+        sut.postEventSync("test", null);
+        sut.remove(null);
+        sut.remove("fake");
+        var target1 = new DispatchTarget();
+        this.assertTrue(target1.id.length > 0);
+        sut.remove(target1);
+        var got = [];
+        target1.register("e1", (e, info) => { got.push({ e: e, info: info, via: "t1e1" }); })
+            .register("e2", (e, info) => { got.push({ e: e, info: info, via: "t1e2" }); });
+        sut.postEventSync("e1", 1);
+        sut.postEventSync("eBogus1", 100);
+        if (this.assertEqual(got.length, 1)) {
+            this.assertEqual(got[0].e, "e1"); this.assertEqual(got[0].info, 1); this.assertEqual(got[0].via, "t1e1");
+        }
+        sut.postEventSync("e2", 2);
+        sut.postEventSync("e1", 3);
+        if (this.assertEqual(got.length, 3)) {
+            this.assertEqual(got[1].e, "e2"); this.assertEqual(got[1].info, 2); this.assertEqual(got[1].via, "t1e2");
+            this.assertEqual(got[2].e, "e1"); this.assertEqual(got[2].info, 3); this.assertEqual(got[2].via, "t1e1");
+        }
+
+        var target2 = new DispatchTarget("hello")
+            .register("e2", (e, info) => { got.push({ e: e, info: info, via: "t2e2" }); });
+        this.assertEqual(target2.id, "hello");
+        sut.postEventSync("e1", 4);
+        if (this.assertEqual(got.length, 4)) {
+            this.assertEqual(got[3].e, "e1"); this.assertEqual(got[3].info, 4); this.assertEqual(got[3].via, "t1e1");
+        }
+        sut.postEventSync("e2", 5);
+        if (this.assertEqual(got.length, 6)) {
+            var e2got = [got[4], got[5]];
+            if (e2got[0].via == "t2e2") { e2got.reverse(); }
+            this.assertEqual(e2got[0].e, "e2"); this.assertEqual(e2got[0].info, 5); this.assertEqual(e2got[0].via, "t1e2");
+            this.assertEqual(e2got[1].e, "e2"); this.assertEqual(e2got[1].info, 5); this.assertEqual(e2got[1].via, "t2e2");
+        }
+
+        sut.remove(null);
+        sut.postEventSync("e1", 6);
+        this.assertEqual(got.length, 7);
+        sut.remove(target1);
+        sut.postEventSync("e1", 7);
+        this.assertEqual(got.length, 7);
+        sut.postEventSync("e2", 8);
+        if (this.assertEqual(got.length, 8)) {
+            this.assertEqual(got[7].e, "e2"); this.assertEqual(got[7].info, 8); this.assertEqual(got[7].via, "t2e2");
+        }
+        sut.remove(target2.id);
+        sut.postEventSync("e2", 8);
+        this.assertEqual(got.length, 8);
+    }).build()();
+}
 
 function flexCanvasGridTest(config, expect) {
     if (!config || !expect) {
@@ -433,6 +510,7 @@ TestSession.current = new TestSession([
     randomTest,
     stringTemplateTest,
     simDateTest,
+    dispatchTest,
     flexCanvasGridTest1,
     flexCanvasGridTest2,
     flexCanvasGridTest3

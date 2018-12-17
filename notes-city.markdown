@@ -39,6 +39,7 @@ Next:
 ### Save and restore game data, start new city
 
 Implement it.
+Auto-save each game month or year. Depending on engine speed. Or maybe autosave every X seconds of wall time (to handle long build-sessions where the game remains paused).
 Make sure Plots and stuff have a consistent way to store opaque state data.
 Also implement modal dialog for starting a new city so you can start over.
 

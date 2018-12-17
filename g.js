@@ -78,6 +78,13 @@ class Rng {
         var r = this.nextUnitFloat() * (maxValueExclusive - minValue);
         return Math.floor(r) + minValue;
     }
+    nextHexString(length) {
+        var str = "";
+        while (str.length < length) {
+            str += (1 + this.nextIntOpenRange(0, 0x10000)).toString(16);
+        }
+        return str.substring(0, length);
+    }
 }
 Rng.shared = new Rng();
 
@@ -1108,6 +1115,57 @@ RunLoop.prototype.processFrame = function() {
     this.scheduleNextFrame();
 };
 
+class Dispatch {
+    constructor() {
+        this._blocks = {};
+    }
+
+    addTarget(id, eventName, block) {
+        if (!this._blocks[eventName]) {
+            this._blocks[eventName] = {};
+        }
+        this._blocks[eventName][id] = block;
+    }
+
+    postEventSync(eventName, info) {
+        var blocks = this._blocks[eventName];
+        if (!blocks) { return; }
+        for (var id of Object.getOwnPropertyNames(blocks)) {
+            blocks[id](eventName, info);
+        }
+    }
+
+    remove(targetOrID) {
+        if (!targetOrID) { return; }
+        var id = targetOrID.id ? targetOrID.id : targetOrID;
+        for (var eventName of Object.getOwnPropertyNames(this._blocks)) {
+            delete this._blocks[eventName][id];
+        }
+    }
+}
+Dispatch.shared = new Dispatch();
+
+class DispatchTarget {
+    constructor(id) {
+        this.id = id || Rng.shared.nextHexString(16);
+    }
+    register(eventName, block) {
+        Dispatch.shared.addTarget(this.id, eventName, block);
+        return this;
+    }
+}
+
+/*
+class PaletteRenderer {
+    initialize() {
+        Dispatch.removeListener(this._listener);
+        this._listener = new EventListener()
+            .register(MapToolController.Events.startedSession, (e, info) => { this._canvasDirty = true; })
+            .register(...)
+    }
+}
+*/
+
 // ----------------------------------------------------------------------
 
 // config: {runLoop}
@@ -1594,6 +1652,8 @@ return {
     Movement: Movement,
     KeyboardState: KeyboardState,
     RunLoop: RunLoop,
+    Dispatch: Dispatch,
+    DispatchTarget: DispatchTarget,
     FlexCanvasGrid: FlexCanvasGrid,
     CanvasGrid: CanvasGrid,
     Prompt: Prompt,
