@@ -99,6 +99,7 @@ mapTools:
     iconPainter: toolPaletteItem
   mapOverlayStyle:
     focusRectPainter: toolFocusRect
+    feedbackFadeMilliseconds: 100
   definitions:
     pointer:
       isDefault: true
@@ -134,6 +135,14 @@ mapTools:
       iconGlyph: 🏭
       paletteTitle: "Industrial Zone ($100)"
       zoneType: I
+  feedback:
+    purchased:
+      immediate: purchasedFeedbackSoundScript
+      displayMilliseconds: 1000
+      driftPerMillisecond:
+        x: 0
+        y: -0.01
+      painter: purchasedFeedback
 
 #################### UI ###################
 
@@ -154,7 +163,7 @@ mainMapView:
 # stroke args: style, shape, thickness, thick units, coords, coord units.
 #   e.g. stroke,red,rect,1,p,0.25,0.25,0.5,0.5,r
 # fill args: style, shape, coords, coord units
-# text args: style, text size, size units, center coords, center units, text
+# text args: style, text size, size units, align, baseline, center coords, center units, text
 # poly args: stroke style, fill style, width, width units, coord units, x1, y1, x2, y2, ..., [close]
 painters:
   toolPaletteUnselectedBase:
@@ -163,7 +172,7 @@ painters:
     - [fill,"hsl(120,50%,75%)",rect,0,0,1,1,r]
     - [innerStroke,black,rect,1,p,0,0,1,1,r]
   toolPaletteItem:
-    - [text,black,0.5,r,0.5,0.5,r,"<iconGlyph>"]
+    - [text,black,0.5,r,center,middle,0.5,0.5,r,"<iconGlyph>"]
   toolFocusRect:
     - [poly,black,,1,p, r, 0,0.3, 0,0, 0.3,0]
     - [poly,black,,1,p, r, 0.7,0, 1,0, 1,0.3]
@@ -171,19 +180,21 @@ painters:
     - [poly,black,,1,p, r, 0.3,1, 0,1, 0,0.7]
   toolHighlightStuff:
     - [poly,,black,0,p, r, 1.1,1.1, 1.4,1.4, 1.25,1.4, 1.13,1.52]
-    - [text,black,0.75,tw,1.44,1.8,r,"<highlightGlyph>"]
+    - [text,black,0.75,tw,center,middle,1.44,1.8,r,"<highlightGlyph>"]
+  purchasedFeedback:
+    - [text,green,1.25,tw,left,middle,1.1,0.5,r,"<formattedPrice>"]
   zoneRd0v0:
     - [fill,"hsl(0,50%,80%)",rect,0,0,1,1,r]
     - [innerStroke,red,rect,1,p,0,0,1,1,r]
-    - [text,"hsl(0,60%,45%)",0.25,r,0.5,0.5,r,R]
+    - [text,"hsl(0,60%,45%)",0.25,r,center,middle,0.5,0.5,r,R]
   zoneCd0v0:
     - [fill,"hsl(240,50%,80%)",rect,0,0,1,1,r]
     - [innerStroke,blue,rect,1,p,0,0,1,1,r]
-    - [text,"hsl(240,60%,45%)",0.25,r,0.5,0.5,r,C]
+    - [text,"hsl(240,60%,45%)",0.25,r,center,middle,0.5,0.5,r,C]
   zoneId0v0:
     - [fill,"hsl(50,60%,80%)",rect,0,0,1,1,r]
     - [innerStroke,yellow,rect,1,p,0,0,1,1,r]
-    - [text,"hsl(50,60%,45%)",0.25,r,0.5,0.5,r,I]
+    - [text,"hsl(50,60%,45%)",0.25,r,center,middle,0.5,0.5,r,I]
   proptree:
     variants:
       - - [fill,"hsl(35, 76%, 23%)",rect,0.4,0.5,0.2,0.5,r]

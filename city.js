@@ -1,16 +1,5 @@
 "use-strict";
 
-/*
-next steps:
-
-- hard-code some Plots on the map and get basic rendering working
-- click on map to plop a zone
-- tool pallete to select zone tools
-- keyboard shortcuts to select zone tools
-- some basic RCI and zone growth
-
-*/
-
 window.CitySim = (function() {
 
 var debugLog = Gaming.debugLog;
@@ -32,6 +21,7 @@ Rect.prototype.containsTile = function(point) {
 // ########################### GLOBAL #######################
 
 var _stringTemplateRegexes = {};
+var _zeroToOne = { min: 0, max: 1 };
 
 String.fromTemplate = function(template, data) {
     if (!template || !data || template.indexOf("<") < 0) { return template; }
@@ -60,6 +50,7 @@ var Z = {
 };
 
 var Simoleon = {
+    symbol: "§",
     format: function(value) {
         return `§${Number.uiInteger(value)}`;
     }
@@ -305,8 +296,8 @@ class City {
         for (var i = 0; i < debugPlots.length; i += 1) {
             var p = debugPlots[i];
             switch (p.cat) {
-                case "Zone": this.map.plots.push(Zone.newPlot(p.cfg)); break;
-                case "Prop": this.map.plots.push(TerrainProp.newPlot(p.cfg)); break;
+                case "Zone": this.plopPlot(Zone.newPlot(p.cfg)); break;
+                case "Prop": this.plopPlot(TerrainProp.newPlot(p.cfg)); break;
             }
         }
     }
@@ -321,11 +312,29 @@ class City {
         });
         return pop;
     }
+
+    spend(simoleons) {
+        return this.budget.spend(simoleons);
+    }
+
+    plopPlot(plot) {
+        this.map.plots.push(plot);
+    }
 }
 
 class Budget {
     constructor(config) {
         this.cash = config.startingCash;
+    }
+
+    spend(simoleons) {
+        simoleons = Math.round(simoleons);
+        if (this.cash >= simoleons) {
+            this.cash -= simoleons;
+            return true;
+        } else {
+            return false;
+        }
     }
 }
 
@@ -612,25 +621,37 @@ class MapToolPlopZone {
     }
 
     performSingleClickAction(session, tile) {
-        debugLog("TODO plop zone on " + tile.debugDescription());
+        var rect = this.focusRectForTileCoordinate(tile);
+        var result = { code: null, price: null, formattedPrice: null, focusTileRect: rect };
+        if (!rect) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
+        var plot = Zone.newPlot({ type: this.settings.zoneType, topLeft: rect.getOrigin() });
+        result.price = 0;
+        result.formattedPrice = Simoleon.format(result.price);
+        var purchased = session.game.city.spend(result.price);
+        if (!purchased) { result.code = MapToolSession.ActionResult.notAffordable; return result; }
+        session.game.city.plopPlot(plot);
+        result.code = MapToolSession.ActionResult.purchased;
+        return result;
     }
 }
 
 class MapToolSession {
-    constructor(tool, preemptedSession) {
-        this.tool = tool;
-        this.preemptedSession = null;
+    constructor(config) {
+        this.game = config.game;
+        this.tool = config.tool;
+        this.preemptedSession = config.preemptedSession;
         this.singleClickMovementTolerance = MapToolController.settings().singleClickMovementTolerance;
-        this._activationTimestamp = 12345; // some sort of timestamp. note DOM Event object has a timestamp.
+        this._activationTimestamp = Date.now();
         this._focusRect = null;
     }
 
     receivedPointInput(inputSequence, tile) {
+        var action = null;
         if (this._isSingleClick(inputSequence)) {
-            this.tool.performSingleClickAction(this, tile);
+            action = this.tool.performSingleClickAction(this, tile);
         }
         this._updateFocusRect(tile);
-        return { code: MapToolSession.InputResult.continueCurrentSession };
+        return { code: MapToolSession.InputResult.continueCurrentSession, action: action };
     }
 
     _isSingleClick(inputSequence) {
@@ -704,13 +725,22 @@ MapToolSession.InputResult = {
     endSession: 2,
     pauseAndPushNewSession: 3
 };
+MapToolSession.ActionResult = {
+    nothing: 0,
+    ok: 1,
+    purchased: 2,
+    notAffordable: 3,
+    notAllowed: 4
+};
 
 class MapToolController {
     constructor(config) {
         this.game = null;
         this.canvasGrid = null;
         this.defaultTool = null;
+        this._feedbackSettings = MapToolController.settings().feedback;
         this._toolSession = null;
+        this._feedbackItems = [];
         this._configureTools();
     }
 
@@ -725,6 +755,10 @@ class MapToolController {
 
     get activeSession() { return this._toolSession; }
     get allTools() { return this._allTools; }
+    get activeFeedbackItems() {
+        this._removeExpiredFeedback();
+        return this._feedbackItems;
+    }
 
     toolWithID(id) {
         return this._toolIDMap[id];
@@ -740,6 +774,7 @@ class MapToolController {
         var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
         if (!tile) { return; }
         var result = session.receivedPointInput(inputSequence, tile);
+        this._addFeedback(result.action);
         switch (result.code) {
             case MapToolSession.InputResult.continueCurrentSession: break;
             case MapToolSession.InputResult.endSession:
@@ -759,6 +794,34 @@ class MapToolController {
         debugLog("TODO selectToolID");
     }
 
+    _addFeedback(result) {
+        if (!result) { return; }
+        var item = null;
+        switch (result.code) {
+            case MapToolSession.ActionResult.purchased:
+                item = result; break;
+            case MapToolSession.ActionResult.notAffordable:
+                item = result; break;
+            case MapToolSession.ActionResult.notAllowed:
+                item = result; break;
+            default: break;
+        }
+        if (item) {
+            item.tool = this.activeSession.tool;
+            item.timestamp = Date.now();
+            this._feedbackItems.push(item);
+        }
+    }
+
+    _removeExpiredFeedback() {
+        var now = Date.now();
+        this._feedbackItems = this._feedbackItems.filter((item) => {
+            var feedback = MapToolController.getFeedbackSettings(this._feedbackSettings, item.code);
+            if (!feedback) { return false; }
+            return (now - item.timestamp) < feedback.displayMilliseconds;
+        });
+    }
+
     _endSession() {
         if (this._toolSession.preemptedSession) {
             this._toolSession = this._toolSession.preemptedSession;
@@ -772,7 +835,11 @@ class MapToolController {
         if (preempt) {
             this._toolSession.pause();
         }
-        this._toolSession = new MapToolSession(tool, preempt ? this._toolSession : null);
+        this._toolSession = new MapToolSession({
+            game: this.game,
+            tool: tool,
+            preemptedSession: preempt ? this._toolSession : null
+        });
         this._toolSession.resume();
     }
 
@@ -804,6 +871,16 @@ class MapToolController {
     }
 }
 MapToolController.settings = () => GameContent.shared.mapTools;
+MapToolController.getFeedbackSettings = (source, code) => {
+    switch (code) {
+        case MapToolSession.ActionResult.purchased: return source.purchased;
+        case MapToolSession.ActionResult.notAffordable: return source.notAffordable;
+        case MapToolSession.ActionResult.notAllowed: return source.notAllowed;
+        default:
+            once(`getFeedbackSettings-${code}`, () => debugLog(`Unknown code ${code}`));
+            return null;
+    }
+}
 
 // ##################### RENDERERS ######################
 
@@ -1013,6 +1090,9 @@ class ChromeRenderer {
         }
     }
 }
+ChromeRenderer.fadeOpacity = function(currentAge, targetAge, duration) {
+    return Math.clamp((targetAge - currentAge) / duration, _zeroToOne);
+};
 
 class PaletteToolSelector {
     constructor(tool, delegate) {
@@ -1261,29 +1341,52 @@ class MapToolSessionRenderer {
     constructor(config) {
         this.game = config.game;
         this.canvasGrid = config.canvasGrid;
+        this._feedbackSettings = Object.assign({}, MapToolController.settings().feedback);
         this._style = MapToolController.settings().mapOverlayStyle;
         this._frameCounter = 0;
         this.focusRectPainter = ScriptPainterStore.shared.getPainter(this._style.focusRectPainter);
+        Object.getOwnPropertyNames(this._feedbackSettings).forEach((key) => {
+            this._feedbackSettings[key].painter = ScriptPainterStore.shared.getPainter(this._feedbackSettings[key].painter);
+        });
     }
 
     render(ctx) {
         this._frameCounter = this._frameCounter + 1;
         var controller = MapToolController.shared;
         var session = controller.activeSession;
-        if (!session) { return; }
-        this._paintFocusRect(ctx, session);
+        if (session) {
+            this._paintFocusRect(ctx, session);
+        }
+        this._paintFeedback(ctx);
     }
 
     _paintFocusRect(ctx, session) {
         var tileRect = session.focusTileRect;
         if (!tileRect) { return; }
         var rect = this.canvasGrid.rectForTileRect(tileRect);
-        if (this._frameCounter % 60 == 0) {
-            debugLog([rect, tileRect, this.focusRectPainter]);
-        }
+        // if (this._frameCounter % 60 == 0) { debugLog([rect, tileRect, this.focusRectPainter]); }
         if (rect && this.focusRectPainter) {
             this.focusRectPainter.render(ctx, rect, this.canvasGrid, session.textTemplateInfo);
         }
+    }
+
+    _paintFeedback(ctx) {
+        var items = MapToolController.shared.activeFeedbackItems;
+        items.forEach((item) => this._paintFeedbackItem(ctx, item));
+    }
+
+    _paintFeedbackItem(ctx, item) {
+        var feedback = MapToolController.getFeedbackSettings(this._feedbackSettings, item.code);
+        if (!feedback || !feedback.painter || !item.focusTileRect) { return; }
+        ctx.save();
+        var age = Date.now() - item.timestamp;
+        ctx.globalAlpha = ChromeRenderer.fadeOpacity(age, feedback.displayMilliseconds, this._style.feedbackFadeMilliseconds);
+        if (feedback.driftPerMillisecond) {
+            ctx.translate(feedback.driftPerMillisecond.x * age, feedback.driftPerMillisecond.y * age);
+        }
+        var rect = this.canvasGrid.rectForTileRect(item.focusTileRect);
+        feedback.painter.render(ctx, rect, this.canvasGrid, item);
+        ctx.restore();
     }
 }
 
@@ -1291,10 +1394,13 @@ class ScriptPainter {
     constructor(config) {
         this.lines = config.lines;
         this.deviceScale = config.deviceScale;
-        this.rDomain = {min: 0, max: 1};
+        this.rDomain = _zeroToOne;
     }
     render(ctx, rect, canvasGrid, modelMetadata) {
         // TODO can we compile the lines so you don't parse them every frame?
+        // Idea would be to create Path objects, Text objects, etc. (using native Canvas stuff like
+        // Path2d or CanvasGradient when possible) with fixed "model" coordinates, then do the final runtime
+        // scaling/translation via CanvasRenderingContext2D transformation matrix.
         if (Array.isEmpty(this.lines)) { return; }
         var ext = rect.getExtremes();
         var xDomain = { min: ext.min.x, max: ext.max.x };
@@ -1319,7 +1425,7 @@ class ScriptPainter {
         switch (units) {
             case "p":
                 if (domain) {
-                    return this.domain.min + (value * this.deviceScale);
+                    return domain.min + (value * this.deviceScale);
                 } else {
                     return value * this.deviceScale;
                 }
@@ -1388,16 +1494,18 @@ class ScriptPainter {
         }
     }
 
-    // [text,red,0.25,r,0.5,0.5,r,R]
-    //  0    1   2    3 4   5   6 7
+    // [text,red,0.25,r,left,top,0.5,0.5,r,R]
+    //  0    1   2    3 4    5   6   7   8 9
     _text(line, ctx, info) {
         var sz = this._toPx(line[2], line[3], info.yRange, info.twRange);
-        var x = this._toPx(line[4], line[6], info.xDomain, info.twRange);
-        var y = this._toPx(line[5], line[6], info.yDomain, info.twRange);
+        ctx.textAlign = line[4];
+        ctx.textBaseline = line[5];
+        var x = this._toPx(line[6], line[8], info.xDomain, info.twRange);
+        var y = this._toPx(line[7], line[8], info.yDomain, info.twRange);
         ctx.font = `${sz}px sans-serif`;
         ctx.fillStyle = line[1];
-        var text = String.fromTemplate(line[7], info.modelMetadata);
-        ctx.fillTextCenteredOnPoint(text, new Point(x, y));
+        var text = String.fromTemplate(line[9], info.modelMetadata);
+        ctx.textFill(text, new Point(x, y));
     }
 }
 

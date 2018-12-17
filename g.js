@@ -158,13 +158,11 @@ CanvasRenderingContext2D.prototype.fillTextCentered = function(text, rect) {
     this.fillText(text, x, y);
 };
 
-CanvasRenderingContext2D.prototype.fillTextCenteredOnPoint = function(text, point, maxWidth) {
-    this.textAlign = "center";
-    this.textBaseline = "middle";
+CanvasRenderingContext2D.prototype.textFill = function(text, point, maxWidth) {
     if (maxWidth > 0) {
-        this.fillText(text, point.x, point.y, maxWidth);
-    } else {
         this.fillText(text, point.x, point.y);
+    } else {
+        this.fillText(text, point.x, point.y, maxWidth);
     }
 };
 

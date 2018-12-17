@@ -1,68 +1,50 @@
 ## Next tasks
 
-### Map tool refactoring
+### UI run loop
 
-PaletteRenderer has a SelectableList for the current MapTool?
-hm is it really a SelectableList?
-eh there are multiple types of modalities here.
-eg hold shift and drag to temporarily switch to the pan/click tool.
-Esc key to revert to the pan/click tool.
-tools that may not appear in the current palette.
-Might be better to use the general scripting engine. esp since there will likely be multiple objects that are interested in the selected tool and selection changes; and also since the paletterenderer should not be strongly coupled to the maprenderer. so eg trigger a global event when the selected tool changes, and the paletterenderer can listen for that.
+Map tool overlays, etc., still need to paint when even when the game engine is paused.
+So don't pause the UI run loop.
+Note that atmospheric animation loops will also want to continue when the game is paused.
 
-Are there interactions with the map canvas *other* than tools?
+### MapTool incremental development
 
-figure out the difference between:
-- the core definition/scripting of individual tools
-  - this is a model class that exists for the life of the game and can be used in various ways
-  - try to make these stateless
-  - independent of the palette (eg tools may not exist on the palette; palette may change, etc.)
-  - all the cost and validity calculations, and executing clicks/drags/hovers
-- palette selection/rendering
-- the usage of a specific tool in a given time period as the mouse moves around
-    - responding to dragging and clicking
-    - rendering status bar, hover overlays, etc.
-    - shifting between tools with key commands
-    - eg holding shift to pan - should it pause or cancel the existing command (e.g. start dragging a road, then shift to pan, then continue dragging some more to make a longer road)
-    - also a hotkey to shift to the query tool temporarily
-    - eg pressing escape to cancel a tool drag (but keep the tool selection). escape when not dragging switches to the pan tool
-    - some tools are single-use, eg plopping a gift. revert to the pan tool after usage.
+Done:
+- basic class design
+- focus rect painting
+- palette painting including selected tool
+- click the map and plop an R zone onto the map
+- update game state when plopping: subtract money, etc.
 
-### PointInputController
+Next:
+- click the palette to select a different tool
+- keyboard shortcuts to change tool selection
+- render everything top-down and left-right
+    - currently just renders in order of Plot creation
+    - optimize GameMap for this purpose
+- supplemental hover text next to the focus rect
+- conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
+  - is-allowed based on budget
+  - is-allowed based on plots under the cursor
+  - cost calculations
+- notAllowed and notAffordable feedback rendering
+- feedback.immediate YAML stuff
+- implement Bulldozer, C-plop, I-plop
+- Disable the initial debug zones but keep the debug trees
+- implement Pointer
+- implement Query. First instance of a complex in-game modal dialog. Pause the game run loop and input controllers when modal is visible.
+- click-and-drag behavior to preview/commit a larger change (bulldozer, roads)
+- implement Road builder
+- modifier keys to push/pop tool sessions (eg switching to Pointer/Query) or changing tool mode (eg showing tile coords with the Pointer/query tool, altering road build pathfinding, etc.)
 
-uses:
-- selecting tools from the palette
-- clicking on minimaps
-- clicking on the main map
-- game control panel
+### Save and restore game data, start new city
 
-each MapTool adds/removes themselves as delegates as they are selected/unselected.
-There's always a single active maptool so that should work well.
-let the PointInput delegates handle the offset calculations, etc.
-Looking up the tile in a canvasgrid: simplest is just having the delegate check controller.canvasGrid.tileAtCSSPoint right? No need for a wrapper in PointInputController?
-
-### Get some basic inputs working
-
-1. click the map and plop an R zone
-2. move the hover rect around as you move the mouse
-3. actually update the game state when plopping: subtract money, etc.
-4. finish the R-plopper tool: canPerformAction, highlightRectForTile, hoverText, etc. idea is to go deep with one tool to make sure the overall architecture is sound before spending lots of time on other tools
-5. click the palette and change tools. Maybe use canvas's native hit region concept for this? That could make it pretty generic: tie a hit region to an ID, use the ID to look up a game script to run
-6. implement more tools
+Implement it.
+Make sure Plots and stuff have a consistent way to store opaque state data.
+Also implement modal dialog for starting a new city so you can start over.
 
 ### Get some actual game logic working to make zones grow
 
 For the zone painter, start with just painting text within the square showing density/value/level of the zones (keep these around as "debug painters" for use in the future, and/or as a query-view like in SNES simcity).
-
-### Query tool popup dialog
-
-First instance of a complex in-game modal dialog.
-Pause the run loops and input controllers when modal is visible.
-
-### Save and restore game data, start new city
-
-implement it.
-Also implement modal dialog for starting a new city so you can start over.
 
 ### Zoom, pan, minimap, and canvas resizing
 
