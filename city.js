@@ -248,7 +248,7 @@ class Terrain {
 class GameMap {
     constructor(config) {
         this.terrain = config.terrain; // <Terrain>
-        this.plots = []; // <Plot>
+        this._plotsByRow = []; // sparse array-of-arrays of <Plot>
         this.activeToolSession = null;
     }
 
@@ -265,8 +265,22 @@ class GameMap {
     // to the rect; so you can look only in specific directions 
     // for eg bridges.
 
-    plotAtPoint(point) {
-        return this.plots.find(p => p.bounds.containsTile(point));
+    visitEachPlot(block) {
+        for (var row of this._plotsByRow) {
+            if (!row) { continue; }
+            for (var col of row) {
+                if (col) { block(col); }
+            }
+        }
+    }
+
+    _plotsAtRow(y, create) {
+        if (create && !this._plotsByRow[y]) { this._plotsByRow[y] = []; }
+        return this._plotsByRow[y];
+    }
+
+    addPlot(plot) {
+        this._plotsAtRow(plot.bounds.y, true)[plot.bounds.x] = plot;
     }
 }
 
@@ -304,7 +318,7 @@ class City {
 
     get population() {
         var pop = new RCIValue(0, 0, 0);
-        this.map.plots.forEach(function (plot) {
+        this.map.visitEachPlot((plot) => {
             var plotPop = plot.item.population;
             if (plotPop) {
                 pop = pop.adding(plotPop);
@@ -318,7 +332,7 @@ class City {
     }
 
     plopPlot(plot) {
-        this.map.plots.push(plot);
+        this.map.addPlot(plot);
     }
 }
 
@@ -824,7 +838,7 @@ class MapToolController {
         if (item) {
             item.tool = this.activeSession.tool;
             item.timestamp = Date.now();
-            this._feedbackItems.push(item);
+            this._feedbackItems.unshift(item);
         }
     }
 
@@ -1290,7 +1304,7 @@ class MapRenderer {
         var ctx = this.drawContext;
         this._terrainRenderer.render(ctx, this.settings);
         var r = this._plotRenderer;
-        this.game.city.map.plots.forEach((plot) => r.render(plot, ctx));
+        this.game.city.map.visitEachPlot((plot) => r.render(plot, ctx));
         this._toolRenderer.render(ctx);
         /*
     FlexCanvasGrid improvements:
