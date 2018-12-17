@@ -65,7 +65,9 @@ buildings:
 
 ################## INPUTS #################
 
-inputController:
+pointInputController:
+    singleClickMovementTolerance: 3
+keyInputController:
   keyPressEvents:
     - [[AnyShift,Slash], showGameHelp]
     - [[Digit0], pauseResume]
@@ -104,34 +106,28 @@ mapTools:
     pointer:
       isDefault: true
       type: pointer
-      # clickScriptID: centerMapOnTile
       iconGlyph: ◎
       paletteTitle: Browse
     query:
       type: query
-      # clickScriptID: queryMapTile
       iconGlyph: 🔍
       paletteTitle: Inspect
     bulldozer:
       type: bulldozer
-      # clickScriptID: performBulldozeTool
       iconGlyph: 💣
       paletteTitle: Bulldozer
     rZone:
       type: plopZone
-      # clickScriptID: performPlopZoneTool
       iconGlyph: 🏠
       paletteTitle: "Residential Zone ($100)"
       zoneType: R
     cZone:
       type: plopZone
-      # clickScriptID: performPlopZoneTool
       iconGlyph: 🏬
       paletteTitle: "Commercial Zone ($100)"
       zoneType: C
     iZone:
       type: plopZone
-      # clickScriptID: performPlopZoneTool
       iconGlyph: 🏭
       paletteTitle: "Industrial Zone ($100)"
       zoneType: I

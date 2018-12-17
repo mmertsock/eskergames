@@ -442,6 +442,10 @@ class PointInputSequence {
     get latestEvent() { return this.events[this.events.length - 1]; }
     get latestPoint() { return this._point(this.events[this.events.length - 1]); }
     get totalOffset() { return this.latestPoint.manhattanDistanceFrom(this.firstPoint); }
+    get isSingleClick() {
+        return this.latestEvent.type == "mouseup"
+            && this.latestPoint.manhattanDistanceFrom(this.firstPoint).magnitude <= GameContent.shared.pointInputController.singleClickMovementTolerance;
+    }
     add(event) { this.events.push(event); }
     _point(event) { return new Point(event.offsetX, event.offsetY); }
 }
@@ -462,7 +466,9 @@ class PointInputController {
         this.sequence = null;
         this.eventTarget.addEventListener("mousedown", this._mousedDown.bind(this));
         this.eventTarget.addEventListener("mouseup", this._mousedUp.bind(this));
-        this.eventTarget.addEventListener("mousemove", this._mousedUp.bind(this));
+        if (config.trackAllMovement) {
+            this.eventTarget.addEventListener("mousemove", this._moved.bind(this));
+        }
     }
 
     pushDelegate(delegate) { this.delegates.push(delegate); }
@@ -481,18 +487,27 @@ class PointInputController {
     }
 
     _mousedDown(evt) {
-        this.sequence = new PointInputSequence(evt);
-        this._fireForEachDelegate();
+        this._buildSequence(evt, true, false);
+    }
+
+    _moved(evt) {
+        this._buildSequence(evt, false, false);
     }
 
     _mousedUp(evt) {
-        if (!this.sequence) {
+        this._buildSequence(evt, false, true);
+    }
+
+    _buildSequence(evt, restart, end) {
+        if (restart || !this.sequence) {
             this.sequence = new PointInputSequence(evt)
         } else {
             this.sequence.add(evt);
         }
         this._fireForEachDelegate();
-        this.sequence = null;
+        if (end) {
+            this.sequence = null;
+        }
     }
 
     _fireForEachDelegate() {
@@ -512,7 +527,7 @@ class KeyInputController {
     constructor() {
         this.game = null;
         this.keyboardState = new Gaming.KeyboardState({ runLoop: uiRunLoop });
-        var settings = GameContent.shared.inputController;
+        var settings = GameContent.shared.keyInputController;
         this.keyPressEvents = settings.keyPressEvents;
         this.continuousKeyEvents = settings.continuousKeyEvents;
         this.keyboardState.addDelegate(this);
@@ -647,16 +662,11 @@ class MapToolSession {
 
     receivedPointInput(inputSequence, tile) {
         var action = null;
-        if (this._isSingleClick(inputSequence)) {
+        if (inputSequence.isSingleClick) {
             action = this.tool.performSingleClickAction(this, tile);
         }
         this._updateFocusRect(tile);
         return { code: MapToolSession.InputResult.continueCurrentSession, action: action };
-    }
-
-    _isSingleClick(inputSequence) {
-        return inputSequence.latestEvent.type == "mouseup"
-            && inputSequence.latestPoint.manhattanDistanceFrom(inputSequence.firstPoint).magnitude <= this.singleClickMovementTolerance;
     }
 
     pause() {
@@ -760,6 +770,10 @@ class MapToolController {
         return this._feedbackItems;
     }
 
+    isToolIDActive(id) {
+        return this.activeSession ? (this.activeSession.tool.id == id) : false;
+    }
+
     toolWithID(id) {
         return this._toolIDMap[id];
     }
@@ -787,11 +801,12 @@ class MapToolController {
     }
 
     selectTool(tool) {
+        if (!tool || this.isToolIDActive(tool.id)) { return; }
         this._beginNewSession(tool, false);
     }
 
     selectToolID(id) {
-        debugLog("TODO selectToolID");
+        this.selectTool(this.toolWithID(id));
     }
 
     _addFeedback(result) {
@@ -1094,26 +1109,17 @@ ChromeRenderer.fadeOpacity = function(currentAge, targetAge, duration) {
     return Math.clamp((targetAge - currentAge) / duration, _zeroToOne);
 };
 
-class PaletteToolSelector {
-    constructor(tool, delegate) {
-        this.tool = tool;
-        this.delegate = delegate;
-        this._selected = tool.settings.isDefault;
-    }
-    get isSelected() { return this._selected; }
-    setSelected(value) {
-        var fire = value && !this._selected;
-        this._selected = value;
-        if (fire) { delegate.mapToolActivated(this.tool) };
-    }
-}
-
 class PaletteRenderer {
     constructor(config) {
         this.canvas = config.containerElem;
         this.game = null;
         this._style = MapToolController.settings().paletteStyle;
         this._canvasDirty = true;
+        this.canvasInputController = new PointInputController({
+            eventTarget: this.canvas,
+            trackAllMovement: false
+        });
+        this.canvasInputController.pushDelegate(this);
     }
 
     get drawContext() {
@@ -1133,6 +1139,18 @@ class PaletteRenderer {
         uiRunLoop.addDelegate(this);
     }
 
+    shouldPassPointSessionToNextDelegate(inputSequence, controller) {
+        return false;
+    }
+
+    pointSessionChanged(inputSequence, controller) {
+        if (!inputSequence.isSingleClick) { return; }
+        var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
+        var id = this._toolIDForTile(tile);
+        MapToolController.shared.selectToolID(id);
+        this._canvasDirty = true; // TODO subcribe to tool-selection-change events instead
+    }
+
     processFrame(rl) {
         if (!this._canvasDirty || rl != uiRunLoop) { return; }
 
@@ -1148,9 +1166,10 @@ class PaletteRenderer {
         this._canvasDirty = false;
     }
 
-    isToolSelected(id) {
-        var session = MapToolController.shared.activeSession;
-        return session ? (session.tool.id == id) : false;
+    _toolIDForTile(tile) {
+        if (!tile) { return null; }
+        var index = this._style.columns * tile.y + tile.x;
+        return this.visibleToolIDs.safeItemAtIndex(index);
     }
 
     _rectForToolIndex(index) {
@@ -1165,7 +1184,7 @@ class PaletteRenderer {
     }
 
     _basePainter(tool) {
-        if (this.isToolSelected(tool.id)) {
+        if (MapToolController.shared.isToolIDActive(tool.id)) {
             return ScriptPainterStore.shared.getPainter(this._style.selectedBasePainter);
         } else {
             return ScriptPainterStore.shared.getPainter(this._style.unselectedBasePainter);
@@ -1227,7 +1246,8 @@ class MapRenderer {
 
         this._configureCommmands();
         this.canvasInputController = new PointInputController({
-            eventTarget: this.canvas
+            eventTarget: this.canvas,
+            trackAllMovement: true
         });
         MapToolController.shared.initialize({
             game: this.game,
@@ -1263,18 +1283,6 @@ class MapRenderer {
         gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
         gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
         gse.registerCommand("setZoomLevel", (index) => this.zoomSelection.setSelectedIndex(index));
-    }
-
-    _canvasSelected(inputSequence) {
-        var tile = this.canvasGrid.tileForCSSPoint(inputSequence.latestPoint);
-        debugLog(`Clicked map at pt ${inputSequence.latestPoint.debugDescription()}, tile ${tile}`);
-        // TODO set coord of the active tool session and 
-        // run its performAction thing.
-        // TODO also handle canvas-mouse-moved by setting the coord of the active tool
-        // Supporting dragging with tools: show a preview of the action (eg 
-        // drawing a road) with total cost: pass the entire DirectInputSession to the 
-        // tool. Or maybe the tool objects themselves register as delegates for 
-        // the DirectInputSession (and can prevent other delegates from responding).
     }
 
     _render() {
@@ -1352,8 +1360,7 @@ class MapToolSessionRenderer {
 
     render(ctx) {
         this._frameCounter = this._frameCounter + 1;
-        var controller = MapToolController.shared;
-        var session = controller.activeSession;
+        var session = MapToolController.shared.activeSession;
         if (session) {
             this._paintFocusRect(ctx, session);
         }

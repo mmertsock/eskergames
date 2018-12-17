@@ -14,19 +14,19 @@ Done:
 - palette painting including selected tool
 - click the map and plop an R zone onto the map
 - update game state when plopping: subtract money, etc.
+- click the palette to select a different tool
 
 Next:
-- click the palette to select a different tool
 - keyboard shortcuts to change tool selection
 - render everything top-down and left-right
     - currently just renders in order of Plot creation
     - optimize GameMap for this purpose
-- supplemental hover text next to the focus rect
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
   - is-allowed based on budget
   - is-allowed based on plots under the cursor
   - cost calculations
-- notAllowed and notAffordable feedback rendering
+- supplemental hover text next to the focus rect
+- notAllowed and notAffordable click feedback rendering
 - feedback.immediate YAML stuff
 - implement Bulldozer, C-plop, I-plop
 - Disable the initial debug zones but keep the debug trees
