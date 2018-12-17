@@ -59,6 +59,16 @@ Array.prototype.isIndexValid = function(i) {
 Array.prototype.safeItemAtIndex = function(i) {
     return (i >= 0 && i < this.length) ? this[i] : undefined;
 };
+if (Array.prototype.removeItemAtIndex) {
+    console.log("Array.prototype.removeItemAtIndex exists");
+} else {
+    Array.prototype.removeItemAtIndex = function(i) {
+        if (this.isIndexValid(i)) {
+            this.splice(i, 1);
+        }
+        return this;
+    }
+}
 
 class Rng {
     nextUnitFloat() {
@@ -478,7 +488,7 @@ Mixins.Gaming.SceneItem = function(cls, config) {
         if (!this.parentItem.childItems) { this.parentItem.childItems = []; }
         var index = this.parentItem.childItems.indexOf(this);
         if (index >= 0) {
-            this.parentItem.childItems.splice(index, 1);
+            this.parentItem.childItems.removeItemAtIndex(index);
         }
         this.parentItem = null;
         return this;

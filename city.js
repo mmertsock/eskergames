@@ -282,12 +282,21 @@ class GameMap {
     addPlot(plot) {
         this._plotsAtRow(plot.bounds.y, true)[plot.bounds.x] = plot;
     }
+
+    removePlot(plot) {
+        for (var row of this._plotsByRow) {
+            if (!row) { continue; }
+            for (var i = 0; i < row.length; i += 1) {
+                if (row[i] == plot) {
+                    row.removeItemAtIndex(i);
+                    return;
+                }
+            }
+        }
+    }
 }
 
 var debugPlots = [
-    {cat: "Zone", cfg: {type: Z.R, topLeft: new Point(15, 8)}},
-    {cat: "Zone", cfg: {type: Z.C, topLeft: new Point(18, 8)}},
-    {cat: "Zone", cfg: {type: Z.I, topLeft: new Point(17, 12)}},
     {cat: "Prop", cfg: {type: "tree", topLeft: new Point(19, 11)}},
     {cat: "Prop", cfg: {type: "tree", topLeft: new Point(20, 11)}},
     {cat: "Prop", cfg: {type: "tree", topLeft: new Point(20, 12)}},
@@ -435,10 +444,15 @@ class Game {
         }
     }
 
+    escapePressed() {
+        MapToolController.shared.selectTool(MapToolController.shared.defaultTool);
+    }
+
     _configureCommmands() {
         var gse = GameScriptEngine.shared;
         gse.registerCommand("pauseResume", () => this.togglePauseState());
         gse.registerCommand("setEngineSpeed", (index) => this.speedSelection.setSelectedIndex(index));
+        gse.registerCommand("escapePressed", () => this.escapePressed());
     }
 }
 Game.rules = function() {
@@ -494,7 +508,7 @@ class PointInputController {
         if (this.delegates.length <= 1) { return null; }
         var index = this.delegates.indexOf(delegate);
         if (this.delegates.isIndexValid(index)) {
-            this.delegates.splice(index, 1);
+            this.delegates.removeItemAtIndex(index);
             return delegate;
         }
         return null;
@@ -628,11 +642,21 @@ class MapToolBulldozer {
     get paletteRenderInfo() { return this.settings; }
 
     focusRectForTileCoordinate(tile) {
+        // TODO if there's a bulldozable plot under the cursor, 
+        // return that plot's tile rect instead.
+        // Could determine the actual focused Plot and store that as state in the 
+        // tool session, then just fetch that as needed.
         return tile ? new Rect(tile, { width: 1, height: 1 }) : null;
     }
 
     performSingleClickAction(session, tile) {
         debugLog("TODO bulldoze " + tile.debugDescription());
+        // Find plots under the tile
+        // Deal with multiple matches?
+        // Only bulldoze if clicking the center-ish of the plot?
+        // If no to any of the above, return notAvailable.
+        // Check price. Check whether the lot is protected from bulldozing.
+        // Spend money. game.city.map.removePlot
     }
 }
 
@@ -817,6 +841,7 @@ class MapToolController {
     selectTool(tool) {
         if (!tool || this.isToolIDActive(tool.id)) { return; }
         this._beginNewSession(tool, false);
+        debugLog("TODO eventing so the palette can redraw");
     }
 
     selectToolID(id) {
@@ -885,6 +910,7 @@ class MapToolController {
             }
         });
         this.defaultTool = this._allTools.find((t) => t.settings.isDefault);
+        GameScriptEngine.shared.registerCommand("selectTool", (id) => this.selectToolID(id));
     }
 
     _createTool(id, settings) {

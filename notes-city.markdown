@@ -15,21 +15,21 @@ Done:
 - click the map and plop an R zone onto the map
 - update game state when plopping: subtract money, etc.
 - click the palette to select a different tool
+- implement C-plop, I-plop
+- render everything top-down and left-right
+- keyboard shortcuts to change tool selection
+- Disable the initial debug zones but keep the debug trees
 
 Next:
-- keyboard shortcuts to change tool selection
-- render everything top-down and left-right
-    - currently just renders in order of Plot creation
-    - optimize GameMap for this purpose
+- implement Bulldozer
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
   - is-allowed based on budget
   - is-allowed based on plots under the cursor
   - cost calculations
 - supplemental hover text next to the focus rect
+- helper alt-titles on the palette, eg for keyboard shortcuts
 - notAllowed and notAffordable click feedback rendering
 - feedback.immediate YAML stuff
-- implement Bulldozer, C-plop, I-plop
-- Disable the initial debug zones but keep the debug trees
 - implement Pointer
 - implement Query. First instance of a complex in-game modal dialog. Pause the game run loop and input controllers when modal is visible.
 - click-and-drag behavior to preview/commit a larger change (bulldozer, roads)

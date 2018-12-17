@@ -69,7 +69,6 @@ pointInputController:
     singleClickMovementTolerance: 3
 keyInputController:
   keyPressEvents:
-    - [[AnyShift,Slash], showGameHelp]
     - [[Digit0], pauseResume]
     - [[Digit1], setEngineSpeed, 0]
     - [[Digit2], setEngineSpeed, 1]
@@ -83,6 +82,13 @@ keyInputController:
     - [[AnyShift,Digit2], setZoomLevel, 1]
     - [[AnyShift,Digit3], setZoomLevel, 2]
     - [[AnyShift,Digit4], setZoomLevel, 3]
+    - [[Escape], escapePressed]
+    - [[Slash], selectTool, query]
+    - [[AnyShift,Slash], selectTool, query]
+    - [[KeyX], selectTool, bulldozer]
+    - [[KeyQ], selectTool, rZone]
+    - [[KeyW], selectTool, cZone]
+    - [[KeyE], selectTool, iZone]
   continuousKeyEvents:
     - [[ArrowUp], panMap, N]
     - [[ArrowUp,ArrowRight], panMap, NE]
