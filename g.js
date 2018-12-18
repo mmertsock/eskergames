@@ -1204,13 +1204,15 @@ class KvoProperty {
 
 class DispatchTarget {
     constructor(id) {
-        this.id = id || Rng.shared.nextHexString(16);
+        DispatchTarget.counter += 1;
+        this.id = id || `DispatchTarget-${DispatchTarget.counter}`;
     }
     register(eventName, block) {
         Dispatch.shared.addTarget(this.id, eventName, block);
         return this;
     }
 }
+DispatchTarget.counter = 0;
 
 /*
 class PaletteRenderer {

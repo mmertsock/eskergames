@@ -7,6 +7,7 @@ var once = Gaming.once;
 var Rect = Gaming.Rect;
 var Point = Gaming.Point;
 var SelectableList = Gaming.SelectableList;
+var Kvo = Gaming.Kvo;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var GameContent = CitySimContent.GameContent;
 var GameScriptEngine = CitySimContent.GameScriptEngine;
@@ -789,6 +790,7 @@ class MapToolController {
         this._feedbackSettings = MapToolController.settings().feedback;
         this._toolSession = null;
         this._feedbackItems = [];
+        this.kvo = new Kvo(MapToolController, this);
         this._configureTools();
     }
 
@@ -797,7 +799,6 @@ class MapToolController {
         this.canvasGrid = config.canvasGrid;
         this.canvasInputController = config.canvasInputController;
         this.canvasInputController.pushDelegate(this);
-        // TODO also configure keyboard commands to switch tools
         this._beginNewSession(this.defaultTool, false);
     }
 
@@ -841,7 +842,6 @@ class MapToolController {
     selectTool(tool) {
         if (!tool || this.isToolIDActive(tool.id)) { return; }
         this._beginNewSession(tool, false);
-        debugLog("TODO eventing so the palette can redraw");
     }
 
     selectToolID(id) {
@@ -878,10 +878,10 @@ class MapToolController {
 
     _endSession() {
         if (this._toolSession.preemptedSession) {
-            this._toolSession = this._toolSession.preemptedSession;
+            this.kvo.activeSession.setValue(this._toolSession.preemptedSession, false, true);
             this._toolSession.resume();
         } else {
-            this.beginNewSession(this.defaultTool, false);
+            this._beginNewSession(this.defaultTool, false);
         }
     }
 
@@ -889,11 +889,11 @@ class MapToolController {
         if (preempt) {
             this._toolSession.pause();
         }
-        this._toolSession = new MapToolSession({
+        this.kvo.activeSession.setValue(new MapToolSession({
             game: this.game,
             tool: tool,
             preemptedSession: preempt ? this._toolSession : null
-        });
+        }), false, true);
         this._toolSession.resume();
     }
 
@@ -925,6 +925,7 @@ class MapToolController {
         }
     }
 }
+MapToolController.Kvo = { activeSession: "_toolSession" };
 MapToolController.settings = () => GameContent.shared.mapTools;
 MapToolController.getFeedbackSettings = (source, code) => {
     switch (code) {
@@ -1176,6 +1177,7 @@ class PaletteRenderer {
             tileSpacing: 0
         });
         this.visibleToolIDs = MapToolController.settings().defaultPalette;
+        MapToolController.shared.kvo.activeSession.addObserver(this, () => this._canvasDirty = true);
         uiRunLoop.addDelegate(this);
     }
 
@@ -1188,11 +1190,11 @@ class PaletteRenderer {
         var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
         var id = this._toolIDForTile(tile);
         MapToolController.shared.selectToolID(id);
-        this._canvasDirty = true; // TODO subcribe to tool-selection-change events instead
     }
 
     processFrame(rl) {
         if (!this._canvasDirty || rl != uiRunLoop) { return; }
+        this._canvasDirty = false;
 
         var ctx = this.drawContext;
         ctx.rectClear(this.canvasGrid.rectForFullCanvas);
@@ -1203,7 +1205,6 @@ class PaletteRenderer {
             var tool = MapToolController.shared.toolWithID(this.visibleToolIDs[i]);
             this._renderTool(ctx, tool, this._rectForToolIndex(i));
         }
-        this._canvasDirty = false;
     }
 
     _toolIDForTile(tile) {
