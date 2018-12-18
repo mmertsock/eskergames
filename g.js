@@ -1127,11 +1127,17 @@ class Dispatch {
         this._blocks[eventName][id] = block;
     }
 
-    postEventSync(eventName, info) {
+    postEventSync(eventName, info, log) {
+        var numNotified = 0;
         var blocks = this._blocks[eventName];
-        if (!blocks) { return; }
-        for (var id of Object.getOwnPropertyNames(blocks)) {
-            blocks[id](eventName, info);
+        if (blocks) {
+            for (var id of Object.getOwnPropertyNames(blocks)) {
+                blocks[id](eventName, info);
+                numNotified += 1;
+            }
+        }
+        if (log) {
+            debugLog(`Dispatch ${eventName}, targets notified: ${numNotified}`);
         }
     }
 
@@ -1144,6 +1150,57 @@ class Dispatch {
     }
 }
 Dispatch.shared = new Dispatch();
+
+class Kvo {
+    constructor(sourceClass, item) {
+        this._obj = item;
+        this.eventName = `${sourceClass.name}.kvo`;
+        if (sourceClass.Kvo) {
+            for (var key of Object.getOwnPropertyNames(sourceClass.Kvo)) {
+                this[key] = new KvoProperty(this, sourceClass.Kvo[key]);
+            }
+        }
+    }
+    addObserver(target, block) {
+        if (!target._kvoDT) { target._kvoDT = new DispatchTarget(); }
+        target._kvoDT.register(this.eventName, (eventName, item) => {
+            if (item === this._obj) { block(item, this); }
+        });
+        return this;
+    }
+    notifyChanged(log) {
+        Dispatch.shared.postEventSync(this.eventName, this._obj, log);
+    }
+}
+Kvo.stopObservations = function(target) {
+    if (!target._kvoDT) { return; }
+    Dispatch.shared.remove(target._kvoDT);
+    target._kvoDT = null;
+};
+
+class KvoProperty {
+    constructor(kvo, key) {
+        this.kvo = kvo;
+        this.key = key;
+        this.eventName = `${key}.${kvo.eventName}`;
+    }
+    addObserver(target, block) {
+        if (!target._kvoDT) { target._kvoDT = new DispatchTarget(); }
+        target._kvoDT.register(this.eventName, (eventName, item) => {
+            if (item === this.kvo._obj) { block(item, this); }
+        });
+        return this;
+    }
+    notifyChanged(notifyRoot, log) {
+        Dispatch.shared.postEventSync(this.eventName, this.kvo._obj, log);
+        if (typeof(notifyRoot) === "undefined") { notifyRoot = true; }
+        if (notifyRoot) { this.kvo.notifyChanged(log); }
+    }
+    setValue(value, notifyRoot, log) {
+        this.kvo._obj[this.key] = value;
+        this.notifyChanged(notifyRoot, log);
+    }
+}
 
 class DispatchTarget {
     constructor(id) {
@@ -1654,6 +1711,7 @@ return {
     RunLoop: RunLoop,
     Dispatch: Dispatch,
     DispatchTarget: DispatchTarget,
+    Kvo: Kvo,
     FlexCanvasGrid: FlexCanvasGrid,
     CanvasGrid: CanvasGrid,
     Prompt: Prompt,

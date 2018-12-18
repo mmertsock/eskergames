@@ -8,6 +8,7 @@ var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var SimDate = CitySim.SimDate;
 var Dispatch = Gaming.Dispatch;
 var DispatchTarget = Gaming.DispatchTarget;
+var Kvo = Gaming.Kvo;
 
 function appendOutputItem(msg, className) {
     if (!outputElement) { return; }
@@ -91,6 +92,7 @@ class UnitTest {
             logTestHeader(`END ${this.name}`);
         }.bind(this);
     }
+
     usage(msg) {
         if (!this.usaged) {
             logTestMsg("Usage:");
@@ -114,6 +116,17 @@ class UnitTest {
         this.expectations += 1;
         if (a != b) {
             this.logFailure(this._assertMessage(`assertEqual failure: ${a} != ${b}`, msg));
+            return false;
+        }
+        return true;
+    }
+    assertElementsEqual(a, b, msg) {
+        this.expectations += 1;
+        if (!a && !b) { return true; }
+        if ((!a || !b)
+            || (a.length != b.length)
+            || (!a.every((item, i) => item == b[i]))) {
+            this.logFailure(this._assertMessage(`assertElementsEqual: ${a} != ${b}`, msg));
             return false;
         }
         return true;
@@ -336,6 +349,146 @@ function dispatchTest() {
     }).build()();
 }
 
+function kvoTest() {
+    class Employee {
+        constructor(employer, title, name) {
+            this.employer = employer;
+            this._title = title;
+            this.name = name;
+            this.kvo = new Kvo(Employee, this);
+        }
+        get title() { return this._title; }
+        get salary() { return this.employer.getSalary(this.title); }
+        setTitle(value) {
+            this._title = value;
+            this.kvo.title.setValue(value, false, true);
+            this.kvo.salary.notifyChanged(true, true);
+        }
+        setName(value) {
+            this.kvo.name.setValue(value, true, true);
+        }
+        doStuff() {
+            this.kvo.notifyChanged(true);
+        }
+    }
+    Employee.Kvo = { title: "_title", salary: "_salary", name: "name" };
+
+    class Business {
+        constructor(salaryTable) {
+            this.salaryTable = salaryTable;
+        }
+        getSalary(title) {
+            return this.salaryTable[title];
+        }
+    }
+
+    class EmployeeWatcher {
+        constructor(employee, top, child) {
+            this.employee = employee;
+            this.salaryHistory = [employee.salary];
+            this.kvoHistory = [];
+            if (top) {
+                this.employee.kvo.addObserver(this, (source) => {
+                    this.kvoHistory.push({ source: source, via: "top" });
+                });
+            }
+            if (child) {
+                this.employee.kvo.salary.addObserver(this, (source) => {
+                    this.salaryHistory.push(source.salary);
+                    this.kvoHistory.push({ source: source, via: "salary" });
+                });
+                this.employee.kvo.name.addObserver(this, (source) => {
+                    this.kvoHistory.push({ source: source, via: "name" });
+                });
+            }
+        }
+    }
+
+    new UnitTest("Kvo-Setup", function() {
+        var business1 = new Business({ bagger: 10, manager: 100 });
+        this.assertEqual(business1.getSalary("bagger"), 10);
+        this.assertEqual(business1.getSalary("manager"), 100);
+        var person1 = new Employee(business1, "bagger", "A");
+        this.assertEqual(person1.title, "bagger");
+        this.assertEqual(person1.name, "A");
+        this.assertEqual(person1.salary, 10);
+        var house1 = new EmployeeWatcher(person1, false, false);
+        this.assertElementsEqual(house1.salaryHistory, [10]);
+        this.assertEqual(house1.kvoHistory.length, 0);
+        person1.setTitle("manager");
+        this.assertEqual(person1.salary, 100);
+    }).build()();
+
+    new UnitTest("Kvo-TopLevel", function() {
+        var business1 = new Business({ bagger: 10, manager: 100 });
+        var person1 = new Employee(business1, "bagger", "A");
+        var house1 = new EmployeeWatcher(person1, true, false);
+        person1.setTitle("manager");
+        if (this.assertEqual(house1.kvoHistory.length, 1)) {
+            this.assertEqual(house1.kvoHistory[0].source, person1);
+            this.assertEqual(house1.kvoHistory[0].via, "top");
+        };
+        person1.setName("B");
+        if (this.assertEqual(house1.kvoHistory.length, 2)) {
+            this.assertEqual(house1.kvoHistory[1].source, person1);
+            this.assertEqual(house1.kvoHistory[1].via, "top");
+        };
+        person1.doStuff();
+        if (this.assertEqual(house1.kvoHistory.length, 3)) {
+            this.assertEqual(house1.kvoHistory[2].source, person1);
+            this.assertEqual(house1.kvoHistory[2].via, "top");
+        };
+        Kvo.stopObservations(house1);
+        person1.setName("C");
+        this.assertEqual(house1.kvoHistory.length, 3);
+    }).build()();
+
+    new UnitTest("Kvo-Property", function() {
+        var business1 = new Business({ bagger: 10, manager: 100 });
+        var person1 = new Employee(business1, "bagger", "A");
+        var person2 = new Employee(business1, "manager", "B");
+        var house1 = new EmployeeWatcher(person1, false, true);
+        person1.setTitle("manager");
+        person2.setTitle("bagger");
+        this.assertElementsEqual(house1.salaryHistory, [10, 100]);
+        if (this.assertEqual(house1.kvoHistory.length, 1)) {
+            this.assertEqual(house1.kvoHistory[0].source, person1);
+            this.assertEqual(house1.kvoHistory[0].via, "salary");
+        }
+        person1.setName("C");
+        this.assertEqual(house1.salaryHistory.length, 2);
+        if (this.assertEqual(house1.kvoHistory.length, 2)) {
+            this.assertEqual(house1.kvoHistory[1].source, person1);
+            this.assertEqual(house1.kvoHistory[1].via, "name");
+        }
+        Kvo.stopObservations(house1);
+        person1.setTitle("bagger");
+        this.assertEqual(house1.salaryHistory.length, 2);
+        this.assertEqual(house1.kvoHistory.length, 2);
+    }).build()();
+
+    new UnitTest("Kvo-Combined", function() {
+        var business1 = new Business({ bagger: 10, manager: 100 });
+        var person1 = new Employee(business1, "bagger", "A");
+        var person2 = new Employee(business1, "manager", "B");
+        var house1 = new EmployeeWatcher(person1, true, true);
+        person1.setTitle("manager");
+        this.assertElementsEqual(house1.salaryHistory, [10, 100]);
+        if (this.assertEqual(house1.kvoHistory.length, 2)) {
+            this.assertEqual(house1.kvoHistory[0].source, person1);
+            this.assertEqual(house1.kvoHistory[0].via, "salary");
+            this.assertEqual(house1.kvoHistory[1].source, person1);
+            this.assertEqual(house1.kvoHistory[1].via, "top");
+        }
+        person1.doStuff();
+        this.assertEqual(house1.salaryHistory.length, 2);
+        if (this.assertEqual(house1.kvoHistory.length, 3)) {
+            this.assertEqual(house1.kvoHistory[2].source, person1);
+            this.assertEqual(house1.kvoHistory[2].via, "top");
+        }
+    }).build()();
+}
+
 function flexCanvasGridTest(config, expect) {
     if (!config || !expect) {
         this.usage("call(config, expect)");
@@ -511,6 +664,7 @@ TestSession.current = new TestSession([
     stringTemplateTest,
     simDateTest,
     dispatchTest,
+    kvoTest,
     flexCanvasGridTest1,
     flexCanvasGridTest2,
     flexCanvasGridTest3
