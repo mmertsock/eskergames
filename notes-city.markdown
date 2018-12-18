@@ -1,11 +1,5 @@
 ## Next tasks
 
-### UI run loop
-
-Map tool overlays, etc., still need to paint when even when the game engine is paused.
-So don't pause the UI run loop.
-Note that atmospheric animation loops will also want to continue when the game is paused.
-
 ### MapTool incremental development
 
 Done:
@@ -19,9 +13,10 @@ Done:
 - render everything top-down and left-right
 - keyboard shortcuts to change tool selection
 - Disable the initial debug zones but keep the debug trees
+- KVO to update selected tool in the palette
 
 Next:
-- implement Bulldozer
+- implement Bulldozer (single clicks)
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
   - is-allowed based on budget
   - is-allowed based on plots under the cursor

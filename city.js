@@ -369,21 +369,13 @@ class Game {
         var speeds = Game.rules().speeds.map((s) => new SpeedSelector(s, this));
         this.speedSelection = new SelectableList(speeds);
         this._started = false;
-
-        // TODO set up a separate run loop for the game logic.
-        // main RunLoop is only for fast UI rendering, game RunLoop
-        // ticks once per SimDate to do all the math. Renderers can 
-        // hook into the game RunLoop to calculate and cach things 
-        // like population only when necessary, so we aren't recalculating 
-        // big aggregate sums 60x a second when it won't change nearly 
-        // that often.
     }
 
     get isStarted() {
         return this._started;
     }
     get isRunning() {
-        return this._started && uiRunLoop.isRunning();
+        return this._started && engineRunLoop.isRunning();
     }
 
     get engineSpeed() {
@@ -398,7 +390,6 @@ class Game {
         this._started = true;
         debugLog(`Started game with city ${this.city.identity.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.sizeInTiles.width}x${this.city.map.terrain.sizeInTiles.height}`);
 
-        uiRunLoop.addDelegate(this);
         engineRunLoop.addDelegate(this);
         uiRunLoop.resume();
         GameScriptEngine.shared.execute("_beginGame", this);
@@ -407,13 +398,13 @@ class Game {
     pause() {
         if (!this.isRunning) { return; }
         debugLog(`Paused game.`);
-        uiRunLoop.pause();
+        engineRunLoop.pause();
     }
 
     resume() {
         if (!this.isStarted || this.isRunning) { return; }
         debugLog("Unpaused game.");
-        uiRunLoop.resume();
+        engineRunLoop.resume();
     }
 
     togglePauseState() {
@@ -438,9 +429,7 @@ class Game {
     }
 
     processFrame(rl) {
-        if (rl == uiRunLoop) {
-
-        } else if (rl == engineRunLoop) {
+        if (rl == engineRunLoop) {
             this.city.time.date = this.city.time.date.adding(1);
         }
     }
@@ -696,7 +685,7 @@ class MapToolSession {
         this.preemptedSession = config.preemptedSession;
         this.singleClickMovementTolerance = MapToolController.settings().singleClickMovementTolerance;
         this._activationTimestamp = Date.now();
-        this._focusRect = null;
+        this._tile = null;
     }
 
     receivedPointInput(inputSequence, tile) {
@@ -704,7 +693,7 @@ class MapToolSession {
         if (inputSequence.isSingleClick) {
             action = this.tool.performSingleClickAction(this, tile);
         }
-        this._updateFocusRect(tile);
+        this._tile = tile;
         return { code: MapToolSession.InputResult.continueCurrentSession, action: action };
     }
 
@@ -714,11 +703,6 @@ class MapToolSession {
 
     resume() {
 
-    }
-
-    _updateFocusRect(tile) {
-        // TODO ask the MapTool to translate the single tile coord to a rect
-        this._focusRect = new Rect(tile, { width: 3, height: 3 });
     }
 
     // UI stuff
@@ -736,10 +720,10 @@ class MapToolSession {
 
     // (optional) List of tiles that may be affected. e.g. to paint with translucent overlay
     get affectedTileRects() {
-        if (!this._focusRect) { return null; }
+        if (!this._tile) { return null; }
         return {
             // a zone might be a single 3x3 rect, a road may be a bunch of 1x1s
-            tileRects: [this._focusRect],
+            tileRects: [],
             // runs the script once per tile rect
             painterID: this.tool.settings.proposedTileRectOverlayPainter
         };
@@ -747,13 +731,13 @@ class MapToolSession {
 
     // (optional) Primary tile rect the tool is pointing to
     get focusTileRect() {
-        return this.tool.focusRectForTileCoordinate(this._focusRect);
+        return this.tool.focusRectForTileCoordinate(this._tile);
     }
 
     // (optional) What to render next to the cursor. Note it defines the position
     // to paint at; not the current cursor x/y position.
     get hoverStatusRenderInfo() {
-        if (!this._focusRect) { return null; }
+        if (!this._tile) { return null; }
         // TODO some tools may not display a hover status. e.g. the Pointer
         // or only sometimes, e.g. show tile coords if holding Option key with the Pointer.
         return {
