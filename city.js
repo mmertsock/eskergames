@@ -12,11 +12,30 @@ var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var GameContent = CitySimContent.GameContent;
 var GameScriptEngine = CitySimContent.GameScriptEngine;
 
-Rect.prototype.containsTile = function(point) {
-    return point.x >= this.x
-        && point.y <= this.y
-        && point.x < (this.x + this.width)
-        && point.y < (this.y + this.height);
+Rect.prototype.containsTile = function(x, y) {
+    if (typeof y === 'undefined') {
+        return x.x >= this.x
+            && x.y >= this.y
+            && x.x < (this.x + this.width)
+            && x.y < (this.y + this.height);
+    } else {
+        return x >= this.x
+            && y >= this.y
+            && x < (this.x + this.width)
+            && y < (this.y + this.height);
+    }
+};
+
+// ordered by row then column
+Rect.prototype.allTileCoordinates = function() {
+    var extremes = this.getExtremes();
+    var coords = [];
+    for (var y = extremes.min.y; y < extremes.max.y; y += 1) {
+        for (var x = extremes.min.x; x < extremes.max.x; x += 1) {
+            coords.push(new Point(x, y));
+        }
+    }
+    return coords;
 };
 
 // ########################### GLOBAL #######################
@@ -234,66 +253,75 @@ class Plot {
 // ########################### MAP/GAME #######################
 
 class Terrain {
-    // select a Terrain when starting a game
-    // define via Yaml. Or auto generate. or?
     constructor(config) {
-        this.sizeInTiles = config.sizeInTiles; // <width/height>
-        this.boundsInTiles = new Rect({x: 0, y: 0}, config.sizeInTiles);
+        this.size = config.size; // <width/height>
+        this.bounds = new Rect(new Point(0, 0), config.size);
     }
 
     isTileRectWithinBounds(rect) {
-        return this.boundsInTiles.contains(rect);
+        return this.bounds.contains(rect);
     }
 }
 
 class GameMap {
     constructor(config) {
-        this.terrain = config.terrain; // <Terrain>
-        this._plotsByRow = []; // sparse array-of-arrays of <Plot>
-        this.activeToolSession = null;
+        this.terrain = config.terrain;
+        // flat sparse arrays in drawing order. See _tileIndex for addressing
+        this._plots = [];
+        this._tiles = [];
     }
 
-    // isValidForConstruction: each building/zone type class 
-    // decides this for itself. check isTileRectWithinBounds, 
-    // whether it intersects any Plots, water, etc. GameMap 
-    // has a intersectingPlots func that returns an array of 
-    // all Plots that overlap a given rect. Each 
-    // isValidForConstruction func can use intersectingPlots 
-    // to make its decision (e.g. is it empty, is it only grass,
-    // is it all water, etc.). Also a adjacentPlots could be 
-    // useful for eg powerline or bridge construction. Pass it 
-    // a Directions spec (e.g. horiz/vert/diagonal) in addition 
-    // to the rect; so you can look only in specific directions 
-    // for eg bridges.
+    get bounds() { return this.terrain.bounds; }
 
-    visitEachPlot(block) {
-        for (var row of this._plotsByRow) {
-            if (!row) { continue; }
-            for (var col of row) {
-                if (col) { block(col); }
-            }
-        }
-    }
-
-    _plotsAtRow(y, create) {
-        if (create && !this._plotsByRow[y]) { this._plotsByRow[y] = []; }
-        return this._plotsByRow[y];
+    isValidCoordinate(x, y) {
+        return this.terrain.bounds.containsTile(x, y);
     }
 
     addPlot(plot) {
-        this._plotsAtRow(plot.bounds.y, true)[plot.bounds.x] = plot;
+        var index = this._tileIndex(plot.bounds.getOrigin());
+        if (isNaN(index)) { return; }
+        this._plots[index] = plot;
+        plot.bounds.allTileCoordinates()
+            .map((t) => this._tileIndex(t))
+            .forEach((i) => { if (!isNaN(i)) { this._tiles[i] = plot; } });
+        debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription()}`);
     }
 
     removePlot(plot) {
-        for (var row of this._plotsByRow) {
-            if (!row) { continue; }
-            for (var i = 0; i < row.length; i += 1) {
-                if (row[i] == plot) {
-                    row.removeItemAtIndex(i);
-                    return;
-                }
-            }
+        var index = this._tileIndex(plot.bounds.getOrigin());
+        if (!isNaN(index) && this._plots[index] === plot) {
+            this._plots[index] = null;
+            plot.bounds.allTileCoordinates()
+                .map((t) => this._tileIndex(t))
+                .forEach((i) => { if (!isNaN(i) && this._tiles[i] === plot) { this._tiles[i] = null; } });
+            debugLog(`Removed plot ${plot.title} at ${plot.bounds.debugDescription()}`);
         }
+    }
+
+    visitEachPlot(block) {
+        for (var i = 0; i < this._plots.length; i += 1) {
+            if (this._plots[i]) { block(this._plots[i]); }
+        }
+    }
+
+    plotAtTile(x, y) {
+        var index = this._tileIndex(x, y);
+        return isNaN(index) ? null : this._tiles[index];
+    }
+
+    plotsInRect(rect) {
+        return Array.from(new Set(rect.allTileCoordinates()
+                .map((t) => this.plotAtTile(t))
+                .filter((p) => !!p)));
+    }
+
+    _tileIndex(x, y) {
+        var px = x; var py = y;
+        if (typeof y === 'undefined') {
+            px = x.x; py = x.y;
+        }
+        if (!this.isValidCoordinate(px, py)) { return NaN; }
+        return py * this.terrain.size.height + px;
     }
 }
 
@@ -388,7 +416,7 @@ class Game {
         this.gameSpeedActivated(this.engineSpeed);
         this.renderer.initialize(this);
         this._started = true;
-        debugLog(`Started game with city ${this.city.identity.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.sizeInTiles.width}x${this.city.map.terrain.sizeInTiles.height}`);
+        debugLog(`Started game with city ${this.city.identity.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.size.width}x${this.city.map.terrain.size.height}`);
 
         engineRunLoop.addDelegate(this);
         uiRunLoop.resume();

@@ -215,6 +215,6 @@ scripts:
 
 terrains:
 - id: _default
-  sizeInTiles:
+  size:
     width: 256
     height: 256

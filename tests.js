@@ -5,10 +5,11 @@ window.UnitTests = (function(outputElement) {
 var Point = Gaming.Point;
 var Rect = Gaming.Rect;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
-var SimDate = CitySim.SimDate;
 var Dispatch = Gaming.Dispatch;
 var DispatchTarget = Gaming.DispatchTarget;
 var Kvo = Gaming.Kvo;
+var SimDate = CitySim.SimDate;
+var GameMap = CitySim.GameMap;
 
 function appendOutputItem(msg, className) {
     if (!outputElement) { return; }
@@ -656,18 +657,150 @@ var rectHashTest = function() {
     logTestMsg(grid.join("\n"));
 };
 
+function cityRectExtensionsTest() {
+    new UnitTest("RectExtensions-City", function() {
+        var rect1 = new Rect(17, 9, 4, 7);
+        [new Point(17, 9), new Point(19, 11), new Point(20, 9), new Point(17, 15), new Point(20, 15)].forEach((p) => {
+            this.assertTrue(rect1.containsTile(p), p.debugDescription());
+            this.assertTrue(rect1.containsTile(p.x, p.y), p.debugDescription() + " decomposed");
+        });
+        [new Point(16, 9), new Point(17, 8), new Point(21, 9), new Point(17, 16)].forEach((p) => {
+            this.assertTrue(!rect1.containsTile(p), p.debugDescription());
+            this.assertTrue(!rect1.containsTile(p.x, p.y), p.debugDescription() + " decomposed");
+        });
+        var coords = rect1.allTileCoordinates();
+        this.assertEqual(coords.length, 28);
+
+        var rect2 = new Rect(24, 31, 3, 2);
+        coords = rect2.allTileCoordinates();
+        this.assertElementsEqual(coords.map((p) => p.y), [31, 31, 31, 32, 32, 32]);
+        this.assertElementsEqual(coords.map((p) => p.x), [24, 25, 26, 24, 25, 26]);
+
+        var rect1x1 = new Rect(5, 2, 1, 1);
+        this.assertTrue(rect1x1.containsTile(5, 2));
+        this.assertTrue(!rect1x1.containsTile(4, 2));
+        this.assertTrue(!rect1x1.containsTile(5, 3));
+        coords = rect1x1.allTileCoordinates();
+        this.assertEqual(coords.length, 1);
+        this.assertEqual(coords[0].x, 5);
+        this.assertEqual(coords[0].y, 2);
+
+        var rectEmpty = new Rect(3, 2, 0, 0);
+        coords = rectEmpty.allTileCoordinates();
+        this.assertTrue(!rectEmpty.containsTile(3, 2));
+        this.assertEqual(coords.length, 0);
+    }).build()();
+}
+
+function gameMapTest() {
+    new UnitTest("GameMap",function() {
+        var terrain = { bounds: new Rect(0, 0, 10, 6), size: { width: 10, height: 6} };
+        var sut = new GameMap({ terrain: terrain });
+        [new Point(0, 0), new Point(3, 3), new Point(0, 5), new Point(9, 0), new Point(9, 5)].forEach((p) => {
+            this.assertTrue(sut.isValidCoordinate(p), p.debugDescription());
+            this.assertTrue(sut.isValidCoordinate(p.x, p.y), p.debugDescription());
+        });
+        [new Point(-1, 0), new Point(0, -1), new Point(-1, -1), new Point(0, 6), new Point(10, 0), new Point(10, 6), new Point(15, 15)].forEach((p) => {
+            this.assertTrue(!sut.isValidCoordinate(p), p.debugDescription());
+            this.assertTrue(!sut.isValidCoordinate(p.x, p.y), p.debugDescription());
+        });
+
+        var visits = [];
+        var visitor = function (plot) { visits.push(plot); };
+        var makePlot = function(name, x, y, w, h) { return { name: name, bounds: new Rect(x, y, w, h) }; };
+
+        sut.visitEachPlot(visitor);
+        this.assertEqual(visits.length, 0);
+        sut.removePlot(makePlot("bogus", 0, 0, 1, 1)); // make sure it doesn't break
+
+        visits = [];
+        var plot1211 = makePlot("A", 1, 2, 1, 1);
+        sut.addPlot(plot1211);
+        sut.visitEachPlot(visitor);
+        this.assertEqual(visits.length, 1);
+        this.assertEqual(sut.plotAtTile(1, 2), plot1211);
+        this.assertEqual(sut.plotAtTile(2, 2), null);
+        var found = sut.plotsInRect(plot1211.bounds);
+        this.assertEqual(found.length, 1)
+        this.assertEqual(found[0], plot1211);
+        found = sut.plotsInRect(plot1211.bounds.inset(-1, -1));
+        this.assertEqual(found.length, 1)
+        this.assertEqual(found[0], plot1211);
+        this.assertEqual(sut.plotsInRect(new Rect(1, 1, 5, 1)).length, 0);
+        this.assertEqual(sut.plotsInRect(new Rect(-3, 1, 5, 2)).length, 1);
+
+        visits = [];
+        var plot3432 = makePlot("B", 3, 4, 3, 2);
+        sut.addPlot(plot3432);
+        sut.visitEachPlot(visitor);
+        this.assertElementsEqual(visits.map((p) => p.name), ["A", "B"]);
+        this.assertEqual(sut.plotAtTile(new Point(3, 4)), plot3432);
+        this.assertEqual(sut.plotAtTile(new Point(5, 5)), plot3432);
+        this.assertEqual(sut.plotAtTile(2, 4), null);
+        this.assertEqual(sut.plotAtTile(6, 4), null);
+        this.assertEqual(sut.plotAtTile(3, 3), null);
+        found = sut.plotsInRect(plot3432.bounds);
+        this.assertElementsEqual(found.map((p) => p.name), ["B"]);
+        found = sut.plotsInRect(sut.bounds);
+        this.assertElementsEqual(found.map((p) => p.name).sort(), ["A", "B"]);
+        found = sut.plotsInRect(new Rect(4, 4, 4, 1));
+        this.assertElementsEqual(found.map((p) => p.name), ["B"]);
+
+        visits = [];
+        var plot0513 = makePlot("C", 5, 0, 1, 3);
+        var plot2411 = makePlot("D", 2, 4, 1, 1);
+        sut.addPlot(plot0513);
+        sut.addPlot(plot2411);
+        sut.addPlot(plot2411); // test adding twice is idempotent
+/*   0123456789
+    0     C
+    1     C
+    2 A   C
+    3
+    4  DBBB
+    5   BBB
+     0123456789 */
+        sut.visitEachPlot(visitor);
+        this.assertElementsEqual(visits.map((p) => p.name), ["C", "A", "D", "B"]); // order by row then column
+        found = sut.plotsInRect(new Rect(4, 1, 3, 1));
+        this.assertElementsEqual(found.map((p) => p.name), ["C"]);
+        found = sut.plotsInRect(plot0513.bounds.union(plot2411.bounds));
+        this.assertElementsEqual(found.map((p) => p.name).sort(), ["B", "C", "D"])
+
+        visits = [];
+        sut.removePlot(plot3432);
+        sut.visitEachPlot(visitor);
+        this.assertElementsEqual(visits.map((p) => p.name), ["C", "A", "D"]);
+        this.assertEqual(sut.plotAtTile(3, 4), null);
+        this.assertEqual(sut.plotAtTile(4, 5), null);
+        this.assertEqual(sut.plotsInRect(plot3432.bounds).length, 0);
+
+        visits = [];
+        sut.removePlot(plot1211);
+        sut.removePlot(plot3432); // test removing twice is idempotent
+        sut.removePlot(plot0513);
+        sut.removePlot(plot2411);
+        sut.visitEachPlot(visitor);
+        this.assertEqual(visits.length, 0);
+        this.assertEqual(sut.plotsInRect(sut.bounds).length, 0);
+
+    }).build()();
+}
+
 TestSession.current = new TestSession([
     // rectHashTest,
-    selectableListTest,
     manhattanDistanceFromTest,
     randomTest,
     stringTemplateTest,
-    simDateTest,
+    selectableListTest,
     dispatchTest,
     kvoTest,
     flexCanvasGridTest1,
     flexCanvasGridTest2,
-    flexCanvasGridTest3
+    flexCanvasGridTest3,
+    cityRectExtensionsTest,
+    simDateTest,
+    gameMapTest
 ]);
 
 return TestSession.current;
