@@ -24,6 +24,7 @@ Done:
 - Disable the initial debug zones but keep the debug trees
 - KVO to update selected tool in the palette
 - implement Bulldozer (single clicks)
+- center focus rect over mouse for plopPlot
 
 Next:
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective

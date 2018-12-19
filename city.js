@@ -37,6 +37,26 @@ Rect.prototype.allTileCoordinates = function() {
     return coords;
 };
 
+Rect.tileRectWithCenter = function(center, size) {
+    var x = (size.width < 2) ? center.x : (center.x - Math.floor(0.5 * size.width));
+    var y = (size.height < 2) ? center.y : (center.y - Math.floor(0.5 * size.height));
+    return new Rect(x, y, size.width, size.height);
+};
+
+// Tries to move (not resize) this rect to be within the given bounds.
+// If it doesn't fit, sets origin == bounds.origin.
+Rect.prototype.clampedWithinTileBounds = function(bounds) {
+    if (bounds.contains(this)) { return this; }
+    var myExtremes = this.getExtremes();
+    var theirExtremes = bounds.getExtremes();
+    var dx = 0, dy = 0;
+    if (myExtremes.max.x > theirExtremes.max.x) { dx = theirExtremes.max.x - myExtremes.max.x; }
+    if (myExtremes.min.x < theirExtremes.min.x) { dx = theirExtremes.min.x - myExtremes.min.x; }
+    if (myExtremes.max.y > theirExtremes.max.y) { dy = theirExtremes.max.y - myExtremes.max.y; }
+    if (myExtremes.min.y < theirExtremes.min.y) { dy = theirExtremes.min.y - myExtremes.min.y; }
+    return new Rect(this.x + dx, this.y + dy, this.width, this.height);
+};
+
 String.fromTemplate = function(template, data) {
     if (!template || !data || template.indexOf("<") < 0) { return template; }
     Object.getOwnPropertyNames(data).forEach((pn) => {
@@ -251,12 +271,14 @@ class Terrain {
         this.size = config.size; // <width/height>
         this.bounds = new Rect(new Point(0, 0), config.size);
     }
-
-    isTileRectWithinBounds(rect) {
-        return this.bounds.contains(rect);
-    }
 }
 
+// NB this doesn't properly handle overlapping plots.
+// Either implement full support for that, or refuse to addPlot when
+// the plot would overlap another (thus, need to remove the old plot
+// first). Should also refuse to addPlot if its bounds goes outside
+// the bounds of the map. Return null from addPlot/removePlot upon
+// failure, and return the plot object upon success.
 class GameMap {
     constructor(config) {
         this.terrain = config.terrain;
@@ -271,14 +293,27 @@ class GameMap {
         return this.terrain.bounds.containsTile(x, y);
     }
 
+    isTileRectWithinBounds(rect) {
+        return this.terrain.bounds.contains(rect);
+    }
+
     addPlot(plot) {
+        if (!this.isTileRectWithinBounds(plot.bounds)) {
+            debugLog(`Plot is outside of map bounds: ${plot.bounds.debugDescription()}`);
+            return null;
+        }
         var index = this._tileIndex(plot.bounds.getOrigin());
-        if (isNaN(index)) { return; }
+        if (isNaN(index)) { return null; }
+        if (this.plotsInRect(plot.bounds).length > 0) {
+            debugLog(`Cannot add plot at ${plot.bounds.debugDescription()}: overlaps other plots.`);
+            return null;
+        }
         this._plots[index] = plot;
         plot.bounds.allTileCoordinates()
             .map((t) => this._tileIndex(t))
             .forEach((i) => { if (!isNaN(i)) { this._tiles[i] = plot; } });
         debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription()}`);
+        return plot;
     }
 
     removePlot(plot) {
@@ -289,7 +324,9 @@ class GameMap {
                 .map((t) => this._tileIndex(t))
                 .forEach((i) => { if (!isNaN(i) && this._tiles[i] === plot) { this._tiles[i] = null; } });
             debugLog(`Removed plot ${plot.title} at ${plot.bounds.debugDescription()}`);
+            return plot;
         }
+        return null;
     }
 
     visitEachPlot(block) {
@@ -364,15 +401,14 @@ class City {
     }
 
     plopPlot(plot) {
-        this.map.addPlot(plot);
+        return this.map.addPlot(plot);
     }
 
     destroyPlot(plot) {
-        this.map.removePlot(plot);
+        return this.map.removePlot(plot);
     }
 
     proposeAction(type, tile) {
-
     }
 
     attemptAction(type, tile) {
@@ -677,8 +713,8 @@ class MapToolBulldozer {
         result.formattedPrice = Simoleon.format(result.price);
         var purchased = session.game.city.spend(result.price);
         if (purchased) {
-            session.game.city.destroyPlot(plot);
-            result.code = MapToolSession.ActionResult.purchased;
+            var destroyed = session.game.city.destroyPlot(plot);
+            result.code = destroyed ? MapToolSession.ActionResult.purchased : MapToolSession.ActionResult.notAllowed;
         } else {
             result.code = MapToolSession.ActionResult.notAffordable;
         }
@@ -700,7 +736,9 @@ class MapToolPlopZone {
     get paletteRenderInfo() { return this.settings; }
 
     focusRectForTileCoordinate(session, tile) {
-        return tile ? new Rect(tile, this.zoneInfo.plotSize) : null;
+        if (!tile) { return null; }
+        return Rect.tileRectWithCenter(tile, this.zoneInfo.plotSize)
+            .clampedWithinTileBounds(session.game.city.map.bounds);
     }
 
     performSingleClickAction(session, tile) {
@@ -712,8 +750,8 @@ class MapToolPlopZone {
         result.formattedPrice = Simoleon.format(result.price);
         var purchased = session.game.city.spend(result.price);
         if (!purchased) { result.code = MapToolSession.ActionResult.notAffordable; return result; }
-        session.game.city.plopPlot(plot);
-        result.code = MapToolSession.ActionResult.purchased;
+        var plopped = session.game.city.plopPlot(plot);
+        result.code = plopped ? MapToolSession.ActionResult.purchased : MapToolSession.ActionResult.notAllowed;
         return result;
     }
 }

@@ -771,11 +771,11 @@ function gameMapTest() {
 
         sut.visitEachPlot(visitor);
         this.assertEqual(visits.length, 0);
-        sut.removePlot(makePlot("bogus", 0, 0, 1, 1)); // make sure it doesn't break
+        this.assertEqual(sut.removePlot(makePlot("bogus", 0, 0, 1, 1)), null); // make sure it doesn't break
 
         visits = [];
         var plot1211 = makePlot("A", 1, 2, 1, 1);
-        sut.addPlot(plot1211);
+        this.assertEqual(sut.addPlot(plot1211), plot1211);
         sut.visitEachPlot(visitor);
         this.assertEqual(visits.length, 1);
         this.assertEqual(sut.plotAtTile(1, 2), plot1211);
@@ -828,7 +828,7 @@ function gameMapTest() {
         this.assertElementsEqual(found.map((p) => p.name).sort(), ["B", "C", "D"])
 
         visits = [];
-        sut.removePlot(plot3432);
+        this.assertEqual(sut.removePlot(plot3432), plot3432);
         sut.visitEachPlot(visitor);
         this.assertElementsEqual(visits.map((p) => p.name), ["C", "A", "D"]);
         this.assertEqual(sut.plotAtTile(3, 4), null);
@@ -843,6 +843,29 @@ function gameMapTest() {
         sut.visitEachPlot(visitor);
         this.assertEqual(visits.length, 0);
         this.assertEqual(sut.plotsInRect(sut.bounds).length, 0);
+
+        // Plots outside the map bounds, overlapping plots, etc.
+        sut = new GameMap({ terrain: terrain });
+
+        visits = [];
+        this.assertEqual(sut.addPlot(makePlot("X", 14, 27, 1, 1)), null);
+        sut.visitEachPlot(visitor);
+        this.assertEqual(visits.length, 0);
+
+        visits = [];
+        this.assertEqual(sut.addPlot(makePlot("X", -1, -1, 1, 1)), null);
+        this.assertEqual(sut.addPlot(makePlot("X", 1, -1, 3, 3)), null);
+        this.assertEqual(sut.addPlot(makePlot("X", -1, 1, 3, 3)), null);
+        this.assertEqual(sut.addPlot(makePlot("X", 8, 1, 5, 1)), null);
+        sut.visitEachPlot(visitor);
+        this.assertEqual(visits.length, 0);
+
+        visits = [];
+        sut.addPlot(plot3432);
+        var plotOverlaps3432 = makePlot(5, 5, 3, 1);
+        this.assertEqual(sut.addPlot(plotOverlaps3432), null);
+        sut.visitEachPlot(visitor);
+        this.assertElementsEqual(visits.map(p => p.name), [plot3432.name]);
 
     }).build()();
 }
