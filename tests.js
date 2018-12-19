@@ -4,6 +4,7 @@ window.UnitTests = (function(outputElement) {
 
 var Point = Gaming.Point;
 var Rect = Gaming.Rect;
+var CircularArray = Gaming.CircularArray;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var Dispatch = Gaming.Dispatch;
 var DispatchTarget = Gaming.DispatchTarget;
@@ -173,6 +174,65 @@ var manhattanDistanceFromTest = function() {
         this.assertEqual(result.dx, -8);
         this.assertEqual(result.dy, 2);
         this.assertEqual(result.magnitude, 8);
+    }).build()();
+}
+
+var circularArrayTest = function() {
+    new UnitTest("CircularArray", function() {
+        var sut = new CircularArray(5);
+        this.assertEqual(sut.maxLength, 5);
+        this.assertTrue(sut.isEmpty)
+        this.assertEqual(sut.size, 0);
+        this.assertEqual(sut.first, null);
+        this.assertEqual(sut.last, null);
+
+        sut.push("A");
+        this.assertEqual(sut.maxLength, 5);
+        this.assertTrue(!sut.isEmpty);
+        this.assertEqual(sut.size, 1);
+        this.assertEqual(sut.first, "A");
+        this.assertEqual(sut.last, "A");
+
+        sut.push("B");
+        this.assertTrue(!sut.isEmpty);
+        this.assertEqual(sut.size, 2);
+        this.assertEqual(sut.first, "A");
+        this.assertEqual(sut.last, "B");
+
+        sut.push("C");
+        sut.push("D");
+        this.assertTrue(!sut.isEmpty);
+        this.assertEqual(sut.size, 4);
+        this.assertEqual(sut.first, "A");
+        this.assertEqual(sut.last, "D");
+
+        sut.push("E");
+        this.assertEqual(sut.size, 5);
+        this.assertEqual(sut.first, "A");
+        this.assertEqual(sut.last, "E");
+
+        sut.push("F");
+        this.assertEqual(sut.size, 5);
+        this.assertEqual(sut.first, "B");
+        this.assertEqual(sut.last, "F");
+
+        sut.push("G"); sut.push("H"); sut.push("I"); sut.push("J"); sut.push("K"); sut.push("L");
+        this.assertEqual(sut.size, 5);
+        this.assertEqual(sut.first, "H");
+        this.assertEqual(sut.last, "L");
+
+        sut.reset();
+        this.assertEqual(sut.maxLength, 5);
+        this.assertTrue(sut.isEmpty);
+        this.assertEqual(sut.size, 0);
+        this.assertEqual(sut.first, null);
+        this.assertEqual(sut.last, null);
+
+        sut.push("A");
+        this.assertTrue(!sut.isEmpty);
+        this.assertEqual(sut.size, 1);
+        this.assertEqual(sut.first, "A");
+        this.assertEqual(sut.last, "A");
     }).build()();
 }
 
@@ -790,6 +850,7 @@ function gameMapTest() {
 TestSession.current = new TestSession([
     // rectHashTest,
     manhattanDistanceFromTest,
+    circularArrayTest,
     randomTest,
     stringTemplateTest,
     selectableListTest,

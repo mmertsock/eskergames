@@ -220,6 +220,48 @@ Mixins.Gaming.DelegateSet = function(cls) {
     });
 };
 
+class CircularArray {
+    constructor(maxLength) {
+        this.maxLength = maxLength;
+        this.items = new Array(maxLength);
+        this.reset();
+    }
+
+    get isEmpty() {
+        return this._oldestIndex < 0;
+    }
+
+    get size() {
+        if (this._oldestIndex < 0) { return 0; }
+        if (this._oldestIndex < this._nextIndex) { return this._nextIndex - this._oldestIndex; }
+        return this._nextIndex + (this.maxLength - this._oldestIndex);
+    }
+
+    get last() {
+        return this.isEmpty ? null : this.items[((this._nextIndex - 1 + this.maxLength) % this.maxLength)];
+    }
+
+    get first() {
+        return this.isEmpty ? null : this.items[this._oldestIndex];
+    }
+
+    reset() {
+        this._nextIndex = 0;
+        this._oldestIndex = -1;
+    }
+
+    push(value) {
+        this.items[this._nextIndex] = value;
+        var newIndex = (this._nextIndex + 1) % this.maxLength;
+        if (this._oldestIndex < 0) {
+            this._oldestIndex = 0;
+        } else if (this._oldestIndex == this._nextIndex) {
+            this._oldestIndex = newIndex;
+        }
+        this._nextIndex = newIndex;
+    }
+}
+
 class SelectableList {
     constructor(items) {
         this.items = items;
@@ -989,7 +1031,7 @@ var RunLoop = function(config) {
     this.runState = RunStates.notStarted;
     this.started = false;
     this.nextTimeoutID = undefined;
-    this.recentFrameStartDates = [];
+    this.recentFrameStartDates = new CircularArray(100);
     this.childRunLoops = (config.childRunLoops === undefined) ? [] : config.childRunLoops;
     if (!config.runWhenPageIsInBackground) {
         document.addEventListener("visibilitychange", this.toggleAutopause.bind(this));
@@ -1004,19 +1046,19 @@ RunLoop.prototype.setTargetFrameRate = function(value) {
 
 RunLoop.prototype.getRecentFramesPerSecond = function() {
     var seconds = this._getRecentSecondsElapsed();
-    return isNaN(seconds) ? NaN : (1000 * this.recentFrameStartDates.length / seconds);
+    return isNaN(seconds) ? NaN : (1000 * this.recentFrameStartDates.size / seconds);
 };
 
 RunLoop.prototype.getRecentMillisecondsPerFrame = function() {
     var seconds = this._getRecentSecondsElapsed();
-    return isNaN(seconds) ? NaN : (seconds / this.recentFrameStartDates.length);
+    return isNaN(seconds) ? NaN : (seconds / this.recentFrameStartDates.size);
 };
 
 RunLoop.prototype._getRecentSecondsElapsed = function() {
-    if (!this.isRunning() || this.recentFrameStartDates.length < 5) {
+    if (this.recentFrameStartDates.size < 5) {
         return NaN;
     }
-    var seconds = (this.recentFrameStartDates[this.recentFrameStartDates.length - 1] - this.recentFrameStartDates[0]);
+    var seconds = this.recentFrameStartDates.last - this.recentFrameStartDates.first;
     if (seconds <= 0) {
         console.warn(`Unexpected recentFrameStartDates interval ${seconds}`);
         return NaN;
@@ -1048,7 +1090,7 @@ RunLoop.prototype.pause = function(autoPause) {
     this.runState = autoPause ? RunStates.autoPaused : RunStates.paused;
     clearTimeout(this.nextTimeoutID);
     this.nextTimeoutID = undefined;
-    this.recentFrameStartDates = [];
+    this.recentFrameStartDates.reset();
     this.forEachDelegate(function (d) {
         if (d.runLoopDidPause) {
             d.runLoopDidPause(this);
@@ -1077,7 +1119,7 @@ RunLoop.prototype.scheduleNextFrame = function() {
     }
 
     var delay = this.targetFrameInterval;
-    var lastDate = this.latestFrameStartDate();
+    var lastDate = this.recentFrameStartDates.last;
     if (lastDate) {
         var delayFromLastFrame = this.targetFrameInterval - (new Date() - lastDate);
         if (delayFromLastFrame < 0.5 * this.targetFrameInterval) {
@@ -1088,25 +1130,12 @@ RunLoop.prototype.scheduleNextFrame = function() {
     this.nextTimeoutID = setTimeout(this.processFrame.bind(this), delay);
 };
 
-RunLoop.prototype.latestFrameStartDate = function() {
-    if (this.recentFrameStartDates.length == 0) { return null; }
-    return this.recentFrameStartDates[this.recentFrameStartDates.length - 1];
-};
-
 RunLoop.prototype.processFrame = function() {
     this.nextTimeoutID = undefined;
     if (!this.isRunning()) {
         return;
     }
-
     this.recentFrameStartDates.push(new Date());
-    if (this.recentFrameStartDates.length > 100) {
-        this.recentFrameStartDates = this.recentFrameStartDates.slice(100 - this.recentFrameStartDates.length);
-    }
-
-    // if (this.id == "engineRunLoop") {
-    //     console.log("processFrame")
-    // }
     this.forEachDelegate(function (d) {
         if (d.processFrame) {
             d.processFrame(this);
@@ -1718,6 +1747,7 @@ return {
     CanvasGrid: CanvasGrid,
     Prompt: Prompt,
     Slider: Slider,
+    CircularArray: CircularArray,
     SelectableList: SelectableList,
     RectSlider: RectSlider
 };

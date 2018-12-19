@@ -14,13 +14,16 @@ Done:
 - keyboard shortcuts to change tool selection
 - Disable the initial debug zones but keep the debug trees
 - KVO to update selected tool in the palette
+- implement Bulldozer (single clicks)
 
 Next:
-- implement Bulldozer (single clicks)
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
+  - note basically all of this logic will be duplicated when moving the mouse and when clicking. So when moving the mouse it's like a preview or dry-run of an action. Maybe the City class has a method to Propose an Action, returns an object with cost, allowed, affordable, etc. And then a method to Perform an Action, which creates a new proposal in the identical way then performs it if valid (redo it in case the game state changed; pass the same args to performAction as to proposeAction, and the returned object is basically the same). Note, moving logic out of Tools and into City. So moving the mouse around creates proposal objects and UI is based on that; clicking creates performAction objects which is almost the same from the UI perspective (except it's actually done so add more effects/colors).
   - is-allowed based on budget
   - is-allowed based on plots under the cursor
   - cost calculations
+  - caching for performance to reduce the amount of ui run loop calculations would be nice. calculate once per 
+    mouse movement at most. but also would need to invalidate when the game state changes if you keep the mouse still
 - supplemental hover text next to the focus rect
 - helper alt-titles on the palette, eg for keyboard shortcuts
 - notAllowed and notAffordable click feedback rendering
@@ -28,6 +31,7 @@ Next:
 - implement Pointer
 - implement Query. First instance of a complex in-game modal dialog. Pause the game run loop and input controllers when modal is visible.
 - click-and-drag behavior to preview/commit a larger change (bulldozer, roads)
+- only destroy larger plots when clicking the center
 - implement Road builder
 - modifier keys to push/pop tool sessions (eg switching to Pointer/Query) or changing tool mode (eg showing tile coords with the Pointer/query tool, altering road build pathfinding, etc.)
 
