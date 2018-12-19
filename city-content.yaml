@@ -204,6 +204,26 @@ painters:
       - - [fill,"hsl(35, 66%, 33%)",rect,0.4,0.5,0.2,0.5,r]
         - [fill,"hsl(120, 55%, 45%)",ellipse,0.2,0.1,0.6,0.6,r]
 
+################## STRINGS ################
+
+strings:
+  defaultCityName: New City
+  engineMsPerDayLabel: "<value> ms/day"
+  failedToLoadGameMessage: There was a problem loading the game data.
+  failedToLoadGameTitle: Failed to load game
+  frameRateTokenSeparator: ". "
+  gameProductTitle: CitySim
+  gameStatePaused: Paused
+  genericCancelButton: Cancel
+  helpDismiss: Thanks!
+  newGameButton: New Game
+  newGamePromptMessage: "Start a new game?"
+  newGamePromptStartButton: Start Game
+  newGamePromptTitle: New Game
+  pauseResumePause: Pause
+  pauseResumeResume: Resume
+  uiFpsLabel: "<value> fps"
+
 ################## SCRIPTS ################
 
 scripts:

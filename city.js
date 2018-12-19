@@ -12,17 +12,16 @@ var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var GameContent = CitySimContent.GameContent;
 var GameScriptEngine = CitySimContent.GameScriptEngine;
 
+// ########################### GLOBAL #######################
+
+var _stringTemplateRegexes = {};
+var _zeroToOne = { min: 0, max: 1 };
+
 Rect.prototype.containsTile = function(x, y) {
     if (typeof y === 'undefined') {
-        return x.x >= this.x
-            && x.y >= this.y
-            && x.x < (this.x + this.width)
-            && x.y < (this.y + this.height);
+        return x.x >= this.x && x.y >= this.y && x.x < (this.x + this.width) && x.y < (this.y + this.height);
     } else {
-        return x >= this.x
-            && y >= this.y
-            && x < (this.x + this.width)
-            && y < (this.y + this.height);
+        return   x >= this.x &&   y >= this.y &&   x < (this.x + this.width) &&   y < (this.y + this.height);
     }
 };
 
@@ -37,11 +36,6 @@ Rect.prototype.allTileCoordinates = function() {
     }
     return coords;
 };
-
-// ########################### GLOBAL #######################
-
-var _stringTemplateRegexes = {};
-var _zeroToOne = { min: 0, max: 1 };
 
 String.fromTemplate = function(template, data) {
     if (!template || !data || template.indexOf("<") < 0) { return template; }
@@ -376,6 +370,14 @@ class City {
     destroyPlot(plot) {
         this.map.removePlot(plot);
     }
+
+    proposeAction(type, tile) {
+
+    }
+
+    attemptAction(type, tile) {
+
+    }
 }
 
 class Budget {
@@ -477,9 +479,7 @@ class Game {
         gse.registerCommand("escapePressed", () => this.escapePressed());
     }
 }
-Game.rules = function() {
-    return GameContent.shared.gameRules;
-}
+Game.rules = function() { return GameContent.shared.gameRules; };
 
 // #################### USER INPUT ######################
 
@@ -778,7 +778,7 @@ class MapToolSession {
     // to paint at; not the current cursor x/y position.
     get hoverStatusRenderInfo() {
         if (!this._tile) { return null; }
-        // TODO some tools may not display a hover status. e.g. the Pointer
+        // Some tools may not display a hover status. e.g. the Pointer
         // or only sometimes, e.g. show tile coords if holding Option key with the Pointer.
         return {
             tileRect: new Rect(1, 1, 1, 1), // determines position to paint below
@@ -964,20 +964,6 @@ MapToolController.getFeedbackSettings = (source, code) => {
 
 // ##################### RENDERERS ######################
 
-// TODO Viewport: defines the subset of the map that's currently 
-// visible (offset + zoom level). And functions to move the 
-// viewport that the InputController would use. Also note you 
-// could have minimaps for navigation or stats wiews that 
-// would use separate Renderer/Viewport copies with different 
-// configs and target canvases.
-
-class Viewport {
-    constructor(config) {
-        this.zoom = config.zoom; // <Float>. 1 == normal size.
-        this.offset = { x: 0, y: 0 };
-    }
-}
-
 // Top level. Handles the DOM elements outside the canvas, etc.
 class ChromeRenderer {
     constructor() {
@@ -1004,8 +990,8 @@ class ChromeRenderer {
 
     failedToLoadBaseData() {
         new Gaming.Prompt({
-            title: "Failed to load game",
-            message: "There was a problem loading the game data.",
+            title: Strings.str("failedToLoadGameTitle"),
+            message: Strings.str("failedToLoadGameMessage"),
             requireSelection: true
         }).show();
     }
@@ -1032,13 +1018,11 @@ class ChromeRenderer {
         sr.append(this.elems.minimapContainer);
 
         this.elems.speedControlElems = [];
-        this.elems.pauseResume = document.createElement("a");
-        this.elems.pauseResume.innerText = "Resume";
+        this.elems.pauseResume = this._createButton(Strings.str("pauseResumeResume"));
         this.elems.pauseResume.addEventListener("click", this._startPauseResumeClicked.bind(this));
         this.elems.speedControls.append(this.elems.pauseResume);
         Game.rules().speeds.forEach(function (speed, index) {
-            var ctrl = document.createElement("a").addRemClass("glyph", true);
-            ctrl.innerText = speed.glyph;
+            var ctrl = this._createButton(speed.glyph).addRemClass("glyph", true);
             ctrl.addGameCommandEventListener("click", true, "setEngineSpeed", index);
             this.elems.speedControls.append(ctrl);
             this.elems.speedControlElems.push(ctrl);
@@ -1095,15 +1079,15 @@ class ChromeRenderer {
         var helpSource = this.elems.container.querySelector("help");
         new Gaming.Prompt({
             customContent: helpSource.cloneNode(true).addRemClass("hidden", false),
-            buttons: [ {label: "Thanks!"} ]
+            buttons: [ {label: Strings.str("helpDismiss")} ]
         }).show();
     }
 
     render() {
         if (!this.game) {
             this.elems.sceneRoot.addRemClass("hidden", true);
-            this.elems.container.querySelector("h1").innerText = "CitySim";
-            document.title = "CitySim";
+            this.elems.container.querySelector("h1").innerText = Strings.str("gameProductTitle");
+            document.title = Strings.str("gameProductTitle");
             return;
         }
         var date = this.game.city.time.date.longString();
@@ -1118,7 +1102,14 @@ class ChromeRenderer {
 
     runLoopDidPause(rl) {
         this._updateGameRunningStateLabels();
-        this.elems.frameRate.innerText = "Paused";
+        this.elems.frameRate.innerText = Strings.str("gameStatePaused");
+    }
+
+    _createButton(text) {
+        var ctrl = document.createElement("a");
+        ctrl.href = "#";
+        ctrl.innerText = text;
+        return ctrl;
     }
 
     _configureCommmands() {
@@ -1129,30 +1120,30 @@ class ChromeRenderer {
         var rates = [];
         var uiFrameRate = uiRunLoop.getRecentFramesPerSecond();
         if (!isNaN(uiFrameRate)) {
-            rates.push(`${Math.round(uiFrameRate)} fps`);
+            rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate) }));
         }
         var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
         if (!isNaN(engineFrameRate)) {
-            rates.push(`${Math.round(engineFrameRate)} ms/day`);
+            rates.push(Strings.template("engineMsPerDayLabel", { value: Math.round(engineFrameRate) }));
         }
 
-        this.elems.frameRate.innerText = rates.join(". ");
+        this.elems.frameRate.innerText = rates.join(Strings.str("frameRateTokenSeparator"));
     }
 
     _updateGameRunningStateLabels() {
         var speedIndex = -1;
         if (!this.game) {
-            this.elems.fileMenu.innerText = "New Game";
+            this.elems.fileMenu.innerText = String.str("newGameButton");
             this.elems.fileMenu.addRemClass("hidden", false);
             this.elems.speedControls.addRemClass("hidden", true);
         } else if (this.game.isRunning) {
             this.elems.fileMenu.addRemClass("hidden", true);
-            this.elems.pauseResume.innerText = "Pause";
+            this.elems.pauseResume.innerText = Strings.str("pauseResumePause");
             this.elems.speedControls.addRemClass("hidden", false);
             speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
         } else {
             this.elems.fileMenu.addRemClass("hidden", true);
-            this.elems.pauseResume.innerText = "Resume";
+            this.elems.pauseResume.innerText = Strings.str("pauseResumeResume");
             this.elems.speedControls.addRemClass("hidden", false);
             speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
         }
@@ -1604,6 +1595,16 @@ class ScriptPainterStore {
 
 // #################### MISC UI #####################
 
+class Strings {
+    static str(id) {
+        return GameContent.shared.strings[id];
+    }
+    static template(id, data) {
+        var template = Strings.str(id);
+        return template ? String.fromTemplate(template, data) : null;
+    }
+}
+
 class DialogManager {
     constructor(config) {
         this.elems = {
@@ -1654,7 +1655,7 @@ class NewGamePrompt {
     startNewGame() {
         var terrain = new Terrain(GameContent.shared.terrains[0]);
         var city = new City({
-            name: "New City",
+            name: Strings.str("defaultCityName"),
             terrain: terrain,
             difficulty: Game.rules().difficulties.easy
         });
@@ -1670,15 +1671,15 @@ class NewGamePrompt {
             return;
         }
         new Gaming.Prompt({
-            title: "New Game",
-            message: "Start a new game?",
+            title: Strings.str("newGamePromptTitle"),
+            message: Strings.str("newGamePromptMessage"),
             buttons: [
-                { label: "Start Game", action: this.startNewGame.bind(this), classNames: ["warning"] },
-                { label: "Cancel" }
+                { label: Strings.str("newGamePromptStartButton"), action: this.startNewGame.bind(this), classNames: ["warning"] },
+                { label: Strings.str("genericCancelButton") }
             ]
         }).show();
     }
-};
+}
 
 // ########################### INIT #######################
 

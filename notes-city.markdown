@@ -1,5 +1,14 @@
 ## Next tasks
 
+Manually pause a run loop. Switch tabs so it backgrounds. Switch back; it auto-unpauses. It *should* only auto-unpaused if it auto-paused.
+
+### JS cleanup
+
+static keyword for static members
+set keyword for setters, instead of setX()
+var, let, const
+convert more types to class instead of function+prototype; use more getters (eg Rect/Point)
+
 ### MapTool incremental development
 
 Done:

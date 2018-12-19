@@ -7,7 +7,7 @@ function debugLog(msg) {
 var onceTokens = new Set();
 function once(id, block) {
     if (onceTokens.has(id)) { return; }
-    debugLog("ONCE: " + id);
+    debugLog("(once) " + id);
     block();
     onceTokens.add(id);
 }
