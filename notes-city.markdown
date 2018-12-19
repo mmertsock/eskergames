@@ -1,6 +1,10 @@
 ## Next tasks
 
+### Misc
+
 Manually pause a run loop. Switch tabs so it backgrounds. Switch back; it auto-unpauses. It *should* only auto-unpaused if it auto-paused.
+
+Auto generate help dialog text for keyboard commands.
 
 ### JS cleanup
 
@@ -25,6 +29,7 @@ Done:
 - KVO to update selected tool in the palette
 - implement Bulldozer (single clicks)
 - center focus rect over mouse for plopPlot
+- Plop-tree tool
 
 Next:
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
@@ -34,11 +39,13 @@ Next:
   - cost calculations
   - caching for performance to reduce the amount of ui run loop calculations would be nice. calculate once per 
     mouse movement at most. but also would need to invalidate when the game state changes if you keep the mouse still
+- feedback text shown after plopping a zone: render at fixed size so it's not tiny when zoomed out
 - supplemental hover text next to the focus rect
 - helper alt-titles on the palette, eg for keyboard shortcuts
 - notAllowed and notAffordable click feedback rendering
 - feedback.immediate YAML stuff
-- implement Pointer
+- implement Pointer. Panning and zooming map.
+- Plus/minus buttons to zoom map with mouse.
 - implement Query. First instance of a complex in-game modal dialog. Pause the game run loop and input controllers when modal is visible.
 - click-and-drag behavior to preview/commit a larger change (bulldozer, roads)
 - only destroy larger plots when clicking the center
@@ -80,6 +87,10 @@ Adding game logic for zones to emit/consume/demand/avoid such environmental data
 ### Terrain
 
 yeah
+
+### Undo button
+
+this would be cool.
 
 - - - - - - - - - - 
 # Thoughts #########

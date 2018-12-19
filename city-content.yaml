@@ -89,6 +89,7 @@ keyInputController:
     - [[KeyQ], selectTool, rZone]
     - [[KeyW], selectTool, cZone]
     - [[KeyE], selectTool, iZone]
+    - [[KeyT], selectTool, tree]
   continuousKeyEvents:
     - [[ArrowUp], panMap, N]
     - [[ArrowUp,ArrowRight], panMap, NE]
@@ -96,7 +97,7 @@ keyInputController:
 ################# MAP TOOLS ###############
 
 mapTools:
-  defaultPalette: [pointer, query, bulldozer, rZone, cZone, iZone]
+  defaultPalette: [pointer, query, bulldozer, rZone, cZone, iZone, tree]
   singleClickMovementTolerance: 3
   paletteStyle:
     columns: 2
@@ -125,18 +126,24 @@ mapTools:
     rZone:
       type: plopZone
       iconGlyph: 🏠
-      paletteTitle: "Residential Zone ($100)"
+      paletteTitle: "Residential Zone (§100)"
       zoneType: R
     cZone:
       type: plopZone
       iconGlyph: 🏬
-      paletteTitle: "Commercial Zone ($100)"
+      paletteTitle: "Commercial Zone (§100)"
       zoneType: C
     iZone:
       type: plopZone
       iconGlyph: 🏭
-      paletteTitle: "Industrial Zone ($100)"
+      paletteTitle: "Industrial Zone (§100)"
       zoneType: I
+    tree:
+      # TODO make this a single plop-prop tool. Long press the tool in palette to change propType.
+      type: plopProp
+      iconGlyph: 🌳
+      paletteTitle: "Tree (§10)"
+      propType: tree
   feedback:
     purchased:
       immediate: purchasedFeedbackSoundScript
@@ -149,7 +156,7 @@ mapTools:
 #################### UI ###################
 
 mainMapView:
-  edgePaddingFillStyle: white
+  edgePaddingFillStyle: hsl(33, 37%, 87%)
   emptyFillStyle: hsl(33, 37%, 87%)
   zoomLevels:
   - tileWidth: 3
@@ -223,6 +230,8 @@ strings:
   pauseResumePause: Pause
   pauseResumeResume: Resume
   uiFpsLabel: "<value> fps"
+  zoomInButton: ➕
+  zoomOutButton: ➖
 
 ################## SCRIPTS ################
 

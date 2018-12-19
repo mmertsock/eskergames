@@ -356,15 +356,6 @@ class GameMap {
     }
 }
 
-var debugPlots = [
-    {cat: "Prop", cfg: {type: "tree", topLeft: new Point(19, 11)}},
-    {cat: "Prop", cfg: {type: "tree", topLeft: new Point(20, 11)}},
-    {cat: "Prop", cfg: {type: "tree", topLeft: new Point(20, 12)}},
-    {cat: "Prop", cfg: {type: "tree", topLeft: new Point(18, 11)}},
-    {cat: "Prop", cfg: {type: "tree", topLeft: new Point(20, 13)}},
-    {cat: "Prop", cfg: {type: "tree", topLeft: new Point(20, 14)}}
-];
-
 class City {
     constructor(config) {
         this.identity = {
@@ -376,13 +367,6 @@ class City {
         };
         this.budget = new Budget({ startingCash: config.difficulty.startingCash });
         this.map = new GameMap({ terrain: config.terrain });
-        for (var i = 0; i < debugPlots.length; i += 1) {
-            var p = debugPlots[i];
-            switch (p.cat) {
-                case "Zone": this.plopPlot(Zone.newPlot(p.cfg)); break;
-                case "Prop": this.plopPlot(TerrainProp.newPlot(p.cfg)); break;
-            }
-        }
     }
 
     get population() {
@@ -756,6 +740,47 @@ class MapToolPlopZone {
     }
 }
 
+/*
+TerrainProp.settings = function() {
+    return GameContent.shared.terrainProps;
+}
+TerrainProp.typeSettings = function(plotType) {
+    return GameContent.shared.terrainProps[plotType];
+}
+TerrainProp.newPlot = function(config) {
+
+*/
+class MapToolPlopProp {
+    constructor(id, settings) {
+        this.id = id;
+        this.settings = settings;
+        this.propInfo = TerrainProp.typeSettings(settings.propType);
+    }
+
+    get textTemplateInfo() { return this.settings; }
+    get paletteRenderInfo() { return this.settings; }
+
+    focusRectForTileCoordinate(session, tile) {
+        if (!tile) { return null; }
+        return Rect.tileRectWithCenter(tile, this.propInfo.plotSize)
+            .clampedWithinTileBounds(session.game.city.map.bounds);
+    }
+
+    performSingleClickAction(session, tile) {
+        var rect = this.focusRectForTileCoordinate(session, tile);
+        var result = { code: null, price: null, formattedPrice: null, focusTileRect: rect };
+        if (!rect) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
+        var plot = TerrainProp.newPlot({ type: this.settings.propType, topLeft: rect.getOrigin() });
+        result.price = 0;
+        result.formattedPrice = Simoleon.format(result.price);
+        var purchased = session.game.city.spend(result.price);
+        if (!purchased) { result.code = MapToolSession.ActionResult.notAffordable; return result; }
+        var plopped = session.game.city.plopPlot(plot);
+        result.code = plopped ? MapToolSession.ActionResult.purchased : MapToolSession.ActionResult.notAllowed;
+        return result;
+    }
+}
+
 class MapToolSession {
     constructor(config) {
         this.game = config.game;
@@ -981,6 +1006,7 @@ class MapToolController {
             case "query": return new MapToolQuery(id, settings);
             case "bulldozer": return new MapToolBulldozer(id, settings);
             case "plopZone": return new MapToolPlopZone(id, settings);
+            case "plopProp": return new MapToolPlopProp(id, settings);
             default:
                 debugLog("Unknown tool type " + settings.type);
                 return null;
@@ -1016,6 +1042,7 @@ class ChromeRenderer {
             sceneRoot: document.querySelector("scene"),
             fileMenu: containerElem.querySelector(".fileMenu"),
             speedControls: containerElem.querySelector("speedControls"),
+            zoomControls: containerElem.querySelector("zoomControls"),
             frameRate: containerElem.querySelector("frameRate")
         };
         this.subRenderers = [];
@@ -1065,6 +1092,13 @@ class ChromeRenderer {
             this.elems.speedControls.append(ctrl);
             this.elems.speedControlElems.push(ctrl);
         }.bind(this));
+
+        var zoomer = this._createButton(Strings.str("zoomOutButton")).addRemClass("glyph", true);
+        zoomer.addGameCommandEventListener("click", true, "zoomOut");
+        this.elems.zoomControls.append(zoomer);
+        zoomer = this._createButton(Strings.str("zoomInButton")).addRemClass("glyph", true);
+        zoomer.addGameCommandEventListener("click", true, "zoomIn");
+        this.elems.zoomControls.append(zoomer);
 
         this.elems.fileMenu.addEventListener("click", this._startPauseResumeClicked.bind(this));
 
