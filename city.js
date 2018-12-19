@@ -372,6 +372,10 @@ class City {
     plopPlot(plot) {
         this.map.addPlot(plot);
     }
+
+    destroyPlot(plot) {
+        this.map.removePlot(plot);
+    }
 }
 
 class Budget {
@@ -627,7 +631,7 @@ class MapToolPointer {
     }
     get textTemplateInfo() { return this.settings; }
     get paletteRenderInfo() { return this.settings; }
-    focusRectForTileCoordinate(tile) { return null; }
+    focusRectForTileCoordinate(session, tile) { return null; }
 
     performSingleClickAction(session, tile) {
         debugLog("TODO center map on " + tile.debugDescription());
@@ -642,7 +646,7 @@ class MapToolQuery {
     get textTemplateInfo() { return this.settings; }
     get paletteRenderInfo() { return this.settings; }
 
-    focusRectForTileCoordinate(tile) {
+    focusRectForTileCoordinate(session, tile) {
         return tile ? new Rect(tile, { width: 1, height: 1 }) : null;
     }
 
@@ -659,22 +663,30 @@ class MapToolBulldozer {
     get textTemplateInfo() { return this.settings; }
     get paletteRenderInfo() { return this.settings; }
 
-    focusRectForTileCoordinate(tile) {
-        // TODO if there's a bulldozable plot under the cursor, 
-        // return that plot's tile rect instead.
-        // Could determine the actual focused Plot and store that as state in the 
-        // tool session, then just fetch that as needed.
-        return tile ? new Rect(tile, { width: 1, height: 1 }) : null;
+    focusRectForTileCoordinate(session, tile) {
+        if (!tile) { return null; }
+        var plot = session.game.city.map.plotAtTile(tile);
+        return this._getFocusRect(plot, tile);
     }
 
     performSingleClickAction(session, tile) {
-        debugLog("TODO bulldoze " + tile.debugDescription());
-        // Find plots under the tile
-        // Deal with multiple matches?
-        // Only bulldoze if clicking the center-ish of the plot?
-        // If no to any of the above, return notAvailable.
-        // Check price. Check whether the lot is protected from bulldozing.
-        // Spend money. game.city.map.removePlot
+        var plot = session.game.city.map.plotAtTile(tile);
+        var result = { code: null, price: null, formattedPrice: null, focusTileRect: this._getFocusRect(plot, tile) };
+        if (!plot) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
+        result.price = 0;
+        result.formattedPrice = Simoleon.format(result.price);
+        var purchased = session.game.city.spend(result.price);
+        if (purchased) {
+            session.game.city.destroyPlot(plot);
+            result.code = MapToolSession.ActionResult.purchased;
+        } else {
+            result.code = MapToolSession.ActionResult.notAffordable;
+        }
+        return result;
+    }
+
+    _getFocusRect(plot, tile) {
+        return plot ? plot.bounds : new Rect(tile, {width: 1, height: 1});
     }
 }
 
@@ -687,12 +699,12 @@ class MapToolPlopZone {
     get textTemplateInfo() { return this.settings; }
     get paletteRenderInfo() { return this.settings; }
 
-    focusRectForTileCoordinate(tile) {
+    focusRectForTileCoordinate(session, tile) {
         return tile ? new Rect(tile, this.zoneInfo.plotSize) : null;
     }
 
     performSingleClickAction(session, tile) {
-        var rect = this.focusRectForTileCoordinate(tile);
+        var rect = this.focusRectForTileCoordinate(session, tile);
         var result = { code: null, price: null, formattedPrice: null, focusTileRect: rect };
         if (!rect) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
         var plot = Zone.newPlot({ type: this.settings.zoneType, topLeft: rect.getOrigin() });
@@ -759,7 +771,7 @@ class MapToolSession {
 
     // (optional) Primary tile rect the tool is pointing to
     get focusTileRect() {
-        return this.tool.focusRectForTileCoordinate(this._tile);
+        return this.tool.focusRectForTileCoordinate(this, this._tile);
     }
 
     // (optional) What to render next to the cursor. Note it defines the position
