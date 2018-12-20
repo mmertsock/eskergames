@@ -192,6 +192,10 @@ class Zone {
     get name() {
         return this.settings.genericName;
     }
+
+    get bulldozeCost() {
+        return this.settings.baseBulldozeCost;
+    }
 }
 
 Zone.settings = function() {
@@ -222,6 +226,10 @@ class TerrainProp {
 
     get name() {
         return this.settings.genericName;
+    }
+
+    get bulldozeCost() {
+        return this.settings.bulldozeCost;
     }
 }
 TerrainProp.settings = function() {
@@ -261,6 +269,10 @@ class Plot {
 
     get title() {
         return this.item.name;
+    }
+
+    get bulldozeCost() {
+        return this.item.bulldozeCost || 0;
     }
 }
 
@@ -390,13 +402,6 @@ class City {
 
     destroyPlot(plot) {
         return this.map.removePlot(plot);
-    }
-
-    proposeAction(type, tile) {
-    }
-
-    attemptAction(type, tile) {
-
     }
 }
 
@@ -667,11 +672,17 @@ class MapToolQuery {
     get paletteRenderInfo() { return this.settings; }
 
     focusRectForTileCoordinate(session, tile) {
-        return tile ? new Rect(tile, { width: 1, height: 1 }) : null;
+        if (!tile) { return null; }
+        var plot = session.game.city.map.plotAtTile(tile);
+        return this._getFocusRect(plot, tile);
     }
 
     performSingleClickAction(session, tile) {
         debugLog("TODO query " + tile.debugDescription());
+    }
+
+    _getFocusRect(plot, tile) {
+        return plot ? plot.bounds : new Rect(tile, {width: 1, height: 1});
     }
 }
 
@@ -693,7 +704,7 @@ class MapToolBulldozer {
         var plot = session.game.city.map.plotAtTile(tile);
         var result = { code: null, price: null, formattedPrice: null, focusTileRect: this._getFocusRect(plot, tile) };
         if (!plot) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
-        result.price = 0;
+        result.price = plot.bulldozeCost;
         result.formattedPrice = Simoleon.format(result.price);
         var purchased = session.game.city.spend(result.price);
         if (purchased) {
@@ -730,7 +741,7 @@ class MapToolPlopZone {
         var result = { code: null, price: null, formattedPrice: null, focusTileRect: rect };
         if (!rect) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
         var plot = Zone.newPlot({ type: this.settings.zoneType, topLeft: rect.getOrigin() });
-        result.price = 0;
+        result.price = this.zoneInfo.newPlotCost;
         result.formattedPrice = Simoleon.format(result.price);
         var purchased = session.game.city.spend(result.price);
         if (!purchased) { result.code = MapToolSession.ActionResult.notAffordable; return result; }
@@ -740,16 +751,6 @@ class MapToolPlopZone {
     }
 }
 
-/*
-TerrainProp.settings = function() {
-    return GameContent.shared.terrainProps;
-}
-TerrainProp.typeSettings = function(plotType) {
-    return GameContent.shared.terrainProps[plotType];
-}
-TerrainProp.newPlot = function(config) {
-
-*/
 class MapToolPlopProp {
     constructor(id, settings) {
         this.id = id;
@@ -771,7 +772,7 @@ class MapToolPlopProp {
         var result = { code: null, price: null, formattedPrice: null, focusTileRect: rect };
         if (!rect) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
         var plot = TerrainProp.newPlot({ type: this.settings.propType, topLeft: rect.getOrigin() });
-        result.price = 0;
+        result.price = this.propInfo.newPlotCost;
         result.formattedPrice = Simoleon.format(result.price);
         var purchased = session.game.city.spend(result.price);
         if (!purchased) { result.code = MapToolSession.ActionResult.notAffordable; return result; }
@@ -784,29 +785,33 @@ class MapToolPlopProp {
 class MapToolSession {
     constructor(config) {
         this.game = config.game;
+        this.canvasGrid = config.canvasGrid;
         this.tool = config.tool;
         this.preemptedSession = config.preemptedSession;
         this.singleClickMovementTolerance = MapToolController.settings().singleClickMovementTolerance;
         this._activationTimestamp = Date.now();
-        this._tile = null;
+        this._tile = null; // TODO refactor this/make it part of this.state
+        this.state = {}; // TODO a generic way to do model object state
     }
 
-    receivedPointInput(inputSequence, tile) {
+    receivedPointInput(inputSequence) {
         var action = null;
-        if (inputSequence.isSingleClick) {
-            action = this.tool.performSingleClickAction(this, tile);
+        // TODO can use this.state to determine if the tile changed between this and the last point-input
+        var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
+        if (tile) {
+            if (inputSequence.isSingleClick) {
+                action = this.tool.performSingleClickAction(this, tile);
+            }
+            this._tile = tile;
         }
-        this._tile = tile;
         return { code: MapToolSession.InputResult.continueCurrentSession, action: action };
     }
 
-    pause() {
+    pause() { }
 
-    }
+    resume() { }
 
-    resume() {
-
-    }
+    end() { }
 
     // UI stuff
 
@@ -834,6 +839,7 @@ class MapToolSession {
 
     // (optional) Primary tile rect the tool is pointing to
     get focusTileRect() {
+        // TODO rely on the stored state instead of recalculating at render time
         return this.tool.focusRectForTileCoordinate(this, this._tile);
     }
 
@@ -887,6 +893,7 @@ class MapToolController {
         this.canvasInputController = config.canvasInputController;
         this.canvasInputController.pushDelegate(this);
         this._beginNewSession(this.defaultTool, false);
+        engineRunLoop.addDelegate(this);
     }
 
     get activeSession() { return this._toolSession; }
@@ -904,6 +911,10 @@ class MapToolController {
         return this._toolIDMap[id];
     }
 
+    processFrame(rl) {
+        // TODO notify the tool session so it can update its statea
+    }
+
     shouldPassPointSessionToNextDelegate(inputSequence, inputController) {
         return !this._toolSession;
     }
@@ -911,9 +922,7 @@ class MapToolController {
     pointSessionChanged(inputSequence, inputController) {
         var session = this.activeSession;
         if (!session) { return; }
-        var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
-        if (!tile) { return; }
-        var result = session.receivedPointInput(inputSequence, tile);
+        var result = session.receivedPointInput(inputSequence);
         this._addFeedback(result.action);
         switch (result.code) {
             case MapToolSession.InputResult.continueCurrentSession: break;
@@ -973,11 +982,11 @@ class MapToolController {
     }
 
     _beginNewSession(tool, preempt) {
-        if (preempt) {
-            this._toolSession.pause();
-        }
+        if (preempt && this._toolSession) { this._toolSession.pause(); }
+        else if (!preempt && this._toolSession) { this._toolSession.end(); }
         this.kvo.activeSession.setValue(new MapToolSession({
             game: this.game,
+            canvasGrid: this.canvasGrid,
             tool: tool,
             preemptedSession: preempt ? this._toolSession : null
         }), false, true);
@@ -1116,7 +1125,7 @@ class ChromeRenderer {
             // in drawing order
             this.subRenderers = [
                 new MapRenderer({ containerElem: this.elems.mainMap }),
-                new GameControlsRenderer({ containerElem: this.elems.controls }),
+                new ControlPanelRenderer({ containerElem: this.elems.controls }),
                 new PaletteRenderer({ containerElem: this.elems.palette })
                 // TODO minimap renderers
                 // Clicking a minimap changes the main map to render in the same 
@@ -1320,19 +1329,49 @@ class PaletteRenderer {
     }
 }
 
-class GameControlsRenderer {
+class ControlPanelRenderer {
     constructor(config) {
-        this.containerElem = config.containerElem;
+        this.canvas = config.containerElem;
         this.game = null;
+        this._style = GameContent.shared.controlPanelView;
+        this._canvasDirty = true;
     }
+
+    get drawContext() {
+        return this.canvas.getContext("2d", { alpha: true });
+    }
+
     initialize(game) {
         this.game = game;
-        this.containerElem.style.backgroundColor = "gray";
+
+        var ctx = this.drawContext;
+        ctx.fillStyle = this._style.fillStyle;
+        ctx.rectFill(this.canvas.rectForFullCanvas());
+        this._canvasDirty = true;
+        uiRunLoop.addDelegate(this);
+        engineRunLoop.addDelegate(this);
     }
+
+    processFrame(rl) {
+        if (rl == engineRunLoop) {
+            this._canvasDirty = true;
+        }
+        if (rl == uiRunLoop this._canvasDirty) {
+            this._render();
+            this._canvasDirty = false;
+        }
+    }
+
+    _render() {
+        var ctx = this.drawContext;
+        ctx.fillStyle = this._style.fillStyle;
+        ctx.rectFill(this.canvas.rectForFullCanvas());
+
         // var date = this.game.city.time.date.longString();
         // var cash = Simoleon.format(this.game.city.budget.cash);
         // var sims = Number.uiInteger(this.game.city.population.R);
         // this._renderTitle(`${this.game.city.identity.name} — ${date}, ${sims}, ${cash}`);
+    }
 }
 
 class MapRenderer {
@@ -1807,7 +1846,7 @@ return {
     KeyInputController: KeyInputController,
     ChromeRenderer: ChromeRenderer,
     PaletteRenderer: PaletteRenderer,
-    GameControlsRenderer: GameControlsRenderer,
+    ControlPanelRenderer: ControlPanelRenderer,
     MapRenderer: MapRenderer,
     NewGamePrompt: NewGamePrompt
 };

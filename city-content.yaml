@@ -34,21 +34,24 @@ zones:
     plotSize: &ZONEPLOTSIZE
       width: 3
       height: 3
-    newPlotCost: 100
+    newPlotCost: &ZONECOST 100
     maxDensityLevel: 5
     maxValueLevel: 4
+    baseBulldozeCost: 5
   C:
     genericName: Commercial
     plotSize: *ZONEPLOTSIZE
-    newPlotCost: 100
+    newPlotCost: *ZONECOST
     maxDensityLevel: 5
     maxValueLevel: 5
+    baseBulldozeCost: 5
   I:
     genericName: Industrial
     plotSize: *ZONEPLOTSIZE
-    newPlotCost: 100
+    newPlotCost: *ZONECOST
     maxDensityLevel: 4
     maxValueLevel: 3
+    baseBulldozeCost: 5
 
 terrainProps:
   tree:
@@ -56,6 +59,8 @@ terrainProps:
     plotSize: &ONEBYONE
       width: 1
       height: 1
+    newPlotCost: 3
+    bulldozeCost: 1
 
 buildings:
 - id: police
@@ -102,7 +107,7 @@ mapTools:
   paletteStyle:
     columns: 2
     tileWidth: 24
-    fillStyle: gray
+    fillStyle: &PANELFILL "hsl(0,0%,75%)"
     unselectedBasePainter: toolPaletteUnselectedBase
     selectedBasePainter: toolPaletteSelectedBase
     iconPainter: toolPaletteItem
@@ -156,14 +161,16 @@ mapTools:
 #################### UI ###################
 
 mainMapView:
-  edgePaddingFillStyle: hsl(33, 37%, 87%)
-  emptyFillStyle: hsl(33, 37%, 87%)
+  edgePaddingFillStyle: "hsl(33, 37%, 87%)"
+  emptyFillStyle: "hsl(33, 37%, 87%)"
   zoomLevels:
   - tileWidth: 3
   - tileWidth: 6
   - tileWidth: 12
     isDefault: true
   - tileWidth: 24
+controlPanelView:
+  fillStyle: *PANELFILL
 
 ################## PAINTERS ###############
 
@@ -176,10 +183,10 @@ mainMapView:
 # poly args: stroke style, fill style, width, width units, coord units, x1, y1, x2, y2, ..., [close]
 painters:
   toolPaletteUnselectedBase:
-    - [innerStroke,black,rect,1,p,0,0,1,1,r]
+    - [innerStroke,"hsl(0,0%,50%)",rect,1,p,0,0,1,1,r]
   toolPaletteSelectedBase:
     - [fill,"hsl(120,50%,75%)",rect,0,0,1,1,r]
-    - [innerStroke,black,rect,1,p,0,0,1,1,r]
+    - [innerStroke,"hsl(0,0%,50%)",rect,1,p,0,0,1,1,r]
   toolPaletteItem:
     - [text,black,0.5,r,center,middle,0.5,0.5,r,"<iconGlyph>"]
   toolFocusRect:
@@ -194,16 +201,16 @@ painters:
     - [text,green,1.25,tw,left,middle,1.1,0.5,r,"<formattedPrice>"]
   zoneRd0v0:
     - [fill,"hsl(0,50%,80%)",rect,0,0,1,1,r]
-    - [innerStroke,red,rect,1,p,0,0,1,1,r]
+    - [innerStroke,"hsl(0,60%,45%)",rect,1,p,0,0,1,1,r]
     - [text,"hsl(0,60%,45%)",0.25,r,center,middle,0.5,0.5,r,R]
   zoneCd0v0:
     - [fill,"hsl(240,50%,80%)",rect,0,0,1,1,r]
-    - [innerStroke,blue,rect,1,p,0,0,1,1,r]
+    - [innerStroke,"hsl(240,60%,45%)",rect,1,p,0,0,1,1,r]
     - [text,"hsl(240,60%,45%)",0.25,r,center,middle,0.5,0.5,r,C]
   zoneId0v0:
-    - [fill,"hsl(50,60%,80%)",rect,0,0,1,1,r]
-    - [innerStroke,yellow,rect,1,p,0,0,1,1,r]
-    - [text,"hsl(50,60%,45%)",0.25,r,center,middle,0.5,0.5,r,I]
+    - [fill,"hsl(50,65%,80%)",rect,0,0,1,1,r]
+    - [innerStroke,"hsl(50,100%,35%)",rect,1,p,0,0,1,1,r]
+    - [text,"hsl(50,100%,35%)",0.25,r,center,middle,0.5,0.5,r,I]
   proptree:
     variants:
       - - [fill,"hsl(35, 76%, 23%)",rect,0.4,0.5,0.2,0.5,r]

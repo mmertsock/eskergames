@@ -6,6 +6,8 @@ Manually pause a run loop. Switch tabs so it backgrounds. Switch back; it auto-u
 
 Auto generate help dialog text for keyboard commands.
 
+Game-specific fonts for zones, maps, controls, etc.
+
 ### JS cleanup
 
 static keyword for static members
@@ -30,6 +32,7 @@ Done:
 - implement Bulldozer (single clicks)
 - center focus rect over mouse for plopPlot
 - Plop-tree tool
+- Prices
 
 Next:
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
@@ -40,7 +43,8 @@ Next:
   - caching for performance to reduce the amount of ui run loop calculations would be nice. calculate once per 
     mouse movement at most. but also would need to invalidate when the game state changes if you keep the mouse still
 - feedback text shown after plopping a zone: render at fixed size so it's not tiny when zoomed out
-- supplemental hover text next to the focus rect
+- supplemental hover text next to the focus rect (eg tool glyph + price)
+- Allow auto bulldoze of props when building stuff. Alter price based on bulldozing
 - helper alt-titles on the palette, eg for keyboard shortcuts
 - notAllowed and notAffordable click feedback rendering
 - feedback.immediate YAML stuff
@@ -55,6 +59,7 @@ Next:
 ### Save and restore game data, start new city
 
 Implement it.
+Have a version number in the game data for compatibility. When writing the save state, write the current version number. When reading, configure a min supported version number (may be able to load/convert slightly older versions).
 Auto-save each game month or year. Depending on engine speed. Or maybe autosave every X seconds of wall time (to handle long build-sessions where the game remains paused).
 Make sure Plots and stuff have a consistent way to store opaque state data.
 Also implement modal dialog for starting a new city so you can start over.

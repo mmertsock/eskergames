@@ -138,9 +138,14 @@ Element.prototype.removeAllChildren = function() {
 };
 
 var _testCanvas = document.createElement("canvas");
+
 HTMLCanvasElement.getDevicePixelScale = function() {
     return (window.devicePixelRatio || 1) / (_testCanvas.getContext("2d").webkitBackingStorePixelRatio || 1);
 };
+
+HTMLCanvasElement.prototype.rectForFullCanvas = function() {
+    return new Gaming.Rect(0, 0, this.width, this.height);
+}
 
 HTMLCanvasElement.prototype.updateBounds = function() {
     var cs = getComputedStyle(this);
