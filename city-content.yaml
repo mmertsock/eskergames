@@ -198,19 +198,25 @@ painters:
     - [poly,,black,0,p, r, 1.1,1.1, 1.4,1.4, 1.25,1.4, 1.13,1.52]
     - [text,black,0.75,tw,center,middle,1.44,1.8,r,"<highlightGlyph>"]
   purchasedFeedback:
-    - [text,green,1.25,tw,left,middle,1.1,0.5,r,"<formattedPrice>"]
+    - [text,green,10,p,left,middle,1.1,0.5,r,"<formattedPrice>"]
   zoneRd0v0:
-    - [fill,"hsl(0,50%,80%)",rect,0,0,1,1,r]
-    - [innerStroke,"hsl(0,60%,45%)",rect,1,p,0,0,1,1,r]
-    - [text,"hsl(0,60%,45%)",0.25,r,center,middle,0.5,0.5,r,R]
+    expectedSize: *ZONEPLOTSIZE
+    variants:
+      - - [fill,"hsl(0,50%,80%)",rect,0,0,1,1,r]
+        - [innerStroke,"hsl(0,60%,45%)",rect,1,p,0,0,1,1,r]
+        - [text,"hsl(0,60%,45%)",0.25,r,center,middle,0.5,0.5,r,R]
   zoneCd0v0:
-    - [fill,"hsl(240,50%,80%)",rect,0,0,1,1,r]
-    - [innerStroke,"hsl(240,60%,45%)",rect,1,p,0,0,1,1,r]
-    - [text,"hsl(240,60%,45%)",0.25,r,center,middle,0.5,0.5,r,C]
+    expectedSize: *ZONEPLOTSIZE
+    variants:
+      - - [fill,"hsl(240,50%,80%)",rect,0,0,1,1,r]
+        - [innerStroke,"hsl(240,60%,45%)",rect,1,p,0,0,1,1,r]
+        - [text,"hsl(240,60%,45%)",0.25,r,center,middle,0.5,0.5,r,C]
   zoneId0v0:
-    - [fill,"hsl(50,65%,80%)",rect,0,0,1,1,r]
-    - [innerStroke,"hsl(50,100%,35%)",rect,1,p,0,0,1,1,r]
-    - [text,"hsl(50,100%,35%)",0.25,r,center,middle,0.5,0.5,r,I]
+    expectedSize: *ZONEPLOTSIZE
+    variants:
+      - - [fill,"hsl(50,65%,80%)",rect,0,0,1,1,r]
+        - [innerStroke,"hsl(50,100%,35%)",rect,1,p,0,0,1,1,r]
+        - [text,"hsl(50,100%,35%)",0.25,r,center,middle,0.5,0.5,r,I]
   proptree:
     variants:
       - - [fill,"hsl(35, 76%, 23%)",rect,0.4,0.5,0.2,0.5,r]

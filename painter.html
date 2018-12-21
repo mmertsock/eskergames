@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>Painter Tool</title>
+    <script>
+        window.doNotInitializeGame = true;
+    </script>
+    <script defer src="js-yaml.min.js"></script>
+    <script defer src="g.js"></script>
+    <script defer src="city-content.js"></script>
+    <script defer src="city.js"></script>
+    <script defer src="painter.js"></script>
+
+<style type="text/css">
+
+textarea {
+    font-family: monospace;
+    font-size: 8pt;
+}
+
+section {
+    display: flex;
+    flex-direction: row;
+}
+
+.inputs {
+    width: 40%;
+    padding: 8px;
+    border-radius: 4px;
+    background-color: #eee;
+}
+
+
+.inputs div {
+    width: 90%;
+    margin: 0 auto;
+}
+
+button.render {
+    display: block;
+    float: right;
+    font-weight: 600;
+    color: #000099;
+}
+button.renderAll {
+    display: block;
+    float: right;
+}
+button.reset {
+    color: #990000;
+}
+select {
+    width: 100%;
+}
+.inputs textarea {
+    width: 100%;
+    box-sizing: border-box;
+}
+.scriptEntry textarea {
+    height: 9em;
+}
+.metadata textarea {
+    height: 3em;
+}
+
+.canvases {
+    margin: 0 8px;
+}
+canvas {
+    display: inline-block;
+    width: 200px;
+    height: 200px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+section, footer {
+    margin: 1em 0;
+}
+
+footer textarea {
+    width: 75%;
+    height: 8em;
+    margin-top: 1em;
+    border: none;
+    border-radius: 4px;
+    background-color: #eee;
+}
+
+</style>
+
+</head>
+<body>
+
+<header>
+text boxes to configure canvasGrid and stuff. loads with a default config == citysim.
+Reset button also reloads all YAML.
+<button>Reset</button>
+</header>
+
+<section>
+    <div class="inputs">
+        <div class="scriptSelection">
+            <select><option>painter ID</option></select>
+        </div>
+        <div class="buttons">
+            <button class="render">Render</button>
+            <button class="renderAll">Render All</button>
+            <button class="selectScript">Load Script</button>
+            <button class="reset">Reset</button>
+        </div>
+        <div class="scriptEntry"><textarea placeholder="Enter script"></textarea></div>
+        <div class="metadata"><textarea placeholder="Model metadata"></textarea></div>
+    </div>
+    <div class="canvases">
+        <canvas class="large"></canvas>
+        <canvas class="medium"></canvas>
+        <canvas class="small"></canvas>
+    </div>
+</section>
+
+
+<section>
+    <div class="inputs">
+        <div class="scriptSelection">
+            <select><option>painter ID</option></select>
+        </div>
+        <div class="buttons">
+            <button class="render">Render</button>
+            <button class="renderAll">Render All</button>
+            <button class="selectScript">Load Script</button>
+            <button class="reset">Reset</button>
+        </div>
+        <div class="scriptEntry"><textarea placeholder="Enter script"></textarea></div>
+        <div class="metadata"><textarea placeholder="Model metadata"></textarea></div>
+    </div>
+    <div class="canvases">
+        <canvas class="large"></canvas>
+        <canvas class="medium"></canvas>
+        <canvas class="small"></canvas>
+    </div>
+</section>
+<section>
+    <div class="inputs">
+        <div class="scriptSelection">
+            <select><option>painter ID</option></select>
+        </div>
+        <div class="buttons">
+            <button class="render">Render</button>
+            <button class="renderAll">Render All</button>
+            <button class="selectScript">Load Script</button>
+            <button class="reset">Reset</button>
+        </div>
+        <div class="scriptEntry"><textarea placeholder="Enter script"></textarea></div>
+        <div class="metadata"><textarea placeholder="Model metadata"></textarea></div>
+    </div>
+    <div class="canvases">
+        <canvas class="large"></canvas>
+        <canvas class="medium"></canvas>
+        <canvas class="small"></canvas>
+    </div>
+</section>
+
+<footer>
+    <textarea></textarea><br>
+    <button>Clear</button>
+</footer>
+
+</body>
+</html>
