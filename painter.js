@@ -12,13 +12,22 @@ var ScriptPainterCollection = CitySim.ScriptPainterCollection;
 var ScriptPainter = CitySim.ScriptPainter;
 var ScriptPainterStore = CitySim.ScriptPainterStore;
 
-function showMessage(msg) {
+function showMessage(msg, elem) {
     debugLog(msg);
-    var elem = document.querySelector("footer textarea");
-    elem.value += msg + "\n";
+    document.querySelector("footer textarea").value += msg + "\n";
+    if (!elem) { return; }
+    clearPopovers();
+    var popover = document.querySelector(".popover").cloneNode(true).addRemClass("cloned", true);
+    popover.addEventListener("click", () => popover.remove());
+    popover.querySelector("p").innerText = msg;
+    debugLog(popover);
+    elem.append(popover);
 }
 function resetMessageArea() {
     document.querySelector("footer textarea").value = "";
+}
+function clearPopovers() {
+    Array.from(document.querySelectorAll(".popover.cloned")).forEach(item => item.remove());
 }
 
 _nextListenerID = 0;
@@ -96,6 +105,7 @@ class HeaderView {
 
 class SectionView {
     constructor(root, sectionIndex) {
+        this.root = root;
         this.scriptSelection = new ScriptSelectorView(root.querySelector(".scriptSelection select"));
         this.scriptEntry = new ScriptEntryView(root.querySelector(".scriptEntry textarea"));
         this.metadataEntry = new MetadataEntryView(root.querySelector(".metadata textarea"));
@@ -125,7 +135,8 @@ class SectionView {
             var metadata = this.metadataEntry.value;
             this.canvasViews.forEach(view => view.render(collection, metadata));
         } catch (e) {
-            showMessage(`Invalid script: ${e.message}`);
+            showMessage(`Invalid script: ${e.message}`, this.root.querySelector(".scriptEntry"));
+            this.scriptEntry.markInvalid();
         }
     }
 
@@ -255,10 +266,12 @@ class ScriptEntryView {
     constructor(elem) {
         this.elem = elem;
         this.reset();
+        this.elem.captureEventListener("input", () => this.clearInvalid());
     }
 
     reset() {
         this.elem.value = "";
+        this.clearInvalid();
     }
 
     get scriptSource() {
@@ -271,6 +284,16 @@ class ScriptEntryView {
         } else {
             this.reset();
         }
+        this.clearInvalid();
+    }
+
+    markInvalid() {
+        this.elem.addRemClass("invalid", true);
+    }
+
+    clearInvalid() {
+        clearPopovers();
+        this.elem.addRemClass("invalid", false);
     }
 }
 
@@ -289,7 +312,7 @@ class MetadataEntryView {
         try {
             return JSON.parse(this.elem.value);
         } catch (e) {
-            showMessage("Error loading metadata: " + e.message);
+            showMessage("Invalid metadata: " + e.message, this.elem);
             return {};
         }
     }
