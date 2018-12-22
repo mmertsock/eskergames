@@ -479,6 +479,9 @@ Rect.prototype.intersects = function(other) {
 Rect.prototype.inset = function(xInset, yInset) {
     return new Rect(this.x + xInset, this.y + yInset, this.width - 2 * xInset, this.height - 2 * yInset);
 };
+Rect.prototype.rounded = function() {
+    return new Rect(Math.round(this.x), Math.round(this.y), Math.round(this.width), Math.round(this.height));
+}
 
 var Vector = function(x, y) {
     if (typeof x === 'undefined') { // zero args

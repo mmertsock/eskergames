@@ -5,6 +5,11 @@
 simDate:
   longMonthStrings: [_,January,February,March,April,May,June,July,August,September,October,November,December]
 
+_constants:
+  - &RZONETEXTCOLOR "hsl(0,60%,45%)"
+  - &CZONETEXTCOLOR "hsl(240,60%,45%)"
+  - &IZONETEXTCOLOR "hsl(50,100%,35%)"
+
 ################ GAME RULES ###############
 
 gameRules:
@@ -169,8 +174,24 @@ mainMapView:
   - tileWidth: 12
     isDefault: true
   - tileWidth: 24
+
 controlPanelView:
   fillStyle: *PANELFILL
+
+rciView:
+  barWidth: 0.25 # relative to view size
+  fontSize: 20 # device independent pixels
+  textSpacing: 4 # ditto
+  bars:
+    - color: *RZONETEXTCOLOR
+      zoneType: R
+      title: R
+    - color: *CZONETEXTCOLOR
+      zoneType: C
+      title: C
+    - color: *IZONETEXTCOLOR
+      zoneType: I
+      title: I
 
 ################## PAINTERS ###############
 
@@ -204,19 +225,19 @@ painters:
     variants:
       - - [fill,"hsl(0,50%,80%)",rect,0,0,1,1,r]
         - [innerStroke,"hsl(0,60%,45%)",rect,1,p,0,0,1,1,r]
-        - [text,"hsl(0,60%,45%)",0.25,r,center,middle,0.5,0.5,r,R]
+        - [text,*RZONETEXTCOLOR,0.25,r,center,middle,0.5,0.5,r,R]
   zoneCd0v0:
     expectedSize: *ZONEPLOTSIZE
     variants:
       - - [fill,"hsl(240,50%,80%)",rect,0,0,1,1,r]
         - [innerStroke,"hsl(240,60%,45%)",rect,1,p,0,0,1,1,r]
-        - [text,"hsl(240,60%,45%)",0.25,r,center,middle,0.5,0.5,r,C]
+        - [text,*CZONETEXTCOLOR,0.25,r,center,middle,0.5,0.5,r,C]
   zoneId0v0:
     expectedSize: *ZONEPLOTSIZE
     variants:
       - - [fill,"hsl(50,65%,80%)",rect,0,0,1,1,r]
         - [innerStroke,"hsl(50,100%,35%)",rect,1,p,0,0,1,1,r]
-        - [text,"hsl(50,100%,35%)",0.25,r,center,middle,0.5,0.5,r,I]
+        - [text,*IZONETEXTCOLOR,0.25,r,center,middle,0.5,0.5,r,I]
   proptree:
     variants:
       - - [fill,"hsl(35, 76%, 23%)",rect,0.4,0.5,0.2,0.5,r]
@@ -227,6 +248,12 @@ painters:
 ################## STRINGS ################
 
 strings:
+  optionsButtonLabel: Options
+  cityStatusNameLabel: Name
+  cityStatusDateLabel: Date
+  cityStatusCashLabel: Cash
+  cityStatusPopulationLabel: Population
+  # TODO audit the below
   defaultCityName: New City
   engineMsPerDayLabel: "<value> ms/day"
   failedToLoadGameMessage: There was a problem loading the game data.

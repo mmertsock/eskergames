@@ -408,23 +408,25 @@ class City {
 class Budget {
     constructor(config) {
         this.cash = config.startingCash;
+        this.kvo = new Kvo(Budget, this);
     }
 
     spend(simoleons) {
         simoleons = Math.round(simoleons);
         if (this.cash >= simoleons) {
-            this.cash -= simoleons;
+            this.kvo.cash.setValue(this.cash - simoleons);
             return true;
         } else {
             return false;
         }
     }
 }
+Budget.Kvo = { cash: "cash" };
 
 class Game {
     constructor(config) {
         this.city = config.city;
-        this.renderer = config.renderer; // <ChromeRenderer>
+        this.rootView = config.rootView;
         var speeds = Game.rules().speeds.map((s) => new SpeedSelector(s, this));
         this.speedSelection = new SelectableList(speeds);
         this._started = false;
@@ -445,7 +447,7 @@ class Game {
         this._configureCommmands();
         KeyInputController.shared.initialize(this);
         this.gameSpeedActivated(this.engineSpeed);
-        this.renderer.initialize(this);
+        this.rootView.initialize(this);
         this._started = true;
         debugLog(`Started game with city ${this.city.identity.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.size.width}x${this.city.map.terrain.size.height}`);
 
@@ -876,6 +878,9 @@ MapToolSession.ActionResult = {
 };
 
 class MapToolController {
+
+    static settings() { return GameContent.shared.mapTools; }
+
     constructor(config) {
         this.game = null;
         this.canvasGrid = null;
@@ -1022,8 +1027,8 @@ class MapToolController {
         }
     }
 }
+MapToolController.shared = null;
 MapToolController.Kvo = { activeSession: "_toolSession" };
-MapToolController.settings = () => GameContent.shared.mapTools;
 MapToolController.getFeedbackSettings = (source, code) => {
     switch (code) {
         case MapToolSession.ActionResult.purchased: return source.purchased;
@@ -1035,24 +1040,320 @@ MapToolController.getFeedbackSettings = (source, code) => {
     }
 }
 
-// ##################### RENDERERS ######################
+// ################ RENDERERS AND VIEWS #################
 
-// Top level. Handles the DOM elements outside the canvas, etc.
+class UI {
+    static fadeOpacity(currentAge, targetAge, duration) {
+        return Math.clamp((targetAge - currentAge) / duration, _zeroToOne);
+    }
+}
+
+class TextLineView {
+    static createElement(config) {
+        var elem = document.createElement("label").addRemClass("textLine", true);
+        if (config.title) {
+            var title = document.createElement("span");
+            title.innerText = config.title;
+            elem.append(title);
+        }
+        var input = document.createElement("input");
+        input.type = "text";
+        input.readOnly = true;
+        elem.append(input);
+        return elem;
+    }
+
+    constructor(config) {
+        this.elem = TextLineView.createElement(config);
+        config.parent.append(this.elem);
+        this.valueElem = this.elem.querySelector("input");
+    }
+
+    get value() { return this.valueElem.value; }
+    set value(newValue) { this.valueElem.value = newValue; }
+}
+
+class ToolButton {
+    static createElement(config) {
+        var elem = document.createElement("a")
+            .addRemClass("tool", true)
+            .addRemClass("glyph", !!config.isGlyph);
+        elem.href = "#";
+        var title = document.createElement("span");
+        title.innerText = config.title;
+        elem.append(title);
+        if (config.size) {
+            elem.style.width = `${config.size.width}px`;
+            elem.style.height = `${config.size.height}px`;
+        }
+        return elem;
+    }
+
+    constructor(config) {
+        this.id = config.id;
+        this.elem = ToolButton.createElement(config);
+        if (config.click) {
+            this.elem.addEventListener("click", evt => { evt.preventDefault(); config.click(this); });
+        }
+        config.parent.append(this.elem);
+        this._selected = false;
+    }
+
+    get isSelected() {
+        return this._selected;
+    }
+    set isSelected(value) {
+        this._selected = value;
+        this.elem.addRemClass("selected", value);
+    }
+}
+
+class RootView {
+    constructor() {
+        this.game = null;
+        this.root = document.querySelector("main");
+        this.newGamePrompt = new NewGamePrompt();
+        this.views = [];
+    }
+
+    setUp() {
+        this._configureCommmands();
+        this.newGamePrompt.show();
+    }
+
+    initialize(game) {
+        this.game = game;
+        if (!game) { return; }
+        this.views.push(new PaletteView({ game: game, root: this.root.querySelector("palette") }));
+        this.views.push(new MapRenderer({ game: game, canvas: this.root.querySelector("canvas.mainMap") }));
+        this.views.push(new ControlsView({ game: game, root: this.root.querySelector("controls") }));
+    }
+
+    failedToLoadBaseData() {
+        new Gaming.Prompt({
+            title: Strings.str("failedToLoadGameTitle"),
+            message: Strings.str("failedToLoadGameMessage"),
+            requireSelection: true
+        }).show();
+    }
+
+    _configureCommmands() {
+        GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
+    }
+}
+
+class PaletteView {
+    constructor(config) {
+        this.root = config.root;
+        this.settings = MapToolController.settings();
+        this.root.style.width = `${this.settings.paletteStyle.tileWidth}px`;
+        this.root.removeAllChildren();
+        this.buttons = this.settings.defaultPalette.map(id => this._makeToolButton(id));
+        this.update();
+        MapToolController.shared.kvo.activeSession.addObserver(this, () => this.update());
+    }
+
+    update() {
+        this.buttons.forEach(button => {
+            button.isSelected = MapToolController.shared.isToolIDActive(button.id);
+        });
+    }
+
+    _makeToolButton(id) {
+        var tool = MapToolController.shared.toolWithID(id);
+        var button = new ToolButton({
+            id: id,
+            parent: this.root,
+            title: tool.settings.iconGlyph,
+            size: { width: this.settings.paletteStyle.tileWidth, height: this.settings.paletteStyle.tileWidth }
+        });
+        button.elem.addGameCommandEventListener("click", true, "selectTool", id);
+        return button;
+    }
+}
+
+class ControlsView {
+    constructor(config) {
+        this.game = config.game;
+        this.root = config.root;
+        this.views = [];
+        this.root.style["padding-left"] = `${GameContent.shared.mapTools.paletteStyle.tileWidth}px`;
+        this.views.push(new NewsView({ game: this.game, root: document.querySelector("#news") }));
+        this.views.push(new CityStatusView({ game: this.game, root: document.querySelector("#cityStatus") }));
+        this.views.push(new RCIView({ game: this.game, root: document.querySelector("#rci") }));
+        this.views.push(new MapControlsView({ game: this.game, root: document.querySelector("#view nav") }))
+        this.views.push(new GameEngineControlsView({ game: this.game, root: document.querySelector("#engine") }));
+        this.buttons = [];
+        this.buttons.push(new ToolButton({
+            parent: this.root.querySelector("#system"),
+            title: Strings.str("optionsButtonLabel"),
+            click: (button) => { console.log("File menu"); }
+        }));
+    }
+}
+
+class CityStatusView {
+    constructor(config) {
+        this.game = config.game;
+        this.views = { root: config.root };
+        this.views.name = new TextLineView({ parent: config.root, title: Strings.str("cityStatusNameLabel") });
+        this.views.date = new TextLineView({ parent: config.root, title: Strings.str("cityStatusDateLabel") });
+        this.views.cash = new TextLineView({ parent: config.root, title: Strings.str("cityStatusCashLabel") });
+        this.views.population = new TextLineView({ parent: config.root, title: Strings.str("cityStatusPopulationLabel") });
+
+        // would be cool to kvo-bind text line views
+        // 
+        this.game.city.budget.kvo.cash.addObserver(this, () => this.updateCash());
+        this.updateCash();
+    }
+
+    updateCash() {
+        this.views.cash.value = Simoleon.format(this.game.city.budget.cash);
+    }
+
+    DEBUG_render() {
+        this.views.name.value = "Cityville";
+        debugLog("Also set document.title");
+        this.views.date.value = "10/1/2018";
+        this.views.cash.value = "§19,834";
+        this.views.population.value = "31,243";
+    }
+}
+
+class RCIView {
+    constructor(config) {
+        this.root = config.root;
+        this.canvas = config.root.querySelector("canvas");
+        this.style = GameContent.shared.rciView;
+        this.deviceScale = HTMLCanvasElement.getDevicePixelScale();
+        this.render();
+    }
+
+    render() {
+        var ctx = this.canvas.getContext("2d");
+        this.canvas.width = this.canvas.clientWidth * this.deviceScale;
+        this.canvas.height = this.canvas.clientHeight * this.deviceScale;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = `${this.style.fontSize}px sans-serif`;
+        this._renderItem(ctx, 0, 0.3);
+        this._renderItem(ctx, 1, 0.7);
+        this._renderItem(ctx, 2, -0.1);
+    }
+
+    _renderItem(ctx, index, value) {
+        var barWidth = this.canvas.width * this.style.barWidth;
+        var barSpacing = (this.canvas.width - (this.style.bars.length * barWidth)) / (this.style.bars.length - 1);
+        var barOriginX = index * (barWidth + barSpacing);
+        var centerY = this.canvas.height / 2;
+        
+        var textCenter = new Gaming.Point(barOriginX + 0.5 * barWidth, centerY);
+        ctx.fillStyle = this.style.bars[index].color;
+        ctx.textFill(this.style.bars[index].title, textCenter);
+
+        if (Math.abs(value) > 0.01) {
+            var textHeightPlusPadding = this.style.fontSize + 2 * this.deviceScale * this.style.textSpacing;
+            var availableHeight = 0.5 * (this.canvas.height - textHeightPlusPadding);
+            var barHeight = value * availableHeight;
+            var barOriginY = 0;
+            if (value > 0) {
+                barOriginY = centerY - 0.5 * textHeightPlusPadding - barHeight;
+            } else {
+                barOriginY = centerY + 0.5 * textHeightPlusPadding;
+            }
+            var rect = new Gaming.Rect(barOriginX, barOriginY, barWidth, barHeight).rounded();
+            ctx.rectFill(rect);
+        }
+    }
+}
+
+class GameEngineControlsView {
+    constructor(config) {
+        this.root = config.root;
+
+        var playPause = config.root.querySelector("playPause");
+        this.controlButtons = [];
+        this.controlButtons.push(new ToolButton({
+            parent: playPause,
+            title: "||"
+        }));
+        this.controlButtons.push(new ToolButton({
+            parent: config.root.querySelector("playPause"),
+            title: ">"
+        }));
+
+        var speedRoot = config.root.querySelector("speedSelector");
+        this.speedButtons = GameContent.shared.gameRules.speeds.map(s => new ToolButton({
+            parent: speedRoot,
+            title: s.name
+        }));
+        this.speedButtons[1].isSelected = true;
+
+        this.frameRateView = new TextLineView({ parent: config.root.querySelector("frameRate") });
+
+        this.render();
+    }
+
+    render() {
+        this.frameRateView.value = "57 fps";
+    }
+}
+
+class MapControlsView {
+    constructor(config) {
+        this.root = config.root;
+        this.buttons = [];
+
+        var directionElem = config.root.querySelector("direction");
+        this.buttons.push(new ToolButton({
+            parent: config.root.querySelector("#map-nav-l"),
+            title: "L"
+        }));
+        this.buttons.push(new ToolButton({
+            parent: config.root.querySelector("#map-nav-ud"),
+            title: "U"
+        }));
+        this.buttons.push(new ToolButton({
+            parent: config.root.querySelector("#map-nav-ud"),
+            title: "D"
+        }));
+        this.buttons.push(new ToolButton({
+            parent: config.root.querySelector("#map-nav-r"),
+            title: "R"
+        }));
+
+        var zoomElem = config.root.querySelector("zoom");
+        this.buttons.concat(["-", "+"].map(id => new ToolButton({
+            parent: zoomElem,
+            id: id,
+            title: id
+        })));
+    }
+}
+
+class NewsView {
+    constructor(config) {
+        this.root = config.root;
+        this.root.innerText = "37 llamas to enter hall of fame in ceremony tonight…";
+        this.root.addEventListener("click", evt => {
+            evt.preventDefault();
+            console.log("Show news");
+        });
+    }
+}
+
+// OLD OLD OLD OLD OLD
+
 class ChromeRenderer {
     constructor() {
-        var containerElem = document.querySelector("#root-CitySim");
+        var containerElem = document.querySelector("main");
         this.game = null;
         this.newGamePrompt = new NewGamePrompt();
         this.dialogs = new DialogManager({ containerElem: containerElem });
         this.numMinimaps = 3;
         this.elems = {
             container: containerElem,
-            gameView: document.querySelector("gameView"),
-            sceneRoot: document.querySelector("scene"),
-            fileMenu: containerElem.querySelector(".fileMenu"),
-            speedControls: containerElem.querySelector("speedControls"),
-            zoomControls: containerElem.querySelector("zoomControls"),
-            frameRate: containerElem.querySelector("frameRate")
+            controlPanel: containerElem.querySelector("controls")
         };
         this.subRenderers = [];
         this.state = {
@@ -1078,8 +1379,8 @@ class ChromeRenderer {
         var sr = this.elems.sceneRoot;
         this.elems.mainMap = document.createElement("canvas").addRemClass("mainMap", true);
         sr.append(this.elems.mainMap);
-        this.elems.controls = document.createElement("canvas").addRemClass("controls", true);
-        sr.append(this.elems.controls);
+        // this.elems.controls = document.createElement("canvas").addRemClass("controls", true);
+        // sr.append(this.elems.controls);
         this.elems.palette = document.createElement("canvas").addRemClass("palette", true);
         sr.append(this.elems.palette);
         this.elems.minimapContainer = document.createElement("minimaps");
@@ -1125,7 +1426,7 @@ class ChromeRenderer {
             // in drawing order
             this.subRenderers = [
                 new MapRenderer({ containerElem: this.elems.mainMap }),
-                new ControlPanelRenderer({ containerElem: this.elems.controls }),
+                new ControlPanelRenderer({ containerElem: this.elems.controlPanel }),
                 new PaletteRenderer({ containerElem: this.elems.palette })
                 // TODO minimap renderers
                 // Clicking a minimap changes the main map to render in the same 
@@ -1242,143 +1543,13 @@ class ChromeRenderer {
         }
     }
 }
-ChromeRenderer.fadeOpacity = function(currentAge, targetAge, duration) {
-    return Math.clamp((targetAge - currentAge) / duration, _zeroToOne);
-};
-
-class PaletteRenderer {
-    constructor(config) {
-        this.canvas = config.containerElem;
-        this.game = null;
-        this._style = MapToolController.settings().paletteStyle;
-        this._canvasDirty = true;
-        this.canvasInputController = new PointInputController({
-            eventTarget: this.canvas,
-            trackAllMovement: false
-        });
-        this.canvasInputController.pushDelegate(this);
-    }
-
-    get drawContext() {
-        return this.canvas.getContext("2d", { alpha: true });
-    }
-
-    initialize(game) {
-        this._canvasDirty = true;
-        this.game = game;
-        this.canvasGrid = new FlexCanvasGrid({
-            canvas: this.canvas,
-            deviceScale: FlexCanvasGrid.getDevicePixelScale(),
-            tileWidth: this._style.tileWidth,
-            tileSpacing: 0
-        });
-        this.visibleToolIDs = MapToolController.settings().defaultPalette;
-        MapToolController.shared.kvo.activeSession.addObserver(this, () => this._canvasDirty = true);
-        uiRunLoop.addDelegate(this);
-    }
-
-    shouldPassPointSessionToNextDelegate(inputSequence, controller) {
-        return false;
-    }
-
-    pointSessionChanged(inputSequence, controller) {
-        if (!inputSequence.isSingleClick) { return; }
-        var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
-        var id = this._toolIDForTile(tile);
-        MapToolController.shared.selectToolID(id);
-    }
-
-    processFrame(rl) {
-        if (!this._canvasDirty || rl != uiRunLoop) { return; }
-        this._canvasDirty = false;
-
-        var ctx = this.drawContext;
-        ctx.rectClear(this.canvasGrid.rectForFullCanvas);
-        ctx.fillStyle = this._style.fillStyle;
-        ctx.rectFill(this.canvasGrid.rectForAllTiles);
-
-        for (var i = 0; i < this.visibleToolIDs.length; i++) {
-            var tool = MapToolController.shared.toolWithID(this.visibleToolIDs[i]);
-            this._renderTool(ctx, tool, this._rectForToolIndex(i));
-        }
-    }
-
-    _toolIDForTile(tile) {
-        if (!tile) { return null; }
-        var index = this._style.columns * tile.y + tile.x;
-        return this.visibleToolIDs.safeItemAtIndex(index);
-    }
-
-    _rectForToolIndex(index) {
-        var x = index % this._style.columns;
-        var y = Math.floor(index / this._style.columns);
-        return this.canvasGrid.rectForTile(new Point(x, y));
-    }
-
-    _renderTool(ctx, tool, rect) {
-        this._basePainter(tool).render(ctx, rect, this.canvasGrid, tool.textTemplateInfo);
-        ScriptPainterStore.shared.getPainter(this._style.iconPainter).render(ctx, rect, this.canvasGrid, tool.textTemplateInfo);
-    }
-
-    _basePainter(tool) {
-        if (MapToolController.shared.isToolIDActive(tool.id)) {
-            return ScriptPainterStore.shared.getPainter(this._style.selectedBasePainter);
-        } else {
-            return ScriptPainterStore.shared.getPainter(this._style.unselectedBasePainter);
-        }
-    }
-}
-
-class ControlPanelRenderer {
-    constructor(config) {
-        this.canvas = config.containerElem;
-        this.game = null;
-        this._style = GameContent.shared.controlPanelView;
-        this._canvasDirty = true;
-    }
-
-    get drawContext() {
-        return this.canvas.getContext("2d", { alpha: true });
-    }
-
-    initialize(game) {
-        this.game = game;
-
-        var ctx = this.drawContext;
-        ctx.fillStyle = this._style.fillStyle;
-        ctx.rectFill(this.canvas.rectForFullCanvas());
-        this._canvasDirty = true;
-        uiRunLoop.addDelegate(this);
-        engineRunLoop.addDelegate(this);
-    }
-
-    processFrame(rl) {
-        if (rl == engineRunLoop) {
-            this._canvasDirty = true;
-        }
-        if (rl == uiRunLoop this._canvasDirty) {
-            this._render();
-            this._canvasDirty = false;
-        }
-    }
-
-    _render() {
-        var ctx = this.drawContext;
-        ctx.fillStyle = this._style.fillStyle;
-        ctx.rectFill(this.canvas.rectForFullCanvas());
-
-        // var date = this.game.city.time.date.longString();
-        // var cash = Simoleon.format(this.game.city.budget.cash);
-        // var sims = Number.uiInteger(this.game.city.population.R);
-        // this._renderTitle(`${this.game.city.identity.name} — ${date}, ${sims}, ${cash}`);
-    }
-}
 
 class MapRenderer {
     constructor(config) {
-        this.canvas = config.containerElem;
+        this.canvas = config.canvas;
         var zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
         this.zoomSelection = new SelectableList(zoomers);
+        this.initialize(config.game);
     }
 
     // Cached once per run loop frame
@@ -1554,7 +1725,7 @@ class MapToolSessionRenderer {
         if (!feedback || !feedback.painter || !item.focusTileRect) { return; }
         ctx.save();
         var age = Date.now() - item.timestamp;
-        ctx.globalAlpha = ChromeRenderer.fadeOpacity(age, feedback.displayMilliseconds, this._style.feedbackFadeMilliseconds);
+        ctx.globalAlpha = UI.fadeOpacity(age, feedback.displayMilliseconds, this._style.feedbackFadeMilliseconds);
         if (feedback.driftPerMillisecond) {
             ctx.translate(feedback.driftPerMillisecond.x * age, feedback.driftPerMillisecond.y * age);
         }
@@ -1564,12 +1735,82 @@ class MapToolSessionRenderer {
     }
 }
 
+class ScriptPainterCollection {
+    static defaultExpectedSize() {
+        return { width: 1, height: 1 };
+    }
+
+    static fromYaml(source, deviceScale) {
+        var config = jsyaml.safeLoad(source);
+        if (!config) { return null; }
+        return ScriptPainterCollection.fromObject(config, deviceScale);
+    }
+
+    static fromObject(config, deviceScale) {
+        if (config instanceof Array) {
+            config = { variants: [config], expectedSize: ScriptPainterCollection.defaultExpectedSize(), deviceScale: deviceScale };
+        } else {
+            if (!(config.variants instanceof Array) || (config.variants.length < 1)) {
+                throw new TypeError("Invalid ScriptPainter YAML: empty variants array.");
+            }
+            config = { variants: config.variants, expectedSize: config.expectedSize || ScriptPainterCollection.defaultExpectedSize(), deviceScale: deviceScale };
+        }
+        if (!config.variants.every(item => item instanceof Array)) {
+            throw new TypeError("Invalid ScriptPainter YAML: invalid lines.");
+        }
+        if (!config.expectedSize || config.expectedSize.width < 1 || config.expectedSize.height < 1) {
+            throw new TypeError("Invalid ScriptPainter YAML: invalid expectedSize.");
+        }
+        return new ScriptPainterCollection(config);
+    }
+
+    constructor(config) {
+        this.config = config;
+        this.variants = config.variants.map(item => new ScriptPainter({ lines: item, expectedSize: config.expectedSize, deviceScale: config.deviceScale }));
+    }
+
+    get rawSource() {
+        var data = {};
+        if (this.config.expectedSize.width == 1 && this.config.expectedSize.height == 1) {
+            if (this.variants.length == 1) {
+                return jsyaml.dump(this.variants[0].lines, {condenseFlow: true, flowLevel: 1});
+            } else {
+                data = { variants: this.variants.map(v => v.lines) };
+            }
+        } else {
+            data = { variants: this.variants.map(v => v.lines), expectedSize: this.config.expectedSize };
+        }
+        return jsyaml.dump(data, {condenseFlow: true, flowLevel: 3});
+    }
+
+    getVariant(variantKey) {
+        return this.variants[variantKey % this.variants.length];
+    }
+}
+
 class ScriptPainter {
+
+    // throws
+    static fromYaml(source, expectedSize, deviceScale) {
+        var lines = jsyaml.safeLoad(source);
+        if (lines instanceof Array) {
+            return new ScriptPainter({ lines: lines, expectedSize: expectedSize, deviceScale: deviceScale });
+        } else {
+            throw new TypeError("ScriptPainter YAML source is not an array.");
+        }
+    }
+
     constructor(config) {
         this.lines = config.lines;
+        this.expectedSize = config.expectedSize;
         this.deviceScale = config.deviceScale;
         this.rDomain = _zeroToOne;
     }
+
+    get rawSource() {
+        return jsyaml.dump(this.lines, {condenseFlow: true, flowLevel: 1});
+    }
+
     render(ctx, rect, canvasGrid, modelMetadata) {
         // TODO can we compile the lines so you don't parse them every frame?
         // Idea would be to create Path objects, Text objects, etc. (using native Canvas stuff like
@@ -1687,7 +1928,25 @@ class ScriptPainterStore {
     constructor() {
         this.deviceScale = FlexCanvasGrid.getDevicePixelScale();
         this.cache = {};
+        this.collectionCache = {};
     }
+
+    getPainterCollection(id) {
+        var found = this.collectionCache[id];
+        if (found) { return found; }
+        var data = GameContent.shared.painters[id];
+        if (!data) { return null; }
+        try {
+            var item = ScriptPainterCollection.fromObject(data, this.deviceScale);
+            if (!item) { return null; }
+            this.cache[id] = item;
+            return item;
+        } catch(e) {
+            debugLog(e.message);
+            return null;
+        }
+    }
+
     getPainter(id, variantKey) {
         var found = this.cache[id];
         variantKey = parseInt(variantKey);
@@ -1698,8 +1957,9 @@ class ScriptPainterStore {
         var data = GameContent.shared.painters[id];
         if (!data) { return null; }
         var variants = data.variants ? data.variants : [data];
+        var expectedSize = data.expectedSize ? data.expectedSize : { width: 1, height: 1 };
         var ds = this.deviceScale;
-        this.cache[id] = variants.map(v => new ScriptPainter({ lines: v, deviceScale: ds }));
+        this.cache[id] = variants.map(v => new ScriptPainter({ lines: v, expectedSize: expectedSize, deviceScale: ds }));
         return this.getPainter(id, variantKey)
     }
 }
@@ -1708,7 +1968,7 @@ class ScriptPainterStore {
 
 class Strings {
     static str(id) {
-        return GameContent.shared.strings[id];
+        return GameContent.shared.strings[id] || `?${id}?`;
     }
     static template(id, data) {
         var template = Strings.str(id);
@@ -1772,7 +2032,7 @@ class NewGamePrompt {
         });
         CitySim.game = new Game({
             city: city,
-            renderer: chromeRenderer
+            rootView: rootView
         });
         CitySim.game.start();
     };
@@ -1805,7 +2065,7 @@ if (!window.doNotInitializeGame) {
         id: "uiRunLoop",
         childRunLoops: [engineRunLoop]
     });
-    var chromeRenderer = new ChromeRenderer();
+    var rootView = new RootView();
 }
 
 var initialize = async function() {
@@ -1815,7 +2075,7 @@ var initialize = async function() {
 
 var dataIsReady = function(content) {
     if (!content) {
-        chromeRenderer.failedToLoadBaseData();
+        rootView.failedToLoadBaseData();
         return;
     }
     GameContent.shared = content;
@@ -1823,14 +2083,14 @@ var dataIsReady = function(content) {
     ScriptPainterStore.shared = new ScriptPainterStore();
     KeyInputController.shared = new KeyInputController();
     MapToolController.shared = new MapToolController();
-    chromeRenderer.setUp();
+    rootView.setUp();
 };
 
 return {
     game: null,
     engineRunLoop: engineRunLoop,
     uiRunLoop: uiRunLoop,
-    chromeRenderer: chromeRenderer,
+    rootView: rootView,
     initialize: initialize,
     Z: Z,
     Simoleon: Simoleon,
@@ -1844,11 +2104,11 @@ return {
     Budget: Budget,
     Game: Game,
     KeyInputController: KeyInputController,
-    ChromeRenderer: ChromeRenderer,
-    PaletteRenderer: PaletteRenderer,
-    ControlPanelRenderer: ControlPanelRenderer,
     MapRenderer: MapRenderer,
-    NewGamePrompt: NewGamePrompt
+    NewGamePrompt: NewGamePrompt,
+    ScriptPainter: ScriptPainter,
+    ScriptPainterCollection: ScriptPainterCollection,
+    ScriptPainterStore: ScriptPainterStore
 };
 
 })(); // end CitySim namespace

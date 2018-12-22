@@ -8,6 +8,332 @@
     <script defer src="city-content.js"></script>
     <script defer src="city.js"></script>
     <style type="text/css">
+/* ~~~~~~ GLOBALS ~~~~~~ */
+/* (defaults. non-structural colors, fonts, etc.) */
+
+body {
+    /* retro-futuristic font */
+    font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
+    font-weight: 300;
+    color: hsl(0, 0%, 0%);
+    background-color: hsl(0, 0%, 100%);
+}
+
+.hidden {
+    display: none;
+}
+
+/* ~~~~~~ STRUCTURE ~~~~~~ */
+/* (layout only) */
+
+body {
+    margin: 0;
+    padding: 0;
+}
+
+main {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+main > div {
+    display: flex;
+    flex-direction: row;
+}
+
+palette {
+    display: block;
+    flex-grow: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+map {
+    display: block;
+    flex-grow: 1;
+}
+
+canvas {
+    display: block;
+}
+
+canvas.mainMap {
+    width: 100%;
+    height: 100%;
+}
+
+minimaps {
+    /* float on right side of map, bottom aligned so it's near the control panel */
+    float: right;
+    max-width: 25%;
+    width: 200px;
+}
+
+minimaps canvas {
+    width: 100%;
+    min-height: 100px;
+    max-height: 30%;
+    margin: 0 0 6px 0;
+    /* TODO bottom-align. Hide any that won't fit in the vertical space allotted. */
+}
+
+controls {
+    display: flex;
+    flex-direction: column;
+}
+
+controls > div {
+    display: flex;
+    flex-direction: row;
+}
+
+block {
+    display: block;
+    padding: 2px;
+}
+
+block.container {
+    padding: 0px;
+}
+
+block#info {
+    /* left side */
+    flex-grow: 1;
+    display: flex;
+    flex-direction: row;
+}
+
+block#cityStatus {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+}
+
+block#cityStatus label {
+    width: 50%;
+}
+
+block#rci {
+    width: 36px;
+    padding: 6px 4px;
+}
+
+#rci canvas {
+    width: 100%;
+    height: 100%;
+}
+
+block#tools {
+    /* fill up the middle */
+    flex-grow: 1;
+}
+
+block#engine {
+    flex-grow: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+playPause, speedSelector {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+
+frameRate {
+    flex-grow: 0;
+    display: block;
+    text-align: right;
+}
+
+#engine a {
+    margin: 0;
+    width: 40px;
+    height: 20px;
+}
+
+block#view {
+    /* right-aligned under the minimaps */
+    flex-grow: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+#view nav {
+    display: flex;
+    flex-direction: column;
+}
+
+#view direction {
+    padding: 4px;
+    flex-grow: 2;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+#view direction #map-nav-ud {
+    display: flex;
+    flex-direction: column;
+}
+
+#view zoom {
+    padding: 4px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+}
+
+#view a {
+    margin: 0 4px;
+    width: 40px;
+    height: 20px;
+}
+
+#view #map-nav-ud a:first-child {
+    margin-bottom: 4px;
+}
+#view #map-nav-ud a:last-child {
+    margin-top: 4px;
+}
+
+block#news {
+    /* fill available width */
+    flex-grow: 1;
+}
+
+block#system {
+    /* just wide enough for one button */
+    flex-grow: 0;
+}
+
+a.tool {
+    display: flex;
+}
+a.tool span {
+    display: block;
+    margin: auto;
+}
+
+/* ~~~~~~ STYLE ~~~~~~ */
+/* (non structural. style for specific elements.) */
+
+palette {
+    background-color: hsl(0, 0%, 75%);
+}
+
+controls {
+    background-color: hsl(0, 0%, 75%);
+}
+
+label.textLine {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+}
+label.textLine span {
+    order: 2;
+    font-size: 8pt;
+    font-weight: 300;
+    text-align: center;
+}
+label.textLine input {
+    order: 1;
+    background-color: transparent;
+    border: none;
+    text-align: center;
+    font-size: 10pt;
+    font-weight: 500;
+}
+
+a.tool:link, a.tool:visited, a.tool:active, a.tool:hover {
+    color: hsl(0, 0%, 0%);
+    text-decoration: none;
+    text-align: center;
+    text-transform: uppercase;
+    font-size: 10pt;
+    font-weight: 500;
+}
+
+a.tool.selected {
+    background-color: hsl(120, 50%, 75%);
+}
+
+/* ~~~~~~ PROMPTS ~~~~~~ */
+
+prompt {
+    display: flex;
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+    font-size: 80%;
+    background-color: hsla(0, 0%, 0%, 0.3);
+}
+prompt panel {
+    display: block;
+    width: 30em;
+    max-width: 90%;
+    margin: 0 auto;
+    padding: 0.5em;
+    border-radius: 0.5em;
+    border: 1px solid hsl(0, 0%, 50%);
+    background-color: hsl(0, 0%, 100%);
+}
+h1 {
+    margin: 0.75em;
+    padding: 0;
+    text-align: center;
+    font-size: 120%;
+    font-weight: bolder;
+}
+prompt p, prompt div {
+    margin: 0.5em;
+    padding: 0;
+}
+
+buttons.promptButtons :first-child {
+    font-weight: bolder;
+}
+.unprioritized buttons.promptButtons {
+    text-align: center;
+}
+.unprioritized buttons.promptButtons :first-child {
+    font-weight: inherit;
+}
+buttons.promptButtons {
+    text-align: right;
+}
+buttons.promptButtons a {
+    margin-left: 0.5em;
+    margin-right: 0;
+}
+.unprioritized buttons.promptButtons a {
+    margin-left: 0.5em;
+    margin-right: 0.5em;
+}
+
+/* ~~~~~~ TEMPORARY ~~~~~~ */
+
+block#tools, block#system {
+    display: none;
+}
+
+
+    /*
     body {
         font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
         font-weight: 300;
@@ -37,7 +363,7 @@
         display: inline;
     }
 
-    gameView, status {
+    gameView, controlPanel {
         display: block;
     }
     gameView {
@@ -54,7 +380,7 @@
         font-weight: bolder;
         text-align: center;
     }
-    gameView status {
+    gameView controlPanel {
         margin: 0;
         padding: 0.5em;
         font-size: 80%;
@@ -127,7 +453,7 @@
         margin: 1em auto;
         padding: 0;
         width: 100%;
-        /* minimapHeight + minimapPadding + controlsHeight */
+        // * minimapHeight + minimapPadding + controlsHeight *
         height: calc((160px * 3) + (4px * 4) + 48px);
     }
     scene canvas {
@@ -143,7 +469,6 @@
         width: 100%;
         height: calc(100% - 48px);
         cursor: crosshair;
-        /* background-color: red; */
     }
     canvas.controls {
         position: absolute;
@@ -151,7 +476,6 @@
         width: 100%;
         bottom: 0;
         height: 48px;
-        /* background-color: gray; */
     }
     canvas.palette {
         position: absolute;
@@ -159,7 +483,6 @@
         left: 4px;
         width: 48px;
         height: calc(100% - 48px - 8px);
-        /* background-color: purple; */
     }
     minimaps {
         display: block;
@@ -175,7 +498,6 @@
         padding: 0;
         width: 160px;
         height: 160px;
-        /* background-color: green; */
     }
 
     buttons {
@@ -213,14 +535,6 @@
         height: 1.2em;
         width: 10em;
     }
-/*    frameRate2 {
-        display: block;
-        position: fixed;
-        bottom: 2.5em;
-        left: 0.5em;
-        height: 1.2em;
-        width: 90%;
-    }*/
 
     prompt {
         display: flex;
@@ -283,11 +597,67 @@
     buttons a.glyph {
         font-size: 72%;
     }
+    */
     </style>
 </head>
 <body>
 
 <main>
+    <div>
+        <palette></palette>
+        <map>
+            <!-- minimaps> <canvas></canvas> <canvas></canvas> <canvas></canvas> </minimaps -->
+            <canvas class="mainMap"></canvas>
+        </map>
+    </div>
+    <controls>
+        <div>
+            <block id="info" class="container">
+                <block id="cityStatus"></block>
+                <block id="rci"><canvas></canvas></block>
+            </block>
+            <block id="tools"></block>
+            <block id="engine">
+                <playPause></playPause>
+                <speedSelector></speedSelector>
+                <frameRate></frameRate>
+            </block>
+            <block id="view">
+                <nav>
+                    <direction>
+                        <div id="map-nav-l"></div>
+                        <div id="map-nav-ud"></div>
+                        <div id="map-nav-r"></div>
+                    </direction>
+                    <zoom></zoom>
+                </nav>
+            </block>
+        </div>
+        <div>
+            <block id="news"><article></article><div></div></block>
+            <block id="system"></block>
+        </div>
+    </controls>
+    <help class="hidden">
+        <ul>
+            <li><kbd>↑ ↓ ← →</kbd>: Move map up/down/left/right</li>
+            <li><kbd>0</kbd>: Pause/resume</li>
+            <li><kbd>1 2 3 4</kbd>: Set game speed</li>
+            <li><kbd>+ -</kbd>: Zoom in/out (<kbd>Shift</kbd> key optional)</li>
+            <li><kbd>Esc</kbd>: Cancel tools, close popups, etc.</li>
+            <li><kbd>?</kbd>: Query</li>
+            <li><kbd>X</kbd>: Bulldozer</li>
+            <li><kbd>Q W E</kbd>: Build R/C/I zone</li>
+            <li><kbd>T</kbd>: Plop tree</li>
+        </ul>
+    </help>
+    <dialog class="hidden">
+        <p>(text)</p>
+    </dialog>
+
+</main>
+
+<!-- main>
     <section id="root-CitySim" class="hidden">
         <h1>CitySim</h1>
         <controls>
@@ -301,7 +671,7 @@
         <gameView class="willFadeIn">
             <h2></h2>
             <scene></scene>
-            <status></status>
+            <controlPanel></controlPanel>
         </gameView>
         <frameRate></frameRate>
         <options class="hidden">
@@ -323,7 +693,7 @@
             <p>(text)</p>
         </dialog>
     </section>
-</main>
+</main -->
 
 <prompt class="hidden">
     <panel>
