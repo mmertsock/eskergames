@@ -253,13 +253,14 @@ strings:
   cityStatusDateLabel: Date
   cityStatusCashLabel: Cash
   cityStatusPopulationLabel: Population
+  windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
+  gameProductTitle: CitySim
   # TODO audit the below
   defaultCityName: New City
   engineMsPerDayLabel: "<value> ms/day"
   failedToLoadGameMessage: There was a problem loading the game data.
   failedToLoadGameTitle: Failed to load game
   frameRateTokenSeparator: ". "
-  gameProductTitle: CitySim
   gameStatePaused: Paused
   genericCancelButton: Cancel
   helpDismiss: Thanks!
@@ -270,8 +271,8 @@ strings:
   pauseResumePause: Pause
   pauseResumeResume: Resume
   uiFpsLabel: "<value> fps"
-  zoomInButton: ➕
-  zoomOutButton: ➖
+  zoomInButtonGlyph: ➕
+  zoomOutButtonGlyph: ➖
 
 ################## SCRIPTS ################
 

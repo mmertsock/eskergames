@@ -1189,6 +1189,12 @@ class Dispatch {
 Dispatch.shared = new Dispatch();
 
 class Kvo {
+    static stopObservations(target) {
+        if (!target._kvoDT) { return; }
+        Dispatch.shared.remove(target._kvoDT);
+        target._kvoDT = null;
+    }
+
     constructor(sourceClass, item) {
         this._obj = item;
         this.eventName = `${sourceClass.name}.kvo`;
@@ -1208,12 +1214,10 @@ class Kvo {
     notifyChanged(log) {
         Dispatch.shared.postEventSync(this.eventName, this._obj, log);
     }
+    getValue() {
+        return this._obj;
+    }
 }
-Kvo.stopObservations = function(target) {
-    if (!target._kvoDT) { return; }
-    Dispatch.shared.remove(target._kvoDT);
-    target._kvoDT = null;
-};
 
 class KvoProperty {
     constructor(kvo, key) {
@@ -1233,9 +1237,33 @@ class KvoProperty {
         if (typeof(notifyRoot) === "undefined") { notifyRoot = true; }
         if (notifyRoot) { this.kvo.notifyChanged(log); }
     }
+    getValue() {
+        return this.kvo._obj[this.key];
+    }
     setValue(value, notifyRoot, log) {
         this.kvo._obj[this.key] = value;
         this.notifyChanged(notifyRoot, log);
+    }
+}
+
+class Binding {
+    // config.source: a Kvo or KvoProperty
+    // config.target: a KvoProperty or anything with a setValue func
+    // config.sourceFormatter: (optional) a func to transform the source kvo value (see default below)
+    constructor(config) {
+        this.source = config.source;
+        this.target = config.target;
+        if (config.sourceFormatter) {
+            this.sourceFormatter = config.sourceFormatter;
+        } else {
+            this.sourceFormatter = (value, kvo) => value;
+        }
+        this._updateTarget();
+        this.source.addObserver(this, source => this._updateTarget());
+    }
+
+    _updateTarget() {
+        this.target.setValue(this.sourceFormatter(this.source.getValue(), this.source));
     }
 }
 
@@ -1751,6 +1779,7 @@ return {
     Dispatch: Dispatch,
     DispatchTarget: DispatchTarget,
     Kvo: Kvo,
+    Binding: Binding,
     FlexCanvasGrid: FlexCanvasGrid,
     CanvasGrid: CanvasGrid,
     Prompt: Prompt,

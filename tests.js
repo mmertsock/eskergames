@@ -9,6 +9,7 @@ var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var Dispatch = Gaming.Dispatch;
 var DispatchTarget = Gaming.DispatchTarget;
 var Kvo = Gaming.Kvo;
+var Binding = Gaming.Binding;
 var SimDate = CitySim.SimDate;
 var GameMap = CitySim.GameMap;
 
@@ -410,60 +411,61 @@ function dispatchTest() {
     }).build()();
 }
 
+class Employee {
+    constructor(employer, title, name) {
+        this.employer = employer;
+        this._title = title;
+        this.name = name;
+        this.kvo = new Kvo(Employee, this);
+    }
+    get title() { return this._title; }
+    get salary() { return this.employer.getSalary(this.title); }
+    setTitle(value) {
+        this._title = value;
+        this.kvo.title.setValue(value, false, true);
+        this.kvo.salary.notifyChanged(true, true);
+    }
+    setName(value) {
+        this.kvo.name.setValue(value, true, true);
+    }
+    doStuff() {
+        this.kvo.notifyChanged(true);
+    }
+}
+Employee.Kvo = { title: "_title", salary: "_salary", name: "name" };
+
+class Business {
+    constructor(salaryTable) {
+        this.salaryTable = salaryTable;
+    }
+    getSalary(title) {
+        return this.salaryTable[title];
+    }
+}
+
+class EmployeeWatcher {
+    constructor(employee, top, child) {
+        this.employee = employee;
+        this.salaryHistory = [employee.salary];
+        this.kvoHistory = [];
+        if (top) {
+            this.employee.kvo.addObserver(this, (source) => {
+                this.kvoHistory.push({ source: source, via: "top" });
+            });
+        }
+        if (child) {
+            this.employee.kvo.salary.addObserver(this, (source) => {
+                this.salaryHistory.push(source.salary);
+                this.kvoHistory.push({ source: source, via: "salary" });
+            });
+            this.employee.kvo.name.addObserver(this, (source) => {
+                this.kvoHistory.push({ source: source, via: "name" });
+            });
+        }
+    }
+}
+
 function kvoTest() {
-    class Employee {
-        constructor(employer, title, name) {
-            this.employer = employer;
-            this._title = title;
-            this.name = name;
-            this.kvo = new Kvo(Employee, this);
-        }
-        get title() { return this._title; }
-        get salary() { return this.employer.getSalary(this.title); }
-        setTitle(value) {
-            this._title = value;
-            this.kvo.title.setValue(value, false, true);
-            this.kvo.salary.notifyChanged(true, true);
-        }
-        setName(value) {
-            this.kvo.name.setValue(value, true, true);
-        }
-        doStuff() {
-            this.kvo.notifyChanged(true);
-        }
-    }
-    Employee.Kvo = { title: "_title", salary: "_salary", name: "name" };
-
-    class Business {
-        constructor(salaryTable) {
-            this.salaryTable = salaryTable;
-        }
-        getSalary(title) {
-            return this.salaryTable[title];
-        }
-    }
-
-    class EmployeeWatcher {
-        constructor(employee, top, child) {
-            this.employee = employee;
-            this.salaryHistory = [employee.salary];
-            this.kvoHistory = [];
-            if (top) {
-                this.employee.kvo.addObserver(this, (source) => {
-                    this.kvoHistory.push({ source: source, via: "top" });
-                });
-            }
-            if (child) {
-                this.employee.kvo.salary.addObserver(this, (source) => {
-                    this.salaryHistory.push(source.salary);
-                    this.kvoHistory.push({ source: source, via: "salary" });
-                });
-                this.employee.kvo.name.addObserver(this, (source) => {
-                    this.kvoHistory.push({ source: source, via: "name" });
-                });
-            }
-        }
-    }
 
     new UnitTest("Kvo-Setup", function() {
         var business1 = new Business({ bagger: 10, manager: 100 });
@@ -484,6 +486,7 @@ function kvoTest() {
         var business1 = new Business({ bagger: 10, manager: 100 });
         var person1 = new Employee(business1, "bagger", "A");
         var house1 = new EmployeeWatcher(person1, true, false);
+        this.assertEqual(person1.kvo.getValue(), person1);
         person1.setTitle("manager");
         if (this.assertEqual(house1.kvoHistory.length, 1)) {
             this.assertEqual(house1.kvoHistory[0].source, person1);
@@ -511,6 +514,7 @@ function kvoTest() {
         var house1 = new EmployeeWatcher(person1, false, true);
         person1.setTitle("manager");
         person2.setTitle("bagger");
+        this.assertEqual(person1.kvo.title.getValue(), "manager");
         this.assertElementsEqual(house1.salaryHistory, [10, 100]);
         if (this.assertEqual(house1.kvoHistory.length, 1)) {
             this.assertEqual(house1.kvoHistory[0].source, person1);
@@ -547,6 +551,51 @@ function kvoTest() {
             this.assertEqual(house1.kvoHistory[2].source, person1);
             this.assertEqual(house1.kvoHistory[2].via, "top");
         }
+    }).build()();
+}
+
+// person1 is raw, person2 has sourceSormatter, and also have a global thing.
+class TargetView {
+    constructor(person1, person2) {
+        this.person1general = "";
+        this.person1name = "";
+        this.person2name = "";
+        this.kvo = new Kvo(TargetView, this);
+        this.bindings = [
+            new Binding({ source: person1.kvo, target: this.kvo.person1title, sourceFormatter: (value, kvo) => value.title }),
+            new Binding({ source: person1.kvo.name, target: this.kvo.person1name }),
+            new Binding({ source: person2.kvo.name, target: this.kvo.person2name, sourceFormatter: (value, kvo) => "P2" + value })
+        ];
+    }
+}
+TargetView.Kvo = { person1title: "person1title", person1name: "person1name", person2name: "person2name" };
+
+
+function bindingTest() {
+    new UnitTest("Binding", function() {
+        var business1 = new Business({ bagger: 10, manager: 100 });
+        var person1 = new Employee(business1, "bagger", "A");
+        var person2 = new Employee(business1, "manager", "B");
+        var view = new TargetView(person1, person2);
+
+        this.assertEqual(view.person1title, person1.title);
+        this.assertEqual(view.person1name, person1.name);
+        this.assertEqual(view.person2name, "P2" + person2.name);
+
+        person1.setName("New P1");
+        this.assertEqual(view.person1title, person1.title);
+        this.assertEqual(view.person1name, person1.name);
+        this.assertEqual(view.person2name, "P2" + person2.name);
+
+        person1.setTitle("manager");
+        this.assertEqual(view.person1title, person1.title);
+        this.assertEqual(view.person1name, person1.name);
+        this.assertEqual(view.person2name, "P2" + person2.name);
+
+        person2.setName("New P2");
+        this.assertEqual(view.person1title, person1.title);
+        this.assertEqual(view.person1name, person1.name);
+        this.assertEqual(view.person2name, "P2" + person2.name);
     }).build()();
 }
 
@@ -879,6 +928,7 @@ TestSession.current = new TestSession([
     selectableListTest,
     dispatchTest,
     kvoTest,
+    bindingTest,
     flexCanvasGridTest1,
     flexCanvasGridTest2,
     flexCanvasGridTest3,

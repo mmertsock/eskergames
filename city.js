@@ -8,6 +8,7 @@ var Rect = Gaming.Rect;
 var Point = Gaming.Point;
 var SelectableList = Gaming.SelectableList;
 var Kvo = Gaming.Kvo;
+var Binding = Gaming.Binding;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var GameContent = CitySimContent.GameContent;
 var GameScriptEngine = CitySimContent.GameScriptEngine;
@@ -16,6 +17,10 @@ var GameScriptEngine = CitySimContent.GameScriptEngine;
 
 var _stringTemplateRegexes = {};
 var _zeroToOne = { min: 0, max: 1 };
+
+var _runLoopPriorities = {
+    gameEngine: -100
+};
 
 Rect.prototype.containsTile = function(x, y) {
     if (typeof y === 'undefined') {
@@ -126,6 +131,11 @@ class SimDate {
     longString() {
         var uiMonth = GameContent.shared.simDate.longMonthStrings[this.month];
         return `${uiMonth} ${this.day}, ${this.year}`;
+    }
+
+    mediumString() {
+        var uiMonth = GameContent.shared.simDate.longMonthStrings[this.month];
+        return `${uiMonth} ${this.year}`;
     }
 }
 SimDate.daysPerMonth = 30;
@@ -368,29 +378,32 @@ class GameMap {
     }
 }
 
+class CityTime {
+    constructor() {
+        this.speed = Game.rules().speeds[0];
+        this.date = SimDate.epoch;
+        this.kvo = new Kvo(CityTime, this);
+    }
+    setSpeed(newSpeed) {
+        this.kvo.speed.setValue(newSpeed);
+    }
+    incrementDay() {
+        this.kvo.date.setValue(this.date.adding(1));
+    }
+}
+CityTime.Kvo = { "speed": "speed", "date": "date" };
+
 class City {
     constructor(config) {
-        this.identity = {
-            name: config.name // <String>
-        };
-        this.time = {
-            speed: Game.rules().speeds[0],
-            date: SimDate.epoch
-        };
+        this.name = config.name;
+        this.time = new CityTime();
         this.budget = new Budget({ startingCash: config.difficulty.startingCash });
         this.map = new GameMap({ terrain: config.terrain });
+        this.kvo = new Kvo(City, this);
+        this._updatePopulation();
     }
 
-    get population() {
-        var pop = new RCIValue(0, 0, 0);
-        this.map.visitEachPlot((plot) => {
-            var plotPop = plot.item.population;
-            if (plotPop) {
-                pop = pop.adding(plotPop);
-            }
-        });
-        return pop;
-    }
+    get population() { return _population; }
 
     spend(simoleons) {
         return this.budget.spend(simoleons);
@@ -403,7 +416,24 @@ class City {
     destroyPlot(plot) {
         return this.map.removePlot(plot);
     }
+
+    simulateOneDay() {
+        this.time.incrementDay();
+        this._updatePopulation();
+    }
+
+    _updatePopulation() {
+        var pop = new RCIValue(0, 0, 0);
+        this.map.visitEachPlot((plot) => {
+            var plotPop = plot.item.population;
+            if (plotPop) {
+                pop = pop.adding(plotPop);
+            }
+        });
+        this.kvo.population.setValue(pop);
+    }
 }
+City.Kvo = { name: "name", population: "_population" };
 
 class Budget {
     constructor(config) {
@@ -449,7 +479,7 @@ class Game {
         this.gameSpeedActivated(this.engineSpeed);
         this.rootView.initialize(this);
         this._started = true;
-        debugLog(`Started game with city ${this.city.identity.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.size.width}x${this.city.map.terrain.size.height}`);
+        debugLog(`Started game with city ${this.city.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.size.width}x${this.city.map.terrain.size.height}`);
 
         engineRunLoop.addDelegate(this);
         uiRunLoop.resume();
@@ -479,19 +509,18 @@ class Game {
 
     gameSpeedActivated(value) {
         debugLog(`Set engine speed to ${value.name}`);
-        this.city.time.speed = value;
+        this.city.time.setSpeed(value);
         engineRunLoop.setTargetFrameRate(value.daysPerSecond);
         this.resume();
     }
 
     delegateOrder(rl) {
-        // Process before basically anything else
-        return -100;
+        return _runLoopPriorities.gameEngine;
     }
 
     processFrame(rl) {
         if (rl == engineRunLoop) {
-            this.city.time.date = this.city.time.date.adding(1);
+            this.city.simulateOneDay();
         }
     }
 
@@ -1067,10 +1096,18 @@ class TextLineView {
         this.elem = TextLineView.createElement(config);
         config.parent.append(this.elem);
         this.valueElem = this.elem.querySelector("input");
+        if (config.binding) {
+            this.binding = new Binding({ source: config.binding.source, target: this, sourceFormatter: config.binding.sourceFormatter });
+        }
     }
 
     get value() { return this.valueElem.value; }
     set value(newValue) { this.valueElem.value = newValue; }
+
+    // for Bindings
+    setValue(newValue) {
+        this.value = newValue;
+    }
 }
 
 class ToolButton {
@@ -1097,6 +1134,11 @@ class ToolButton {
         }
         config.parent.append(this.elem);
         this._selected = false;
+    }
+
+    configure(block) {
+        block(this);
+        return this;
     }
 
     get isSelected() {
@@ -1196,27 +1238,32 @@ class CityStatusView {
     constructor(config) {
         this.game = config.game;
         this.views = { root: config.root };
-        this.views.name = new TextLineView({ parent: config.root, title: Strings.str("cityStatusNameLabel") });
-        this.views.date = new TextLineView({ parent: config.root, title: Strings.str("cityStatusDateLabel") });
-        this.views.cash = new TextLineView({ parent: config.root, title: Strings.str("cityStatusCashLabel") });
-        this.views.population = new TextLineView({ parent: config.root, title: Strings.str("cityStatusPopulationLabel") });
-
-        // would be cool to kvo-bind text line views
-        // 
-        this.game.city.budget.kvo.cash.addObserver(this, () => this.updateCash());
-        this.updateCash();
+        this.views.name = new TextLineView({ parent: config.root, title: Strings.str("cityStatusNameLabel"), binding: {
+            source: this.game.city.kvo.name
+        } });
+        this.views.date = new TextLineView({ parent: config.root, title: Strings.str("cityStatusDateLabel"), binding: {
+            source: this.game.city.time.kvo.date, sourceFormatter: value => value.longString()
+        } });
+        this.views.cash = new TextLineView({ parent: config.root, title: Strings.str("cityStatusCashLabel"), binding: {
+            source: this.game.city.budget.kvo.cash, sourceFormatter: Simoleon.format
+        } });
+        this.views.population = new TextLineView({ parent: config.root, title: Strings.str("cityStatusPopulationLabel"), binding: {
+            source: this.game.city.kvo.population, sourceFormatter: value => Number.uiInteger(value.R)
+        } });
+        this.game.city.time.kvo.date.addObserver(this, kvo => this._updateDocumentTitle());
+        this.game.city.kvo.name.addObserver(this, kvo => this._updateDocumentTitle());
+        this._updateDocumentTitle();
     }
 
-    updateCash() {
-        this.views.cash.value = Simoleon.format(this.game.city.budget.cash);
-    }
-
-    DEBUG_render() {
-        this.views.name.value = "Cityville";
-        debugLog("Also set document.title");
-        this.views.date.value = "10/1/2018";
-        this.views.cash.value = "§19,834";
-        this.views.population.value = "31,243";
+    _updateDocumentTitle() {
+        var newTitle = Strings.template("windowTitleTemplate", {
+            name: this.game.city.name,
+            date: this.game.city.time.date.mediumString(),
+            gameProductTitle: Strings.str("gameProductTitle")
+        });
+        if (document.title != newTitle) {
+            document.title = newTitle;
+        }
     }
 }
 
@@ -1323,11 +1370,14 @@ class MapControlsView {
         }));
 
         var zoomElem = config.root.querySelector("zoom");
-        this.buttons.concat(["-", "+"].map(id => new ToolButton({
+        this.buttons.push(new ToolButton({
             parent: zoomElem,
-            id: id,
-            title: id
-        })));
+            title: Strings.str("zoomOutButtonGlyph")
+        }).configure(button => button.elem.addGameCommandEventListener("click", true, "zoomOut", null)));
+        this.buttons.push(new ToolButton({
+            parent: zoomElem,
+            title: Strings.str("zoomInButtonGlyph")
+        }).configure(button => button.elem.addGameCommandEventListener("click", true, "zoomIn", null)));
     }
 }
 
@@ -1442,7 +1492,6 @@ class ChromeRenderer {
             });
         }
         this.state.frameCounter = 0;
-        document.title = this.game.city.identity.name;
         this.render();
     }
     
@@ -1473,7 +1522,7 @@ class ChromeRenderer {
             return;
         }
         var date = this.game.city.time.date.longString();
-        this.elems.container.querySelector("h1").innerText = `${this.game.city.identity.name} — ${date}`;
+        this.elems.container.querySelector("h1").innerText = `${this.game.city.name} — ${date}`;
         this._updateGameRunningStateLabels();
     }
 
