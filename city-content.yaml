@@ -248,6 +248,7 @@ painters:
 ################## STRINGS ################
 
 strings:
+  helpButtonLabel: "?"
   optionsButtonLabel: Options
   cityStatusNameLabel: Name
   cityStatusDateLabel: Date

@@ -400,10 +400,11 @@ class City {
         this.budget = new Budget({ startingCash: config.difficulty.startingCash });
         this.map = new GameMap({ terrain: config.terrain });
         this.kvo = new Kvo(City, this);
-        this._updatePopulation();
+        this._updateStateAfterOneDay();
     }
 
-    get population() { return _population; }
+    get population() { return this._population; }
+    get rciDemand() { return this._rciDemand; }
 
     spend(simoleons) {
         return this.budget.spend(simoleons);
@@ -419,7 +420,12 @@ class City {
 
     simulateOneDay() {
         this.time.incrementDay();
+        this._updateStateAfterOneDay();
+    }
+
+    _updateStateAfterOneDay() {
         this._updatePopulation();
+        this._updateRCI();
     }
 
     _updatePopulation() {
@@ -432,8 +438,12 @@ class City {
         });
         this.kvo.population.setValue(pop);
     }
+
+    _updateRCI() {
+        this.kvo.rciDemand.setValue(new RCIValue(0.7, -0.1, 0.3));
+    }
 }
-City.Kvo = { name: "name", population: "_population" };
+City.Kvo = { name: "name", population: "_population", rciDemand: "_rciDemand" };
 
 class Budget {
     constructor(config) {
@@ -1101,6 +1111,11 @@ class TextLineView {
         }
     }
 
+    configure(block) {
+        block(this);
+        return this;
+    }
+
     get value() { return this.valueElem.value; }
     set value(newValue) { this.valueElem.value = newValue; }
 
@@ -1131,6 +1146,10 @@ class ToolButton {
         this.elem = ToolButton.createElement(config);
         if (config.click) {
             this.elem.addEventListener("click", evt => { evt.preventDefault(); config.click(this); });
+        } else if (config.clickScript) {
+            var subject = typeof(config.clickScriptSubject) === 'undefined' ? this : config.clickScriptSubject;
+            debugLog([config.title, config.clickScript, subject, config.clickScriptSubject]);
+            this.elem.addGameCommandEventListener("click", true, config.clickScript, subject);
         }
         config.parent.append(this.elem);
         this._selected = false;
@@ -1207,9 +1226,10 @@ class PaletteView {
             id: id,
             parent: this.root,
             title: tool.settings.iconGlyph,
-            size: { width: this.settings.paletteStyle.tileWidth, height: this.settings.paletteStyle.tileWidth }
+            size: { width: this.settings.paletteStyle.tileWidth, height: this.settings.paletteStyle.tileWidth },
+            clickScript: "selectTool",
+            clickScriptSubject: id
         });
-        button.elem.addGameCommandEventListener("click", true, "selectTool", id);
         return button;
     }
 }
@@ -1228,8 +1248,13 @@ class ControlsView {
         this.buttons = [];
         this.buttons.push(new ToolButton({
             parent: this.root.querySelector("#system"),
+            title: Strings.str("helpButtonLabel"),
+            clickScript: "showGameHelp"
+        }));
+        this.buttons.push(new ToolButton({
+            parent: this.root.querySelector("#system"),
             title: Strings.str("optionsButtonLabel"),
-            click: (button) => { console.log("File menu"); }
+            clickScript: "showFileMenu"
         }));
     }
 }
@@ -1269,11 +1294,13 @@ class CityStatusView {
 
 class RCIView {
     constructor(config) {
+        this.game = config.game;
         this.root = config.root;
         this.canvas = config.root.querySelector("canvas");
         this.style = GameContent.shared.rciView;
         this.deviceScale = HTMLCanvasElement.getDevicePixelScale();
         this.render();
+        this.game.city.kvo.rciDemand.addObserver(this, value => this.render());
     }
 
     render() {
@@ -1283,9 +1310,10 @@ class RCIView {
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.font = `${this.style.fontSize}px sans-serif`;
-        this._renderItem(ctx, 0, 0.3);
-        this._renderItem(ctx, 1, 0.7);
-        this._renderItem(ctx, 2, -0.1);
+        var rci = this.game.city.rciDemand;
+        this._renderItem(ctx, 0, rci.R);
+        this._renderItem(ctx, 1, rci.C);
+        this._renderItem(ctx, 2, rci.I);
     }
 
     _renderItem(ctx, index, value) {
@@ -1316,36 +1344,60 @@ class RCIView {
 
 class GameEngineControlsView {
     constructor(config) {
+        this.game = config.game;
         this.root = config.root;
 
         var playPause = config.root.querySelector("playPause");
-        this.controlButtons = [];
-        this.controlButtons.push(new ToolButton({
+        this.pauseButton = new ToolButton({
             parent: playPause,
-            title: "||"
-        }));
-        this.controlButtons.push(new ToolButton({
+            title: "||",
+            clickScript: "pauseResume"
+        });
+        this.playButton = new ToolButton({
             parent: config.root.querySelector("playPause"),
-            title: ">"
-        }));
+            title: ">",
+            clickScript: "pauseResume"
+        });
 
         var speedRoot = config.root.querySelector("speedSelector");
-        this.speedButtons = GameContent.shared.gameRules.speeds.map(s => new ToolButton({
+        this.speedButtons = GameContent.shared.gameRules.speeds.map((s, index) => new ToolButton({
             parent: speedRoot,
-            title: s.name
+            title: s.glyph,
+            clickScript: "setEngineSpeed",
+            clickScriptSubject: index
         }));
         this.speedButtons[1].isSelected = true;
 
-        this.frameRateView = new TextLineView({ parent: config.root.querySelector("frameRate") });
-        this.frameRateView.elem.addRemClass("minor", true);
+        this.frameRateView = new TextLineView({ parent: config.root.querySelector("frameRate") })
+            .configure(view => view.elem.addRemClass("minor", true));
         this._lastFrameRateUpdateTime = 0;
 
         uiRunLoop.addDelegate(this);
+        engineRunLoop.addDelegate(this);
+        this._updateFrameRateLabel();
+        this._updateGameEngineControls();
     }
 
     processFrame(rl) {
-        this._frameCounter += 1;
-        this._updateFrameRateLabel();
+        if (rl == uiRunLoop) {
+            this._frameCounter += 1;
+            this._updateFrameRateLabel();
+        }
+        if (rl == engineRunLoop) {
+            this._updateGameEngineControls();
+        }
+    }
+
+    runLoopDidPause(rl) {
+        if (rl == engineRunLoop) { this._updateGameEngineControls(); }
+    }
+
+    runLoopWillResume(rl) {
+        if (rl == engineRunLoop) { this._updateGameEngineControls(); }
+    }
+
+    runLoopDidChange(rl) {
+        if (rl == engineRunLoop) { this._updateGameEngineControls(); }
     }
 
     _updateFrameRateLabel() {
@@ -1366,6 +1418,18 @@ class GameEngineControlsView {
         }
 
         this.frameRateView.value = rates.join(Strings.str("frameRateTokenSeparator"));
+    }
+
+    _updateGameEngineControls() {
+        this.pauseButton.isSelected = this.game.isRunning;
+        this.playButton.isSelected = !this.game.isRunning;
+
+        var speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
+        GameContent.shared.gameRules.speeds.forEach((speed, index) => {
+            if (index < this.speedButtons.length) {
+                this.speedButtons[index].isSelected = (index == speedIndex);
+            }
+        });
     }
 }
 
@@ -1395,22 +1459,24 @@ class MapControlsView {
         var zoomElem = config.root.querySelector("zoom");
         this.buttons.push(new ToolButton({
             parent: zoomElem,
-            title: Strings.str("zoomOutButtonGlyph")
-        }).configure(button => button.elem.addGameCommandEventListener("click", true, "zoomOut", null)));
+            title: Strings.str("zoomOutButtonGlyph"),
+            clickScript: "zoomOut"
+        }));
         this.buttons.push(new ToolButton({
             parent: zoomElem,
-            title: Strings.str("zoomInButtonGlyph")
-        }).configure(button => button.elem.addGameCommandEventListener("click", true, "zoomIn", null)));
+            title: Strings.str("zoomInButtonGlyph"),
+            clickScript: "zoomIn"
+        }));
     }
 }
 
 class NewsView {
     constructor(config) {
         this.root = config.root;
-        this.root.innerText = "37 llamas to enter hall of fame in ceremony tonight…";
+        this.root.innerText = ""; //"37 llamas to enter hall of fame in ceremony tonight…";
         this.root.addEventListener("click", evt => {
             evt.preventDefault();
-            console.log("Show news");
+            debugLog("TODO Show news viewer dialog");
         });
     }
 }

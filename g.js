@@ -1032,6 +1032,7 @@ var RunStates = {
 //   processFrame(RunLoop)
 //   runLoopWillResume(RunLoop)
 //   runLoopDidPause(RunLoop)
+//   runLoopDidChange(RunLoop)
 var RunLoop = function(config) {
     this.id = config.id;
     this.targetFrameRate = config.targetFrameRate;
@@ -1050,6 +1051,11 @@ Mixins.Gaming.DelegateSet(RunLoop);
 RunLoop.prototype.setTargetFrameRate = function(value) {
     this.targetFrameRate = value;
     this.targetFrameInterval = 1000 / this.targetFrameRate;
+    this.forEachDelegate(function (d) {
+        if (d.runLoopDidChange) {
+            d.runLoopDidChange(this);
+        }
+    }.bind(this));
 };
 
 RunLoop.prototype.getRecentFramesPerSecond = function() {
