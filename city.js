@@ -1337,12 +1337,35 @@ class GameEngineControlsView {
         this.speedButtons[1].isSelected = true;
 
         this.frameRateView = new TextLineView({ parent: config.root.querySelector("frameRate") });
+        this.frameRateView.elem.addRemClass("minor", true);
+        this._lastFrameRateUpdateTime = 0;
 
-        this.render();
+        uiRunLoop.addDelegate(this);
     }
 
-    render() {
-        this.frameRateView.value = "57 fps";
+    processFrame(rl) {
+        this._frameCounter += 1;
+        this._updateFrameRateLabel();
+    }
+
+    _updateFrameRateLabel() {
+        // TODO can probably calculate if a run loop is "pegged", meaning that the execution time for a 
+        // single frame is >= the time allowed for a single full-speed frame.
+        var now = Date.now();
+        if (Math.abs(now - this._lastFrameRateUpdateTime) < 1000) { return; }
+        this._lastFrameRateUpdateTime = now;
+
+        var rates = [];
+        var uiFrameRate = uiRunLoop.getRecentFramesPerSecond();
+        if (!isNaN(uiFrameRate)) {
+            rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate) }));
+        }
+        var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
+        if (!isNaN(engineFrameRate)) {
+            rates.push(Strings.template("engineMsPerDayLabel", { value: Math.round(engineFrameRate) }));
+        }
+
+        this.frameRateView.value = rates.join(Strings.str("frameRateTokenSeparator"));
     }
 }
 
@@ -1498,9 +1521,6 @@ class ChromeRenderer {
     processFrame(rl) {
         if (rl == uiRunLoop) {
             this.state.frameCounter = this.state.frameCounter + 1;
-            if (this.state.frameCounter % 60 == 0) {
-                this._updateFrameRateLabel();
-            }
         } else if (rl == engineRunLoop) {
             this.render();
         }
@@ -1545,20 +1565,6 @@ class ChromeRenderer {
 
     _configureCommmands() {
         GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
-    }
-
-    _updateFrameRateLabel() {
-        var rates = [];
-        var uiFrameRate = uiRunLoop.getRecentFramesPerSecond();
-        if (!isNaN(uiFrameRate)) {
-            rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate) }));
-        }
-        var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
-        if (!isNaN(engineFrameRate)) {
-            rates.push(Strings.template("engineMsPerDayLabel", { value: Math.round(engineFrameRate) }));
-        }
-
-        this.elems.frameRate.innerText = rates.join(Strings.str("frameRateTokenSeparator"));
     }
 
     _updateGameRunningStateLabels() {
