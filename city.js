@@ -660,7 +660,7 @@ class KeyInputController {
     getKeyAction(lookup) {
         var action = lookup.find(a => this.keyboardState.areKeyCodesDown(a[0], true));
         return action ? { command: action[1], subject: action[2] } : null;
-    };
+    }
 
     keyboardStateDidChange(kc, eventType) {
         if (!this.keyboardCommandsActive) { return; }
@@ -1148,7 +1148,6 @@ class ToolButton {
             this.elem.addEventListener("click", evt => { evt.preventDefault(); config.click(this); });
         } else if (config.clickScript) {
             var subject = typeof(config.clickScriptSubject) === 'undefined' ? this : config.clickScriptSubject;
-            debugLog([config.title, config.clickScript, subject, config.clickScriptSubject]);
             this.elem.addGameCommandEventListener("click", true, config.clickScript, subject);
         }
         config.parent.append(this.elem);
@@ -1421,8 +1420,8 @@ class GameEngineControlsView {
     }
 
     _updateGameEngineControls() {
-        this.pauseButton.isSelected = this.game.isRunning;
-        this.playButton.isSelected = !this.game.isRunning;
+        this.pauseButton.isSelected = !this.game.isRunning;
+        this.playButton.isSelected = this.game.isRunning;
 
         var speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
         GameContent.shared.gameRules.speeds.forEach((speed, index) => {

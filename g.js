@@ -1306,8 +1306,11 @@ class PaletteRenderer {
 var KeyboardState = function(config) {
     this.keyCodesCurrentlyDown = new Set();
     config.runLoop.addDelegate(this);
-    document.addEventListener("keydown", this.keydown.bind(this));
-    document.addEventListener("keyup", this.keyup.bind(this));
+    document.addEventListener("keydown", e => this.keydown(e));
+    document.addEventListener("keyup", e => this.keyup(e));
+    window.addEventListener("blur", e => window.setTimeout(() => this.reset(), 250));
+    window.addEventListener("focus", e => window.setTimeout(() => this.reset(), 250));
+    window.addEventListener("resize", e => window.setTimeout(() => this.reset(), 250));
 };
 Mixins.Gaming.DelegateSet(KeyboardState);
 
@@ -1358,6 +1361,11 @@ KeyboardState.prototype.keyup = function(event) {
     }
 };
 
+KeyboardState.prototype.reset = function() {
+    var oldSize = this.keyCodesCurrentlyDown.size;
+    this.keyCodesCurrentlyDown.clear();
+};
+
 // ----------------------------------------------------------------------
 
 /*
@@ -1376,11 +1384,17 @@ So rects may be 2x size of tileWidth depending on screen scale.
 
 */
 class FlexCanvasGrid {
+    static getDevicePixelScale() { return HTMLCanvasElement.getDevicePixelScale(); }
+
     constructor(config) {
         this.canvas = config.canvas;
         this.deviceScale = config.deviceScale;
         this.setSize(config);
-        // TODO listen for DOM size changes
+
+        this._updateMetricsDebounceTimeout = null;
+        document.defaultView.addEventListener("resize", e => {
+            this._updateMetricsDebounced();
+        });
     }
 
     setSize(config) {
@@ -1392,7 +1406,15 @@ class FlexCanvasGrid {
         this.updateMetrics();
     }
 
+    _updateMetricsDebounced() {
+        if (this._updateMetricsDebounceTimeout) {
+            window.clearTimeout(this._updateMetricsDebounceTimeout);
+        }
+        this._updateMetricsDebounceTimeout = window.setTimeout(() => this.updateMetrics(), 100);
+    }
+
     updateMetrics() {
+        this._updateMetricsDebounceTimeout = null;
         var canvasSize = this.canvasDeviceSize;
         this.canvas.width = canvasSize.width;
         this.canvas.height = canvasSize.height;
@@ -1417,10 +1439,10 @@ class FlexCanvasGrid {
         }
     }
 
-    // Device independent size
     get canvasDeviceSize() {
         return { width: this.canvas.clientWidth * this.deviceScale, height: this.canvas.clientHeight * this.deviceScale };
     }
+    // Device independent size
     get canvasCSSSize() {
         return { width: this.canvas.clientWidth, height: this.canvas.clientHeight };
     }
@@ -1490,9 +1512,6 @@ class FlexCanvasGrid {
         }
     }
 }
-FlexCanvasGrid.getDevicePixelScale = function() {
-    return HTMLCanvasElement.getDevicePixelScale();
-};
 
 var CanvasGrid = function(config) {
     this.rows = config.rows;
