@@ -1165,6 +1165,139 @@ RunLoop.prototype.processFrame = function() {
     this.scheduleNextFrame();
 };
 
+class SaveStateCollection {
+    // these will throw
+    static serialize(object) { return object ? JSON.stringify(object) : object; }
+    static deserialize(savedString) { return JSON.parse(savedString); }
+
+    // storage: localStorage or sessionStorage
+    // namespace: string prefix for storage keys
+    constructor(storage, namespace) {
+        this.storage = storage;
+        this.namespace = namespace;
+    }
+
+    // Array of SaveStateSummaryItem objects
+    get itemsSortedByLastSaveTime() {
+        return this._tryCatch("itemsSortedByLastSaveTime", [], () => {
+            var data = SaveStateCollection.deserialize(this.storage.getItem(this._fullNameForKey("summary")));
+            if (!data) { return []; }
+            data = data.map(wrapper => SaveStateSummaryItem.fromDeserializedWrapper(wrapper));
+            data.sort((a, b) => { return b.timestamp - a.timestamp });
+            return data;
+        });
+    }
+
+    // Returns a SaveStateItem
+    getItem(id) {
+        return this._tryCatch("getItem", null, () => {
+            var wrapper = SaveStateCollection.deserialize(this.storage.getItem(this._fullKeyNameForItemID(id)));
+            return SaveStateItem.fromDeserializedWrapper(wrapper);
+        });
+    }
+
+    // Takes a SaveStateItem. Returns SaveStateSummaryItem with updated metadata on success; null on failure
+    saveItem(item) {
+        // save the item
+        // if ok, update the summary state (retrieve it, then remove the item with matching ID and insert 
+        // a new summary at the top)
+        return this._tryCatch("saveItem", null, () => {
+            item.timestamp = Date.now();
+            var data = SaveStateCollection.serialize(item.serializationWrapper);
+            this.storage.setItem(this._fullKeyNameForItemID(item.id), data);
+            var summary = new SaveStateSummaryItem(item.id, item.title, item.timestamp, data.length);
+            this._updateSummaryArray(item.id, summary);
+            return summary;
+        });
+    }
+
+    // Takes an item ID. Returns a new SaveStateSummaryItem on success; null on failure
+    // duplicateItem(id) {
+    //     return this._tryCatch("duplicateItem", null, () => {
+    //         var oldItem = this.getItem(id);
+    //         if (!oldItem) { return null; }
+    //         return this.saveItem(new SaveStateItem(SaveStateItem.newID(), oldItem.title, oldItem.timestamp, oldItem.data));
+    //     });
+    // }
+
+    // Takes an item ID. Returns true if deleted or already didn't exist; false on failure
+    deleteItem(id) {
+        return this._tryCatch("deleteItem", false, () => {
+            this.storage.removeItem(this._fullKeyNameForItemID(id));
+            this._updateSummaryArray(id, null);
+            return true;
+        });
+    }
+
+    _fullNameForKey(name) {
+        return this.namespace + "." + name;
+    }
+
+    _fullKeyNameForItemID(id) {
+        return this._fullNameForKey("item-" + id);
+    }
+
+    _updateSummaryArray(idToRemove, newSummaryItem) {
+        var items = this.itemsSortedByLastSaveTime;
+        if (idToRemove) {
+            var index = items.findIndex(item => item.id == idToRemove);
+            if (index >= 0) { items.removeItemAtIndex(index); }
+            if (newSummaryItem) { items.push(newSummaryItem); }
+            var wrapper = items.map(item => item.serializationWrapper);
+            this.storage.setItem(this._fullNameForKey("summary"), SaveStateCollection.serialize(wrapper));
+        }
+    }
+
+    _tryCatch(label, errorResult, block) {
+        try {
+            return block();
+        } catch(e) {
+            debugLog(`SaveStateCollection.${label} error: ${e.message}`);
+            return errorResult;
+        }
+    }
+}
+
+// Don't create directly. Managed by SaveStateCollection
+class SaveStateSummaryItem {
+    static fromDeserializedWrapper(wrapper) {
+        return wrapper ? new SaveStateSummaryItem(wrapper.id, wrapper.title, wrapper.timestamp, wrapper.sizeBytes) : null;
+    }
+
+    constructor(id, title, timestamp, sizeBytes) {
+        this.id = id;
+        this.title = title;
+        this.timestamp = timestamp;
+        this.sizeBytes = sizeBytes;
+    }
+
+    get serializationWrapper() {
+        return { id: this.id, title: this.title, timestamp: this.timestamp, sizeBytes: this.sizeBytes };
+    }
+}
+
+class SaveStateItem {
+    static newID() { return Rng.shared.nextHexString(16); }
+
+    static fromDeserializedWrapper(wrapper) {
+        return wrapper ? new SaveStateItem(wrapper.id, wrapper.title, wrapper.timestamp, wrapper.data) : null;
+    }
+
+    // load from collection or prepare to save to collection
+    // Timestamp required when loading. When saving, timestamp will be overwritten.
+    // data is a JSON-stringify-able object.
+    constructor(id, title, timestamp, data) {
+        this.id = id;
+        this.title = title;
+        this.timestamp = timestamp;
+        this.data = data;
+    }
+
+    get serializationWrapper() {
+        return { id: this.id, title: this.title, timestamp: this.timestamp, data: this.data };
+    }
+}
+
 class Dispatch {
     constructor() {
         this._blocks = {};
@@ -1808,6 +1941,8 @@ return {
     Movement: Movement,
     KeyboardState: KeyboardState,
     RunLoop: RunLoop,
+    SaveStateCollection: SaveStateCollection,
+    SaveStateItem: SaveStateItem,
     Dispatch: Dispatch,
     DispatchTarget: DispatchTarget,
     Kvo: Kvo,

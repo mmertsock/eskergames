@@ -2,8 +2,6 @@
 
 ### Misc
 
-Manually pause a run loop. Switch tabs so it backgrounds. Switch back; it auto-unpauses. It *should* only auto-unpaused if it auto-paused.
-
 Auto generate help dialog text for keyboard commands.
 
 Game-specific fonts for zones, maps, controls, etc.
@@ -14,6 +12,12 @@ static keyword for static members
 set keyword for setters, instead of setX()
 var, let, const
 convert more types to class instead of function+prototype; use more getters (eg Rect/Point)
+
+### requestAnimationFrame
+
+Run the UI loop either as fast as possible or up to X frames/sec.
+Run an iteration of the game engine at the end of a UI loop, whenever X milliseconds have passed since the start of the previous iteration, depending on game speed. 
+Perhaps divide the work of a single game engine iteration among several animation frames to avoid the potential lag caused by a doing a full iteration during one frame.
 
 ### MapTool incremental development
 
@@ -33,6 +37,7 @@ Done:
 - center focus rect over mouse for plopPlot
 - Plop-tree tool
 - Prices
+- Feedback text shown after plopping a zone: render at fixed size so it's not tiny when zoomed out
 
 Next:
 - conditional logic for tool availability. The MapTool impl class can read/write state into the MapToolSession object; the state data is opaque from the MapToolSession's perspective
@@ -42,14 +47,12 @@ Next:
   - cost calculations
   - caching for performance to reduce the amount of ui run loop calculations would be nice. calculate once per 
     mouse movement at most. but also would need to invalidate when the game state changes if you keep the mouse still
-- feedback text shown after plopping a zone: render at fixed size so it's not tiny when zoomed out
 - supplemental hover text next to the focus rect (eg tool glyph + price)
 - Allow auto bulldoze of props when building stuff. Alter price based on bulldozing
 - helper alt-titles on the palette, eg for keyboard shortcuts
 - notAllowed and notAffordable click feedback rendering
 - feedback.immediate YAML stuff
 - implement Pointer. Panning and zooming map.
-- Plus/minus buttons to zoom map with mouse.
 - implement Query. First instance of a complex in-game modal dialog. Pause the game run loop and input controllers when modal is visible.
 - click-and-drag behavior to preview/commit a larger change (bulldozer, roads)
 - only destroy larger plots when clicking the center
@@ -134,10 +137,6 @@ https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
 
 ctx.lineCap/lineJoin: be sure to set these properly
 
-probably should use requestAnimationFrame instead of setTimeout in the RunLoops?
-
-make sure the run loops autopause when the page is in background
-
 ctx.createPattern: load an html/svg image element, and use it as a fillStyle. can repeat or not. So, could fill swaths of the terrain using a single repeating createPattern - eg 
 paint the entire dirt base layer, then paint chunks of water on top of that.
 
@@ -172,8 +171,13 @@ maybe instead of (or on top of) a FlexCanvasGrid, have a BitCanvasGrid that is s
 game items can have an "atmospheric animation" that is a simple repeating loop with no real state or meaning; just makes the game look nice (e.g. waving grass, rotating wheels, puffing smoke, blinking lights). animations are one frame per second or something, small number of frames.
 use the variantKey to choose which of 60 frames per second to increment the animation frame on - this lets each animated item be a little out of phase, for variety. And don't start them all on frame zero, start on frame N and loop, to further offset them.
 
+## Declarative UI
+
+On startup, parse the HTML. Attach TextLineViews and Bindings to matching HTML elements, etc.
+
 - - - - - -
 # Resources
 
 http://bucephalus.org/text/CanvasHandbook/CanvasHandbook.html
 
+https://developer.mozilla.org/en-US/docs/Games/Anatomy

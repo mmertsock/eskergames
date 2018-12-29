@@ -6,6 +6,7 @@ var Point = Gaming.Point;
 var Rect = Gaming.Rect;
 var CircularArray = Gaming.CircularArray;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
+var SaveStateItem = Gaming.SaveStateItem;
 var Dispatch = Gaming.Dispatch;
 var DispatchTarget = Gaming.DispatchTarget;
 var Kvo = Gaming.Kvo;
@@ -106,6 +107,7 @@ class UnitTest {
     logFailure(msg) {
         this.failures += 1;
         logTestFail(`${this.name}: ${msg}`);
+        console.trace();
     }
     assertDefined(value, msg) {
         this.expectations += 1;
@@ -354,6 +356,88 @@ var simDateTest = function() {
         }
     }).build()({ days: 1000 }, null);
 };
+
+function saveStateTest() {
+    new UnitTest("SaveState", function() {
+        this.assertTrue(SaveStateItem.newID() != SaveStateItem.newID());
+        var data1 = { "a": 1, "b": 2 };
+        var item1 = new SaveStateItem(SaveStateItem.newID(), "item1", Date.now(), data1);
+        this.assertTrue(item1.id.length > 0);
+        this.assertEqual(item1.title, "item1");
+        this.assertEqual(item1.data, data1);
+
+        window.sessionStorage.clear();
+        var sut = new Gaming.SaveStateCollection(window.sessionStorage, "_unitTests_");
+        this.assertEqual(sut.itemsSortedByLastSaveTime.length, 0);
+        this.assertEqual(sut.getItem(item1.id), null);
+        this.assertTrue(sut.deleteItem(item1.id));
+
+        var savedItem1 = sut.saveItem(item1);
+        if (this.assertTrue(!!savedItem1)) {
+            this.assertEqual(savedItem1.id, item1.id);
+            this.assertEqual(savedItem1.title, item1.title);
+            this.assertTrue(savedItem1.sizeBytes >= 13);
+            this.assertTrue(!!savedItem1.timestamp);
+        }
+
+        var items = sut.itemsSortedByLastSaveTime;
+        if (this.assertEqual(items.length, 1)) {
+            this.assertEqual(items[0].id, savedItem1.id);
+            this.assertEqual(items[0].title, savedItem1.title);
+            this.assertEqual(items[0].sizeBytes, savedItem1.sizeBytes);
+            this.assertEqual(items[0].timestamp, savedItem1.timestamp);
+        }
+
+        var gotItem = sut.getItem(item1.id);
+        if (this.assertTrue(!!gotItem)) {
+            this.assertEqual(gotItem.id, item1.id);
+            this.assertEqual(gotItem.title, item1.title);
+            this.assertEqual(gotItem.timestamp, savedItem1.timestamp);
+            if (this.assertTrue(!!gotItem.data)) {
+                this.assertEqual(gotItem.data.a, item1.data.a);
+                this.assertEqual(gotItem.data.b, item1.data.b);
+            }
+        }
+
+        var data2 = { "c": 3, "d": 4 };
+        var item2 = new SaveStateItem(SaveStateItem.newID(), "item2", Date.now(), data2);
+        var savedItem2 = sut.saveItem(item2);
+        if (this.assertTrue(!!savedItem2)) {
+            this.assertEqual(savedItem2.id, item2.id);
+            this.assertEqual(savedItem2.title, item2.title);
+            this.assertTrue(savedItem2.sizeBytes >= 13);
+            this.assertTrue(!!savedItem2.timestamp);
+        }
+
+        items = sut.itemsSortedByLastSaveTime;
+        this.assertEqual(items.length, 2);
+        this.assertElementsEqual(items.map(item => item.id).sort(), [item1.id, item2.id].sort());
+
+        var updatedData1 = { "a": 100, "b": 100 };
+        var savedUpdatedItem1 = sut.saveItem(new SaveStateItem(item1.id, item1.title, Date.now(), updatedData1));
+        this.assertEqual(savedUpdatedItem1.id, savedItem1.id);
+        this.assertTrue(savedUpdatedItem1.sizeBytes > savedItem1.sizeBytes);
+        this.assertEqual(sut.itemsSortedByLastSaveTime.length, 2);
+        gotItem = sut.getItem(item1.id);
+        if (gotItem) {
+            this.assertEqual(gotItem.data.a, updatedData1.a);
+        }
+
+        // this.assertEqual(sut.duplicateItem("bogus"), null);
+        // gotItem = sut.duplicateItem(item2.id);
+        // if (this.assertTrue(!!gotItem)) {
+        //     this.assertTrue(gotItem.id != item2.id);
+        //     this.assertEqual(gotItem.title, item2.title);
+        // }
+        // this.assertEqual(sut.itemsSortedByLastSaveTime.length, 3);
+        // console.table(sut.itemsSortedByLastSaveTime);
+
+        this.assertTrue(sut.deleteItem(item1.id));
+        this.assertEqual(sut.getItem(item1.id), null);
+        this.assertEqual(sut.itemsSortedByLastSaveTime.length, 1);
+        this.assertTrue(sut.getItem(item2.id) != null);
+    }).build()();
+}
 
 function dispatchTest() {
     new UnitTest("Dispatch", function() {
@@ -926,6 +1010,7 @@ TestSession.current = new TestSession([
     randomTest,
     stringTemplateTest,
     selectableListTest,
+    saveStateTest,
     dispatchTest,
     kvoTest,
     bindingTest,
