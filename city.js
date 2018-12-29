@@ -956,7 +956,7 @@ class MapToolController {
     }
 
     processFrame(rl) {
-        // TODO notify the tool session so it can update its statea
+        // TODO notify the tool session so it can update its state
     }
 
     shouldPassPointSessionToNextDelegate(inputSequence, inputController) {
@@ -1197,6 +1197,14 @@ class RootView {
         }).show();
     }
 
+    showGameHelp() {
+        var helpSource = this.root.querySelector("help");
+        new Gaming.Prompt({
+            customContent: helpSource.cloneNode(true).addRemClass("hidden", false),
+            buttons: [ {label: Strings.str("helpDismiss")} ]
+        }).show();
+    }
+
     _configureCommmands() {
         GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
     }
@@ -1351,7 +1359,7 @@ class GameEngineControlsView {
             parent: playPause,
             title: "||",
             clickScript: "pauseResume"
-        });
+        }).configure(button => button.elem.addRemClass("stop-indication", true));
         this.playButton = new ToolButton({
             parent: config.root.querySelector("playPause"),
             title: ">",
@@ -1455,6 +1463,7 @@ class MapControlsView {
             title: "R"
         }));
 
+        // TODO consider zoomselector class
         var zoomElem = config.root.querySelector("zoom");
         this.buttons.push(new ToolButton({
             parent: zoomElem,
@@ -1477,190 +1486,6 @@ class NewsView {
             evt.preventDefault();
             debugLog("TODO Show news viewer dialog");
         });
-    }
-}
-
-// OLD OLD OLD OLD OLD
-
-class ChromeRenderer {
-    constructor() {
-        var containerElem = document.querySelector("main");
-        this.game = null;
-        this.newGamePrompt = new NewGamePrompt();
-        this.dialogs = new DialogManager({ containerElem: containerElem });
-        this.numMinimaps = 3;
-        this.elems = {
-            container: containerElem,
-            controlPanel: containerElem.querySelector("controls")
-        };
-        this.subRenderers = [];
-        this.state = {
-            frameCounter: 0
-        };
-        uiRunLoop.addDelegate(this);
-        engineRunLoop.addDelegate(this);
-    }
-
-    failedToLoadBaseData() {
-        new Gaming.Prompt({
-            title: Strings.str("failedToLoadGameTitle"),
-            message: Strings.str("failedToLoadGameMessage"),
-            requireSelection: true
-        }).show();
-    }
-
-    setUp() {
-        var ce = this.elems.container;
-        ce.addRemClass("hidden", false);
-        ce.querySelector(".help").addGameCommandEventListener("click", true, "showGameHelp", null);
-
-        var sr = this.elems.sceneRoot;
-        this.elems.mainMap = document.createElement("canvas").addRemClass("mainMap", true);
-        sr.append(this.elems.mainMap);
-        // this.elems.controls = document.createElement("canvas").addRemClass("controls", true);
-        // sr.append(this.elems.controls);
-        this.elems.palette = document.createElement("canvas").addRemClass("palette", true);
-        sr.append(this.elems.palette);
-        this.elems.minimapContainer = document.createElement("minimaps");
-        this.elems.minimaps = [];
-        for (var i = 0; i < this.numMinimaps; i += 1) {
-            var minimap = document.createElement("canvas").addRemClass("minimap", true);
-            this.elems.minimaps.push(minimap);
-            this.elems.minimapContainer.append(minimap);
-        }
-        sr.append(this.elems.minimapContainer);
-
-        this.elems.speedControlElems = [];
-        this.elems.pauseResume = this._createButton(Strings.str("pauseResumeResume"));
-        this.elems.pauseResume.addEventListener("click", this._startPauseResumeClicked.bind(this));
-        this.elems.speedControls.append(this.elems.pauseResume);
-        Game.rules().speeds.forEach(function (speed, index) {
-            var ctrl = this._createButton(speed.glyph).addRemClass("glyph", true);
-            ctrl.addGameCommandEventListener("click", true, "setEngineSpeed", index);
-            this.elems.speedControls.append(ctrl);
-            this.elems.speedControlElems.push(ctrl);
-        }.bind(this));
-
-        var zoomer = this._createButton(Strings.str("zoomOutButton")).addRemClass("glyph", true);
-        zoomer.addGameCommandEventListener("click", true, "zoomOut");
-        this.elems.zoomControls.append(zoomer);
-        zoomer = this._createButton(Strings.str("zoomInButton")).addRemClass("glyph", true);
-        zoomer.addGameCommandEventListener("click", true, "zoomIn");
-        this.elems.zoomControls.append(zoomer);
-
-        this.elems.fileMenu.addEventListener("click", this._startPauseResumeClicked.bind(this));
-
-        this._configureCommmands();
-        this.render();
-        this.newGamePrompt.show();
-    }
-
-    initialize(game) {
-        this.game = game;
-        if (!this.game) {
-            this.subRenderers = [];
-        } else {
-            this.elems.sceneRoot.addRemClass("hidden", false);
-            // in drawing order
-            this.subRenderers = [
-                new MapRenderer({ containerElem: this.elems.mainMap }),
-                new ControlPanelRenderer({ containerElem: this.elems.controlPanel }),
-                new PaletteRenderer({ containerElem: this.elems.palette })
-                // TODO minimap renderers
-                // Clicking a minimap changes the main map to render in the same 
-                // mode as the minimap (eg crime overlay) and also navigates the 
-                // main map. Minimap #1 is always the nav map and clicking resets 
-                // the overlay mode and navigates the map. The other 2 minimaps 
-                // have a button to change what minimap it is.
-                // Minimaps probably cache their base map (basemap == terrain + plots)
-                // so they don't have to re-render at 60fps.
-            ];
-            this.subRenderers.forEach(function (r) {
-                r.initialize(game);
-            });
-        }
-        this.state.frameCounter = 0;
-        this.render();
-    }
-    
-    processFrame(rl) {
-        if (rl == uiRunLoop) {
-            this.state.frameCounter = this.state.frameCounter + 1;
-        } else if (rl == engineRunLoop) {
-            this.render();
-        }
-    }
-
-    showGameHelp() {
-        var helpSource = this.elems.container.querySelector("help");
-        new Gaming.Prompt({
-            customContent: helpSource.cloneNode(true).addRemClass("hidden", false),
-            buttons: [ {label: Strings.str("helpDismiss")} ]
-        }).show();
-    }
-
-    render() {
-        if (!this.game) {
-            this.elems.sceneRoot.addRemClass("hidden", true);
-            this.elems.container.querySelector("h1").innerText = Strings.str("gameProductTitle");
-            document.title = Strings.str("gameProductTitle");
-            return;
-        }
-        var date = this.game.city.time.date.longString();
-        this.elems.container.querySelector("h1").innerText = `${this.game.city.name} — ${date}`;
-        this._updateGameRunningStateLabels();
-    }
-
-    runLoopWillResume(rl) {
-        this._updateGameRunningStateLabels();
-        this.elems.frameRate.innerText = "";
-    }
-
-    runLoopDidPause(rl) {
-        this._updateGameRunningStateLabels();
-        this.elems.frameRate.innerText = Strings.str("gameStatePaused");
-    }
-
-    _createButton(text) {
-        var ctrl = document.createElement("a");
-        ctrl.href = "#";
-        ctrl.innerText = text;
-        return ctrl;
-    }
-
-    _configureCommmands() {
-        GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
-    }
-
-    _updateGameRunningStateLabels() {
-        var speedIndex = -1;
-        if (!this.game) {
-            this.elems.fileMenu.innerText = String.str("newGameButton");
-            this.elems.fileMenu.addRemClass("hidden", false);
-            this.elems.speedControls.addRemClass("hidden", true);
-        } else if (this.game.isRunning) {
-            this.elems.fileMenu.addRemClass("hidden", true);
-            this.elems.pauseResume.innerText = Strings.str("pauseResumePause");
-            this.elems.speedControls.addRemClass("hidden", false);
-            speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
-        } else {
-            this.elems.fileMenu.addRemClass("hidden", true);
-            this.elems.pauseResume.innerText = Strings.str("pauseResumeResume");
-            this.elems.speedControls.addRemClass("hidden", false);
-            speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
-        }
-        for (var i = 0; i < this.elems.speedControlElems.length; i += 1) {
-            this.elems.speedControlElems[i].addRemClass("selected", i == speedIndex);
-        }
-    }
-
-    _startPauseResumeClicked(event) {
-        event.preventDefault();
-        if (!this.game) {
-            this.newGamePrompt.show();
-        } else {
-            this.game.togglePauseState();
-        }
     }
 }
 

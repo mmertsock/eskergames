@@ -166,7 +166,7 @@ mapTools:
 #################### UI ###################
 
 mainMapView:
-  edgePaddingFillStyle: "hsl(33, 37%, 87%)"
+  edgePaddingFillStyle: "hsl(33, 37%, 87%)" # or try *PANELFILL
   emptyFillStyle: "hsl(33, 37%, 87%)"
   zoomLevels:
   - tileWidth: 3
