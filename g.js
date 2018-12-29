@@ -1025,6 +1025,7 @@ var RunStates = {
     autoPaused: 3
 };
 
+// TODO I guess childRunLoops are obsolete.
 // config: {targetFrameRate, id, runWhenPageIsInBackground, childRunLoops: [RunLoop]}
 // frameRate values are frames/sec.
 // childRunLoops: parent state change propagates to children. Delegates must be registered separately.
@@ -1094,9 +1095,9 @@ RunLoop.prototype.resume = function() {
     }.bind(this));
     this.scheduleNextFrame();
 
-    this.childRunLoops.forEach(function (rl) {
-        rl.resume();
-    });
+    // this.childRunLoops.forEach(function (rl) {
+    //     rl.resume();
+    // });
 };
 
 RunLoop.prototype.pause = function(autoPause) {
@@ -1111,17 +1112,23 @@ RunLoop.prototype.pause = function(autoPause) {
         }
     }.bind(this));
 
-    this.childRunLoops.forEach(function (rl) {
-        rl.pause(autoPause);
-    });
+    // this.childRunLoops.forEach(function (rl) {
+    //     rl.pause(autoPause);
+    // });
 };
 
 RunLoop.prototype.toggleAutopause = function() {
     switch (this.runState) {
-        case RunStates.notStarted: return;
-        case RunStates.running: if (document.hidden) { this.pause(true); }
-        case RunStates.paused: return;
-        case RunStates.autoPaused: if (!document.hidden) { this.resume(); }
+        case RunStates.notStarted:
+            return;
+        case RunStates.running:
+            if (document.hidden) { this.pause(true); }
+            return;
+        case RunStates.paused:
+            return;
+        case RunStates.autoPaused:
+            if (!document.hidden) { this.resume(); }
+            return;
     }
 };
 

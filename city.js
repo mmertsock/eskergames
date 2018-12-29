@@ -493,6 +493,7 @@ class Game {
 
         engineRunLoop.addDelegate(this);
         uiRunLoop.resume();
+        engineRunLoop.resume();
         GameScriptEngine.shared.execute("_beginGame", this);
     }
 
