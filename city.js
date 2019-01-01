@@ -669,7 +669,11 @@ GameStorage.currentSchemaVersion = 1;
 GameStorage.minSchemaVersion = 1;
 
 class Game {
-    static quit() { window.location = "index.html"; }
+    static quit(prompt) {
+        if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
+            window.location = "index.html";
+        }
+    }
 
     static rules() { return GameContent.shared.gameRules; }
     static speedOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Game.rules().speeds, index); }
@@ -715,8 +719,10 @@ class Game {
             this.saveStateInfo.id = saved.id;
             this.saveStateInfo.lastTimestamp = saved.timestamp;
             debugLog(`Saved game to storage with id ${saved.id}.`);
+            return true;
         } else {
             debugWarn(`Failed to save game to storage.`);
+            return false;
         }
     }
 
@@ -1492,7 +1498,7 @@ class RootView {
         new Gaming.Prompt({
             title: Strings.str("failedToLoadGameTitle"),
             message: message,
-            buttons: [{ label: Strings.str("quitButton"), action: () => Game.quit() }],
+            buttons: [{ label: Strings.str("quitButton"), action: () => Game.quit(false) }],
             requireSelection: true
         }).show();
     }
@@ -1563,6 +1569,24 @@ class ControlsView {
             title: Strings.str("optionsButtonLabel"),
             clickScript: "showFileMenu"
         }));
+        this._configureCommmands();
+    }
+
+    showFileMenu() {
+        new Gaming.Prompt({
+            title: Strings.str("systemMenuTitle"),
+            message: null,
+            buttons: [
+                { label: Strings.str("saveButton"), action: () => this.game.saveToStorage() },
+                { label: Strings.str("saveAndQuitButton"), action: () => { if (this.game.saveToStorage()) { Game.quit(false); } } },
+                { label: Strings.str("quitButton"), action: () => Game.quit(true), classNames: ["warning"] },
+                { label: Strings.str("genericCancelButton") }
+            ]
+        }).show();
+    }
+
+    _configureCommmands() {
+        GameScriptEngine.shared.registerCommand("showFileMenu", () => this.showFileMenu());
     }
 }
 

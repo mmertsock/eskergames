@@ -269,13 +269,17 @@ strings:
   frameRateTokenSeparator: ". "
   gameProductTitle: CitySim
   genericCancelButton: Cancel
-  helpButtonLabel: "?"
+  helpButtonLabel: Help
   helpDismiss: Thanks!
   newGamePromptMessage: "Start a new game?"
   newGamePromptStartButton: Start Game
   newGamePromptTitle: New Game
   optionsButtonLabel: Options
   quitButton: Quit
+  quitGameConfirmPrompt: "Are you sure you want to quit? You may have unsaved changes."
+  saveAndQuitButton: Save and Quit
+  saveButton: Save
+  systemMenuTitle: System
   uiFpsLabel: "<value> fps"
   windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
   zoomInButtonGlyph: ➕

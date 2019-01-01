@@ -213,8 +213,16 @@ block#news {
 }
 
 block#system {
-    /* just wide enough for one button */
     flex-grow: 0;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+}
+
+#system a {
+    margin: 0 4px;
+    font-weight: 400;
+    color: hsl(0, 0%, 15%);
 }
 
 a.tool {
@@ -337,7 +345,7 @@ buttons.promptButtons a {
 
 /* ~~~~~~ TEMPORARY ~~~~~~ */
 
-block#tools, block#system {
+block#tools {
     display: none;
 }
     </style>
