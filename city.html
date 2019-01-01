@@ -2,7 +2,7 @@
 <html lang="en-US">
 <head>
     <meta charset="UTF-8">
-    <title></title>
+    <title>CitySim</title>
     <script defer src="js-yaml.min.js"></script>
     <script defer src="g.js"></script>
     <script defer src="city-content.js"></script>
@@ -343,6 +343,92 @@ buttons.promptButtons a {
     margin-right: 0.5em;
 }
 
+/* ~~~~~~ FORMS ~~~~~~ */
+
+gameForm {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+gameForm .invalid input {
+    background-color: hsl(0, 50%, 85%);
+}
+
+gameForm label.textInput {
+    display: block;
+    font-size: 10pt;
+}
+
+/* ~~~~~~ DIALOGS ~~~~~~ */
+
+templates { display: none; }
+
+#dialogs {
+    display: flex;
+    position: fixed;
+    align-items: center;
+    justify-content: center;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+#dialogs.hidden {
+    display: none;
+}
+#dialogs.hasModal {
+    background-color: hsla(0, 0%, 0%, 0.3);
+}
+
+dialog {
+    display: flex;
+    position: fixed;
+    margin: 0;
+    flex-direction: column;
+    border: 1px solid hsl(0, 0%, 0%);
+    background-color: hsl(0, 0%, 100%);
+    box-shadow: 0px 0px 20px hsla(0, 0%, 0%, 0.5);
+}
+
+dialog header {
+    display: flex;
+    flex-direction: row;
+    margin: 0 0 8px 0;
+    padding: 2px 4px;
+    background-color: hsl(0, 0%, 75%);
+}
+
+dialog header a {
+    display: block;
+    flex-grow: 0;
+}
+
+dialog header h2 {
+    flex-grow: 1;
+    margin: 0;
+    padding: 0;
+    font-size: 12pt;
+    font-weight: 500;
+    text-transform: uppercase;
+    text-align: center;
+}
+
+dialog content {
+    display: block;
+    margin: 0 8px;
+    padding: 0;
+}
+
+dialog nav {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    margin: 8px 0 0 0;
+    padding: 2px 4px;
+    background-color: hsl(0, 0%, 75%);
+}
+
 /* ~~~~~~ TEMPORARY ~~~~~~ */
 
 block#tools {
@@ -401,11 +487,21 @@ block#tools {
             <li><kbd>T</kbd>: Plant tree</li>
         </ul>
     </help>
-    <dialog class="hidden">
-        <p>(text)</p>
-    </dialog>
 
 </main>
+
+<div id="dialogs" class="hidden"></div>
+
+<templates>
+    <dialog id="newGame">
+        <content>
+            <label><input></label>
+            City name: ___<br>
+            Mayor name: ___<br>
+            Difficulty: ___
+        </content>
+    </dialog>
+</templates>
 
 <prompt class="hidden">
     <panel>

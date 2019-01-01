@@ -262,6 +262,7 @@ strings:
   cityStatusNameLabel: Name
   cityStatusPopulationLabel: Population
   deleteGameConfirmPrompt: "Are you sure you want to delete this file?"
+  dialogDismissButton: ✖️
   engineMsPerDayLabel: "<value> ms/day"
   failedToFindGameMessage: Unable to locate the specified game file.
   failedToLoadGameMessage: There was a problem loading the game data.
@@ -271,9 +272,8 @@ strings:
   genericCancelButton: Cancel
   helpButtonLabel: Help
   helpDismiss: Thanks!
-  newGamePromptMessage: "Start a new game?"
-  newGamePromptStartButton: Start Game
-  newGamePromptTitle: New Game
+  newGameDialogStartButton: Start Game
+  newGameDialogTitle: New Game
   optionsButtonLabel: Options
   quitButton: Quit
   quitGameConfirmPrompt: "Are you sure you want to quit? You may have unsaved changes."
@@ -284,6 +284,10 @@ strings:
   windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
   zoomInButtonGlyph: ➕
   zoomOutButtonGlyph: ➖
+  textInputLabelSuffix: ": "
+  citySettingsCityNameLabel: City Name
+  citySettingsMayorNameLabel: Mayor Name
+  citySettingsDifficultyLabel: Difficulty
 
 ################## SCRIPTS ################
 

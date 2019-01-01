@@ -24,6 +24,9 @@ function deserializeAssert(condition, message) {
 String.isEmpty = function(value) {
     return !value || value.length == 0;
 };
+String.isEmptyOrWhitespace = function(value) {
+    return !value || value.trim().length == 0;
+};
 
 Math.clamp = function(value, range) {
     return Math.min(Math.max(value, range.min), range.max);
@@ -144,6 +147,11 @@ Element.prototype.removeAllChildren = function() {
     while (this.firstChild) {
         this.removeChild(this.firstChild);
     }
+};
+
+Element.prototype.configure = function(block) {
+    block(this);
+    return this;
 };
 
 var _testCanvas = document.createElement("canvas");

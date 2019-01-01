@@ -3,15 +3,10 @@
 ### Misc
 
 Auto generate help dialog text for keyboard commands.
-
 Game-specific fonts for zones, maps, controls, etc.
-
 New-game dialog.
-
-### JS cleanup
-
-set keyword for setters, instead of setX()
-var, let, const
+JS: set keyword for setters, instead of setX()
+JS: var, let, const
 
 ### requestAnimationFrame
 

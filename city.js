@@ -1365,24 +1365,10 @@ class UI {
     }
 }
 
-class TextLineView {
-    static createElement(config) {
-        var elem = document.createElement("label").addRemClass("textLine", true);
-        if (config.title) {
-            var title = document.createElement("span");
-            title.innerText = config.title;
-            elem.append(title);
-        }
-        var input = document.createElement("input");
-        input.type = "text";
-        input.readOnly = true;
-        elem.append(input);
-        return elem;
-    }
-
-    constructor(config) {
-        this.elem = TextLineView.createElement(config);
-        config.parent.append(this.elem);
+class InputView {
+    constructor(config, elem) {
+        this.elem = elem;
+        if (config.parent) { config.parent.append(this.elem); }
         this.valueElem = this.elem.querySelector("input");
         if (config.binding) {
             this.binding = new Binding({ source: config.binding.source, target: this, sourceFormatter: config.binding.sourceFormatter });
@@ -1400,6 +1386,60 @@ class TextLineView {
     // for Bindings
     setValue(newValue) {
         this.value = newValue;
+    }
+}
+
+class TextLineView extends InputView {
+    static createElement(config) {
+        var elem = document.createElement("label").addRemClass("textLine", true);
+        if (config.title) {
+            var title = document.createElement("span");
+            title.innerText = config.title;
+            elem.append(title);
+        }
+        var input = document.createElement("input");
+        input.type = "text";
+        input.readOnly = true;
+        elem.append(input);
+        return elem;
+    }
+
+    constructor(config, elem) {
+        super(config, elem || TextLineView.createElement(config));
+    }
+}
+
+class TextInputView extends InputView {
+    static createElement(config) {
+        var elem = document.createElement("label").addRemClass("textInput", true);
+        if (config.title) {
+            var title = document.createElement("span");
+            title.innerText = config.title + Strings.str("textInputLabelSuffix");
+            elem.append(title);
+        }
+        var input = document.createElement("input");
+        input.type = "text";
+        input.placeholder = config.placeholder || "";
+        elem.append(input);
+        return elem;
+    }
+
+    static notEmptyOrWhitespaceRule(input) {
+        return !String.isEmptyOrWhitespace(input.value);
+    }
+
+    constructor(config, elem) {
+        super(config, elem || TextInputView.createElement(config));
+        this.validationRules = config.validationRules || [];
+        this.valueElem.addEventListener("input", evt => this.revalidate());
+    }
+
+    revalidate() {
+        this.elem.addRemClass("invalid", !this.isValid);
+    }
+
+    get isValid() {
+        return this.validationRules.every(rule => rule(this));
     }
 }
 
@@ -1428,7 +1468,9 @@ class ToolButton {
             var subject = typeof(config.clickScriptSubject) === 'undefined' ? this : config.clickScriptSubject;
             this.elem.addGameCommandEventListener("click", true, config.clickScript, subject);
         }
-        config.parent.append(this.elem);
+        if (config.parent) {
+            config.parent.append(this.elem);
+        }
         this._selected = false;
     }
 
@@ -1450,7 +1492,6 @@ class RootView {
     constructor() {
         this.game = null;
         this.root = document.querySelector("main");
-        this.newGamePrompt = new NewGamePrompt();
         this.views = [];
     }
 
@@ -1466,7 +1507,7 @@ class RootView {
         var id = storage.latestSavedGameID;
         if (!startNewGame && !!id) { this.tryToLoadGame(id); return; }
 
-        this.newGamePrompt.show();
+        new NewGameDialog().show();
     }
 
     tryToLoadGame(id) {
@@ -2252,59 +2293,136 @@ class Strings {
     }
 }
 
-class DialogManager {
-    constructor(config) {
-        this.elems = {
-            sceneContainer: config.containerElem.querySelector("gameView scene"),
-            dialogTemplate: config.containerElem.querySelector("dialog")
-        };
+class GameDialogManager {
+    constructor() {
+        this.containerElem = document.querySelector("#dialogs");
+        this.items = [];
+        this._updateArrangement();
     }
 
-    getDialog() {
-        return this.elems.sceneContainer.querySelector("dialog");
+    show(dialog) {
+        if (!this.containerElem) { return; }
+        this.items.push(this);
+        this.containerElem.append(dialog.root);
+        this._updateArrangement();
     }
 
-    dismissDialog() {
-        var dialog = this.getDialog();
-        if (dialog) {
-            dialog.addRemClass("dismissed", true);
-            return true;
-        } else {
-            return false;
-        }
+    dismiss(dialog) {
+        if (!this.containerElem) { return; }
+        var index = this.items.findIndex(item => item == dialog);
+        if (index >= 0) { this.items.removeItemAtIndex(index); }
+        this.containerElem.removeChild(dialog.root);
+        this._updateArrangement();
     }
 
-    removeDialogs() {
-        var dialog = this.getDialog();
-        while (dialog) {
-            this.elems.sceneContainer.removeChild(dialog);
-            dialog = this.getDialog();
-        }
+    _updateArrangement() {
+        if (!this.containerElem) { return; }
+        this.containerElem.addRemClass("hidden", this.containerElem.childElementCount < 1);
+        this.containerElem.addRemClass("hasModal", this.containerElem.querySelector(".modal") != null);
+    }
+}
+GameDialogManager.shared = new GameDialogManager();
+
+// Subclass me. Subclasses should implement:
+// Required: get title() -> text
+// Required: get contentElem() -> DOM "content" element; cloned if needed
+// Required: get dialogButtons() -> array of DOM elements
+// Optional: get isModal() -> bool
+class GameDialog {
+    static createContentElem() { return document.createElement("content"); }
+
+    constructor() {
+        this.manager = GameDialogManager.shared;
     }
 
-    showDialog(text, type, completion) {
-        this.removeDialogs();
-        var dialog = this.elems.dialogTemplate.cloneNode(true).addRemClass("hidden", false);
-        dialog.querySelector("p").innerText = text;
-        dialog.addEventListener("click", event => this.dismissDialog());
-        dialog.addEventListener("transitionend", event => {
-            if (event.target.classList.contains("dismissed")) {
-                if (completion) { completion(); }
-                this.removeDialogs();
-            }
+    show() {
+        this.root = document.createElement("dialog").addRemClass("modal", this.isModal);
+        var header = document.createElement("header");
+        this.dismissButton = new ToolButton({
+            title: Strings.str("dialogDismissButton"),
+            click: () => this.dismissButtonClicked()
         });
-        this.elems.sceneContainer.append(dialog);
-        setTimeout(() => dialog.addRemClass("presented", true), 10);
+        header.append(this.dismissButton.elem);
+        header.append(document.createElement("h2").configure(elem => {
+            elem.innerText = this.title;
+        }));
+        this.root.append(header);
+        this.root.append(this.contentElem);
+        var nav = document.createElement("nav");
+        this.dialogButtons.forEach(elem => nav.append(elem));
+        this.root.append(nav);
+        this.manager.show(this);
+    }
+
+    // override if needed
+    dismissButtonClicked() {
+        this.dismiss();
+    }
+
+    dismiss() {
+        this.manager.dismiss(this);
     }
 }
 
-class NewGamePrompt {
-    startNewGame() {
+class NewGameDialog extends GameDialog {
+    constructor() {
+        super();
+        this.startButton = new ToolButton({
+            title: Strings.str("newGameDialogStartButton"),
+            click: () => this.validateAndStart()
+        });
+        this.contentElem = GameDialog.createContentElem();
+        var formElem = document.createElement("gameForm");
+        this.cityNameInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("citySettingsCityNameLabel"),
+            placeholder: "",
+            validationRules: [TextInputView.notEmptyOrWhitespaceRule]
+        }).configure(input => input.value = Strings.randomCityName());
+        this.mayorNameInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("citySettingsMayorNameLabel"),
+            placeholder: "",
+            validationRules: [TextInputView.notEmptyOrWhitespaceRule]
+        }).configure(input => input.value = Strings.randomPersonName());
+        this.contentElem.append(formElem);
+
+        // TODO difficulty selector. Could leverage SingleSelectionList
+        // Strings.str("citySettingsDifficultyLabel")
+
+        // TODO come up with a standard HTML/CSS format and a shared JS class for input forms within 
+        // dialogs. A form is an element within a dialog, not a type of dialog, so that you can have 
+        // multiple forms inside a dialog; the owner of the form is responsible for any "submit" buttons
+        // (rather than being embedded within the form) - that way for a single form you can have the 
+        // standard bottom-of-dialog buttons.
+
+        this.allInputs = [this.cityNameInput, this.mayorNameInput];
+    }
+
+    get isModal() { return true; }
+
+    get title() { return Strings.str("newGameDialogTitle"); }
+
+    get dialogButtons() {
+        return [this.startButton.elem];
+    }
+
+    get isValid() {
+        return this.allInputs.every(input => input.isValid);
+    }
+
+    validateAndStart() {
+        if (!this.isValid) {
+            debugLog("NOT VALID");
+            return;
+        }
+
         var terrain = new Terrain(GameContent.shared.terrains[0]);
         var city = new City({
-            isNewCity: true,
-            name: Strings.randomCityName(),
-            mayorName: Strings.randomPersonName(),
+            // TODO could have a transformer func used in TextInputView.value getter 
+            // to modify the raw input.value before returning, e.g. to always trim the value.
+            name: this.cityNameInput.value.trim(),
+            mayorName: this.mayorNameInput.value.trim(),
             terrain: terrain,
             difficulty: Game.defaultDifficulty()
         });
@@ -2314,20 +2432,11 @@ class NewGamePrompt {
         });
         CitySim.game.start();
         engineRunLoop.resume();
-    };
-    show() {
-        if (!CitySim.game) {
-            this.startNewGame();
-            return;
-        }
-        new Gaming.Prompt({
-            title: Strings.str("newGamePromptTitle"),
-            message: Strings.str("newGamePromptMessage"),
-            buttons: [
-                { label: Strings.str("newGamePromptStartButton"), action: this.startNewGame.bind(this), classNames: ["warning"] },
-                { label: Strings.str("genericCancelButton") }
-            ]
-        }).show();
+        this.dismiss();
+    }
+
+    dismissButtonClicked() {
+        Game.quit(false);
     }
 }
 
@@ -2509,7 +2618,6 @@ return {
     Game: Game,
     KeyInputController: KeyInputController,
     MapRenderer: MapRenderer,
-    NewGamePrompt: NewGamePrompt,
     LoadGameMenu: LoadGameMenu,
     ScriptPainter: ScriptPainter,
     ScriptPainterCollection: ScriptPainterCollection,
