@@ -512,7 +512,7 @@ class Employee {
         this.employer = employer;
         this._title = title;
         this.name = name;
-        this.kvo = new Kvo(Employee, this);
+        this.kvo = new Kvo(this);
     }
     get title() { return this._title; }
     get salary() { return this.employer.getSalary(this.title); }
@@ -656,7 +656,7 @@ class TargetView {
         this.person1general = "";
         this.person1name = "";
         this.person2name = "";
-        this.kvo = new Kvo(TargetView, this);
+        this.kvo = new Kvo(this);
         this.bindings = [
             new Binding({ source: person1.kvo, target: this.kvo.person1title, sourceFormatter: (value, kvo) => value.title }),
             new Binding({ source: person1.kvo.name, target: this.kvo.person1name }),

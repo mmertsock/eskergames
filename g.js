@@ -1366,12 +1366,12 @@ class Kvo {
         target._kvoDT = null;
     }
 
-    constructor(sourceClass, item) {
+    constructor(item) {
         this._obj = item;
-        this.eventName = `${sourceClass.name}.kvo`;
-        if (sourceClass.Kvo) {
-            for (var key of Object.getOwnPropertyNames(sourceClass.Kvo)) {
-                this[key] = new KvoProperty(this, sourceClass.Kvo[key]);
+        this.eventName = `${item.constructor.name}.kvo`;
+        if (item.constructor.Kvo) {
+            for (var key of Object.getOwnPropertyNames(item.constructor.Kvo)) {
+                this[key] = new KvoProperty(this, item.constructor.Kvo[key]);
             }
         }
     }

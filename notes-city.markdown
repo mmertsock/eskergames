@@ -10,10 +10,8 @@ New-game dialog.
 
 ### JS cleanup
 
-static keyword for static members
 set keyword for setters, instead of setX()
 var, let, const
-convert more types to class instead of function+prototype; use more getters (eg Rect/Point)
 
 ### requestAnimationFrame
 

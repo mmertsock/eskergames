@@ -189,6 +189,18 @@ class RCIValue {
 }
 
 class Zone {
+    static settings() { return GameContent.shared.zones; }
+    static typeSettings(zoneType) { return GameContent.shared.zones[zoneType]; }
+
+    static newPlot(config) {
+        var zone = new Zone({ type: config.type });
+        var plot = new Plot({
+            bounds: new Rect(config.topLeft, Zone.typeSettings(config.type).plotSize),
+            item: zone
+        });
+        return plot;
+    }
+
     static fromDeserializedWrapper(data, schemaVersion) {
         deserializeAssert(data != null);
         return new Zone({ dz: {
@@ -235,24 +247,19 @@ class Zone {
     }
 }
 
-Zone.settings = function() {
-    return GameContent.shared.zones;
-}
-// <Z> -> JSON
-Zone.typeSettings = function(zoneType) {
-    return GameContent.shared.zones[zoneType];
-}
-
-Zone.newPlot = function(config) {
-    var zone = new Zone({ type: config.type });
-    var plot = new Plot({
-        bounds: new Rect(config.topLeft, Zone.typeSettings(config.type).plotSize),
-        item: zone
-    });
-    return plot;
-};
-
 class TerrainProp {
+    static settings() { return GameContent.shared.terrainProps; }
+    static typeSettings(plotType) { return GameContent.shared.terrainProps[plotType]; }
+
+    static newPlot(config) {
+        var prop = new TerrainProp({ type: config.type });
+        var plot = new Plot({
+            bounds: new Rect(config.topLeft, TerrainProp.typeSettings(config.type).plotSize),
+            item: prop
+        });
+        return plot;
+    }
+
     static fromDeserializedWrapper(data, schemaVersion) {
         deserializeAssert(data != null);
         return new TerrainProp({ dz: { type: data.type } });
@@ -280,20 +287,6 @@ class TerrainProp {
         return this.settings.bulldozeCost;
     }
 }
-TerrainProp.settings = function() {
-    return GameContent.shared.terrainProps;
-}
-TerrainProp.typeSettings = function(plotType) {
-    return GameContent.shared.terrainProps[plotType];
-}
-TerrainProp.newPlot = function(config) {
-    var prop = new TerrainProp({ type: config.type });
-    var plot = new Plot({
-        bounds: new Rect(config.topLeft, TerrainProp.typeSettings(config.type).plotSize),
-        item: prop
-    });
-    return plot;
-};
 
 // a location on the map with a Zone or Building.
 // contains the coordinates, pointers to game, finding neighbors,
@@ -506,7 +499,7 @@ class CityTime {
     constructor() {
         this.speed = Game.defaultSpeed();
         this.date = SimDate.epoch;
-        this.kvo = new Kvo(CityTime, this);
+        this.kvo = new Kvo(this);
     }
 
     get objectForSerialization() {
@@ -555,7 +548,7 @@ class City {
             this.map = new GameMap({ terrain: config.terrain });
         }
 
-        this.kvo = new Kvo(City, this);
+        this.kvo = new Kvo(this);
         this._updateStateAfterOneDay();
     }
 
@@ -622,7 +615,7 @@ class Budget {
 
     constructor(config) {
         this.cash = config.dz ? config.dz.cash : config.startingCash;
-        this.kvo = new Kvo(Budget, this);
+        this.kvo = new Kvo(this);
     }
 
     get objectForSerialization() {
@@ -676,9 +669,9 @@ GameStorage.currentSchemaVersion = 1;
 GameStorage.minSchemaVersion = 1;
 
 class Game {
-
     static quit() { window.location = "index.html"; }
 
+    static rules() { return GameContent.shared.gameRules; }
     static speedOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Game.rules().speeds, index); }
     static defaultSpeed() { return GameContent.defaultItemFromArray(Game.rules().speeds); }
 
@@ -824,7 +817,6 @@ class Game {
         gse.registerCommand("escapePressed", () => this.escapePressed());
     }
 }
-Game.rules = function() { return GameContent.shared.gameRules; };
 
 // #################### USER INPUT ######################
 
@@ -1199,6 +1191,17 @@ class MapToolController {
 
     static settings() { return GameContent.shared.mapTools; }
 
+    static getFeedbackSettings(source, code) {
+        switch (code) {
+            case MapToolSession.ActionResult.purchased: return source.purchased;
+            case MapToolSession.ActionResult.notAffordable: return source.notAffordable;
+            case MapToolSession.ActionResult.notAllowed: return source.notAllowed;
+            default:
+                once(`getFeedbackSettings-${code}`, () => debugLog(`Unknown code ${code}`));
+                return null;
+        }
+    }
+
     constructor(config) {
         this.game = null;
         this.canvasGrid = null;
@@ -1206,7 +1209,7 @@ class MapToolController {
         this._feedbackSettings = MapToolController.settings().feedback;
         this._toolSession = null;
         this._feedbackItems = [];
-        this.kvo = new Kvo(MapToolController, this);
+        this.kvo = new Kvo(this);
         this._configureTools();
     }
 
@@ -1347,16 +1350,6 @@ class MapToolController {
 }
 MapToolController.shared = null;
 MapToolController.Kvo = { activeSession: "_toolSession" };
-MapToolController.getFeedbackSettings = (source, code) => {
-    switch (code) {
-        case MapToolSession.ActionResult.purchased: return source.purchased;
-        case MapToolSession.ActionResult.notAffordable: return source.notAffordable;
-        case MapToolSession.ActionResult.notAllowed: return source.notAllowed;
-        default:
-            once(`getFeedbackSettings-${code}`, () => debugLog(`Unknown code ${code}`));
-            return null;
-    }
-}
 
 // ################ RENDERERS AND VIEWS #################
 
