@@ -372,12 +372,17 @@ function saveStateTest() {
         this.assertEqual(sut.getItem(item1.id), null);
         this.assertTrue(sut.deleteItem(item1.id));
 
-        var savedItem1 = sut.saveItem(item1);
+        var meta1 = { metaA: "a", metaB: "b" };
+        var savedItem1 = sut.saveItem(item1, meta1);
         if (this.assertTrue(!!savedItem1)) {
             this.assertEqual(savedItem1.id, item1.id);
             this.assertEqual(savedItem1.title, item1.title);
             this.assertTrue(savedItem1.sizeBytes >= 13);
             this.assertTrue(!!savedItem1.timestamp);
+            if (this.assertTrue(!!savedItem1.metadata)) {
+                this.assertEqual(savedItem1.metadata.metaA, meta1.metaA);
+                this.assertEqual(savedItem1.metadata.metaB, meta1.metaB);
+            }
         }
 
         var items = sut.itemsSortedByLastSaveTime;
@@ -400,13 +405,17 @@ function saveStateTest() {
         }
 
         var data2 = { "c": 3, "d": 4 };
+        var meta2 = { metaA: "aaa", metaB: "bbbb" };
         var item2 = new SaveStateItem(SaveStateItem.newID(), "item2", Date.now(), data2);
-        var savedItem2 = sut.saveItem(item2);
+        var savedItem2 = sut.saveItem(item2, meta2);
         if (this.assertTrue(!!savedItem2)) {
             this.assertEqual(savedItem2.id, item2.id);
             this.assertEqual(savedItem2.title, item2.title);
             this.assertTrue(savedItem2.sizeBytes >= 13);
             this.assertTrue(!!savedItem2.timestamp);
+            if (this.assertTrue(!!savedItem2.metadata)) {
+                this.assertEqual(savedItem2.metadata.metaB, meta2.metaB);
+            }
         }
 
         items = sut.itemsSortedByLastSaveTime;
@@ -414,9 +423,12 @@ function saveStateTest() {
         this.assertElementsEqual(items.map(item => item.id).sort(), [item1.id, item2.id].sort());
 
         var updatedData1 = { "a": 100, "b": 100 };
-        var savedUpdatedItem1 = sut.saveItem(new SaveStateItem(item1.id, item1.title, Date.now(), updatedData1));
+        var savedUpdatedItem1 = sut.saveItem(new SaveStateItem(item1.id, item1.title, Date.now(), updatedData1), meta2);
         this.assertEqual(savedUpdatedItem1.id, savedItem1.id);
         this.assertTrue(savedUpdatedItem1.sizeBytes > savedItem1.sizeBytes);
+        if (this.assertTrue(!!savedUpdatedItem1.metadata)) {
+            this.assertEqual(savedUpdatedItem1.metadata.metaA, meta2.metaA);
+        }
         this.assertEqual(sut.itemsSortedByLastSaveTime.length, 2);
         gotItem = sut.getItem(item1.id);
         if (gotItem) {

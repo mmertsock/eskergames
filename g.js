@@ -1,7 +1,9 @@
 "use-strict";
 
-function debugLog(msg) {
-    console.log(msg);
+function debugLog(msg) { console.log(msg); }
+function debugWarn(msg, trace) {
+    console.warn(msg);
+    if (trace) { console.trace(); }
 }
 
 var onceTokens = new Set();
@@ -10,6 +12,13 @@ function once(id, block) {
     debugLog("(once) " + id);
     block();
     onceTokens.add(id);
+}
+
+function deserializeAssert(condition, message) {
+    if (!!condition) { return; }
+    var error = message ? `Deserialization error: ${message}` : "Deserialization error";
+    debugWarn(error, true);
+    throw new Error(error);
 }
 
 String.isEmpty = function(value) {
@@ -421,6 +430,13 @@ Rect.withCenter = function(x, y, width, height) {
 Rect.fromExtremes = function(e) {
     return new Rect(e.min.x, e.min.y, e.max.x - e.min.x, e.max.y - e.min.y);
 };
+Rect.fromDeserializedWrapper = function(data, schemaVersion) {
+    deserializeAssert(Array.isArray(data) && data.length == 4);
+    return new Rect(data[0], data[1], data[2], data[3]);
+}
+Rect.prototype.objectForSerialization = function() {
+    return [this.x, this.y, this.width, this.height];
+}
 Rect.prototype.getOrigin = function() {
     return new Point(this.x, this.y);
 };
@@ -1059,6 +1075,11 @@ RunLoop.prototype.setTargetFrameRate = function(value) {
     }.bind(this));
 };
 
+RunLoop.prototype.latestFrameStartTimestamp = function() {
+    var last = this.recentFrameStartDates.last;
+    return last ? last.getTime() : Date.now();
+}
+
 RunLoop.prototype.getRecentFramesPerSecond = function() {
     var seconds = this._getRecentSecondsElapsed();
     return isNaN(seconds) ? NaN : (1000 * this.recentFrameStartDates.size / seconds);
@@ -1197,7 +1218,8 @@ class SaveStateCollection {
     }
 
     // Takes a SaveStateItem. Returns SaveStateSummaryItem with updated metadata on success; null on failure
-    saveItem(item) {
+    // metadata is an object of additional info to include with the SaveStateSummary
+    saveItem(item, metadata) {
         // save the item
         // if ok, update the summary state (retrieve it, then remove the item with matching ID and insert 
         // a new summary at the top)
@@ -1205,7 +1227,7 @@ class SaveStateCollection {
             item.timestamp = Date.now();
             var data = SaveStateCollection.serialize(item.serializationWrapper);
             this.storage.setItem(this._fullKeyNameForItemID(item.id), data);
-            var summary = new SaveStateSummaryItem(item.id, item.title, item.timestamp, data.length);
+            var summary = new SaveStateSummaryItem(item.id, item.title, item.timestamp, data.length, metadata);
             this._updateSummaryArray(item.id, summary);
             return summary;
         });
@@ -1259,20 +1281,23 @@ class SaveStateCollection {
 }
 
 // Don't create directly. Managed by SaveStateCollection
+// Get it as a copy from the SaveStateItem.
+// Can use it for game loading menus, etc.
 class SaveStateSummaryItem {
     static fromDeserializedWrapper(wrapper) {
-        return wrapper ? new SaveStateSummaryItem(wrapper.id, wrapper.title, wrapper.timestamp, wrapper.sizeBytes) : null;
+        return wrapper ? new SaveStateSummaryItem(wrapper.id, wrapper.title, wrapper.timestamp, wrapper.sizeBytes, wrapper.metadata) : null;
     }
 
-    constructor(id, title, timestamp, sizeBytes) {
+    constructor(id, title, timestamp, sizeBytes, metadata) {
         this.id = id;
         this.title = title;
         this.timestamp = timestamp;
         this.sizeBytes = sizeBytes;
+        this.metadata = metadata;
     }
 
     get serializationWrapper() {
-        return { id: this.id, title: this.title, timestamp: this.timestamp, sizeBytes: this.sizeBytes };
+        return { id: this.id, title: this.title, timestamp: this.timestamp, sizeBytes: this.sizeBytes, metadata: this.metadata };
     }
 }
 
@@ -1929,7 +1954,9 @@ RectSlider.prototype.selected = function(x, y) {
 
 return {
     debugLog: debugLog,
+    debugWarn: debugWarn,
     once: once,
+    deserializeAssert: deserializeAssert,
     GameSelector: GameSelector,
     directions: directions,
     Point: Point,

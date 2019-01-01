@@ -81,6 +81,58 @@ class GameContent {
             request.send();
         });
     }
+
+    static prepare(content) {
+        if (content.gameRules) {
+            GameContent.addIndexToItemsInArray(content.gameRules.speeds);
+            GameContent.addIndexToItemsInArray(content.gameRules.difficulties);
+        }
+        if (content.mapTools) {
+            GameContent.addIdToItemsInDictionary(content.mapTools.definitions);
+        }
+        if (content.mainMapView) {
+            GameContent.addIndexToItemsInArray(content.mainMapView.zoomLevels);
+        }
+        return content;
+    }
+
+    static addIndexToItemsInArray(items) {
+        if (!items) { return; }
+        items.forEach((item, index) => {
+            if (typeof(item.index) === 'undefined') {
+                item.index = index;
+            }
+        });
+    }
+
+    static addIdToItemsInDictionary(items) {
+        if (!items) { return; }
+        Object.getOwnPropertyNames(items).forEach(id => {
+            var item = items[id];
+            if (typeof(item.id) === 'undefined') {
+                item.id = id;
+            }
+        });
+    }
+
+    static itemOrDefaultFromArray(items, index) {
+        return items.isIndexValid(index) ? items[index] : GameContent.defaultItemFromArray(items);
+    }
+
+    static defaultItemFromArray(items) {
+        return items.find(item => item.isDefault);
+    }
+
+    static itemOrDefaultFromDictionary(items, id) {
+        var found = items[id];
+        return typeof(found) === 'undefined' ? GameContent.defaultItemFromDictionary(items) : found;
+    }
+
+    static defaultItemFromDictionary(items) {
+        Object.getOwnPropertyNames(items).forEach(id => {
+            if (!!items[id].isDefault) { return items[id]; }
+        });
+    }
 }
 GameContent.cachePolicies = {
     auto: 0,

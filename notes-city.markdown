@@ -6,6 +6,8 @@ Auto generate help dialog text for keyboard commands.
 
 Game-specific fonts for zones, maps, controls, etc.
 
+New-game dialog.
+
 ### JS cleanup
 
 static keyword for static members
@@ -59,14 +61,6 @@ Next:
 - implement Road builder
 - modifier keys to push/pop tool sessions (eg switching to Pointer/Query) or changing tool mode (eg showing tile coords with the Pointer/query tool, altering road build pathfinding, etc.)
 
-### Save and restore game data, start new city
-
-Implement it.
-Have a version number in the game data for compatibility. When writing the save state, write the current version number. When reading, configure a min supported version number (may be able to load/convert slightly older versions).
-Auto-save each game month or year. Depending on engine speed. Or maybe autosave every X seconds of wall time (to handle long build-sessions where the game remains paused).
-Make sure Plots and stuff have a consistent way to store opaque state data.
-Also implement modal dialog for starting a new city so you can start over.
-
 ### Get some actual game logic working to make zones grow
 
 For the zone painter, start with just painting text within the square showing density/value/level of the zones (keep these around as "debug painters" for use in the future, and/or as a query-view like in SNES simcity).
@@ -75,6 +69,12 @@ For the zone painter, start with just painting text within the square showing de
 
 implement these. Refer to the "FlexCanvasGrid and Viewport" heading below.
 implement listening for canvas DOM size changes and refresh the FlexCanvasGrid as appropriate.
+
+Arrow keys to move map.
+Spacebar to center map on cursor.
+Click to center the map when Pointer tool is selected.
+Hold a key and click-drag to move the map? At least when the Pointer tool is selected?
+Pan the map when holding the cursor near the edge of the map?
 
 ### Figure out where to go with graphics before adding more content
 
@@ -92,13 +92,25 @@ How to handle different zoom levels, animation frames, and building variants?
 Overlays for land value, pollution, crime, etc.
 Adding game logic for zones to emit/consume/demand/avoid such environmental data.
 
+### More stuff
+
+Signposts or other ways to label the terrain, infrastructure, buildings.
+
 ### Terrain
 
-yeah
+Create a terrain.html tester/editor page, similar to painter.html, to do all terrain feature development. This could perhaps become the full god-mode terrain editor tool in the end.
 
 ### Undo button
 
-this would be cool.
+This would be cool.
+Perhaps what you do is anything done between gameEngine frames goes into a queue or temporary state, and only gets committed fully when the run loop runs a frame?
+Or could just use the typical stack-of-functions approach; so plopping an R zone adds an undo function that destroys the R zone and refunds the money. hm since money is involved, and there can be side effects (eg auto-bulldozing terrain), is there really an effective/fair way to do this?
+
+## Further in the future
+
+Max size of individual localStorage values is around 5 MB. So, two options:
+- chunk the serialized strings into blocks of size X when writing, and when reading load all chunks, append into a single string, then JSON.parse the large string
+- chunk the unserialized data into blocks of cohesive objects, then serialize into strings. This would be the Plots array and maybe some Terrain stuff
 
 - - - - - - - - - - 
 # Thoughts #########

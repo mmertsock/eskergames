@@ -3,10 +3,14 @@
 window.CitySim = (function() {
 
 var debugLog = Gaming.debugLog;
+var debugWarn = Gaming.debugWarn;
 var once = Gaming.once;
+var deserializeAssert = Gaming.deserializeAssert;
 var Rect = Gaming.Rect;
 var Point = Gaming.Point;
 var SelectableList = Gaming.SelectableList;
+var SaveStateCollection = Gaming.SaveStateCollection;
+var SaveStateItem = Gaming.SaveStateItem;
 var Kvo = Gaming.Kvo;
 var Binding = Gaming.Binding;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
@@ -159,10 +163,10 @@ class ZoomSelector {
 }
 
 class SpeedSelector {
-    constructor(value, delegate) {
+    constructor(value, delegate, selected) {
         this.value = value;
         this.delegate = delegate;
-        this._selected = value.isDefault == true;
+        this._selected = selected;
     }
     get isSelected() { return this._selected; }
     setSelected(value) {
@@ -185,10 +189,33 @@ class RCIValue {
 }
 
 class Zone {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null);
+        return new Zone({ dz: {
+            type: data.type,
+            densityLevel: data.densityLevel,
+            valueLevel: data.valueLevel
+        } });
+    }
+
     constructor(config) {
-        this.type = config.type; // <Z>
-        this.densityLevel = 0; // Int; see Zone.config.maxDensityLevel
-        this.valueLevel = 0; // Int; see Zone.config.maxValueLevel
+        if (config.dz) {
+            this.type = config.dz.type; // <Z>
+            this.densityLevel = config.dz.densityLevel;
+            this.valueLevel = config.dz.valueLevel;
+        } else {
+            this.type = config.type; // <Z>
+            this.densityLevel = 0; // Int; see Zone.config.maxDensityLevel
+            this.valueLevel = 0; // Int; see Zone.config.maxValueLevel
+        }
+    }
+
+    get objectForSerialization() {
+        return {
+            type: this.type,
+            densityLevel: this.densityLevel,
+            valueLevel: this.valueLevel
+        };
     }
 
     get population() {
@@ -226,8 +253,19 @@ Zone.newPlot = function(config) {
 };
 
 class TerrainProp {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null);
+        return new TerrainProp({ dz: { type: data.type } });
+    }
+
     constructor(config) {
-        this.type = config.type;
+        this.type = config.dz ? config.dz.type : config.type;
+    }
+
+    get objectForSerialization() {
+        return {
+            type: this.type
+        };
     }
 
     get settings() {
@@ -261,12 +299,47 @@ TerrainProp.newPlot = function(config) {
 // contains the coordinates, pointers to game, finding neighbors,
 // calculating land values and stuff, etc.
 class Plot {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null);
+        return new Plot({ dz: {
+            bounds: Rect.fromDeserializedWrapper(data.bounds, schemaVersion),
+            item: Plot.deserializerForItemClass(data.itemClass)(data.item, schemaVersion),
+            data: data.data
+        } });
+    }
+
+    static deserializerForItemClass(itemClass) {
+        switch (itemClass) {
+            case Zone.name: return Zone.fromDeserializedWrapper;
+            case TerrainProp.name: return TerrainProp.fromDeserializedWrapper;
+            default:
+                deserializeAssert(false, `Unknown Prop.itemClass ${itemClass}`);
+                return () => undefined;
+        }
+    }
+
     constructor(config) {
-        // bounds: <Rect>. rect.origin = top-left tile.
-        this.bounds = config.bounds;
-        this.item = config.item; // <Zone> or other
-        this.data = {
-            variantKey: config.bounds.hashValue()
+        if (config.dz) {
+            this.bounds = config.dz.bounds;
+            this.item = config.dz.item;
+            this.data = config.dz.data;
+        } else {
+            this.bounds = config.bounds; // <Rect>. rect.origin = top-left tile.
+            this.item = config.item; // <Zone> or other
+            this.data = {
+                variantKey: config.bounds.hashValue()
+            };
+        }
+    }
+
+    get objectForSerialization() {
+        return {
+            bounds: this.bounds.objectForSerialization(),
+            itemClass: this.item.constructor.name,
+            item: this.item.objectForSerialization,
+            data: {
+                variantKey: this.data.variantKey
+            }
         };
     }
 
@@ -289,9 +362,26 @@ class Plot {
 // ########################### MAP/GAME #######################
 
 class Terrain {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null && data.size != null);
+        return new Terrain({ dz: {
+            size: { width: data.size.width, height: data.size.height }
+        } });
+    }
+
     constructor(config) {
-        this.size = config.size; // <width/height>
-        this.bounds = new Rect(new Point(0, 0), config.size);
+        if (config.dz) {
+            this.size = config.dz.size;
+        } else {
+            this.size = config.size; // <width/height>
+        }
+        this.bounds = new Rect(new Point(0, 0), this.size);
+    }
+
+    get objectForSerialization() {
+        return {
+            size: this.size
+        }
     }
 }
 
@@ -302,11 +392,35 @@ class Terrain {
 // the bounds of the map. Return null from addPlot/removePlot upon
 // failure, and return the plot object upon success.
 class GameMap {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null);
+        return new GameMap({ dz: {
+            terrain: Terrain.fromDeserializedWrapper(data.terrain, schemaVersion),
+            plots: data.plots.map(plot => Plot.fromDeserializedWrapper(plot, schemaVersion))
+        } });
+    }
+
     constructor(config) {
-        this.terrain = config.terrain;
         // flat sparse arrays in drawing order. See _tileIndex for addressing
         this._plots = [];
         this._tiles = [];
+        if (config.dz) {
+            this.terrain = config.dz.terrain;
+            config.dz.plots.forEach(plot => {
+                this.addPlot(plot, true);
+            });
+        } else {
+            this.terrain = config.terrain;
+        }
+    }
+
+    get objectForSerialization() {
+        var plots = [];
+        this.visitEachPlot(plot => plots.push(plot.objectForSerialization));
+        return {
+            terrain: this.terrain.objectForSerialization,
+            plots: plots
+        };
     }
 
     get bounds() { return this.terrain.bounds; }
@@ -319,7 +433,7 @@ class GameMap {
         return this.terrain.bounds.contains(rect);
     }
 
-    addPlot(plot) {
+    addPlot(plot, fromFile) {
         if (!this.isTileRectWithinBounds(plot.bounds)) {
             debugLog(`Plot is outside of map bounds: ${plot.bounds.debugDescription()}`);
             return null;
@@ -334,7 +448,7 @@ class GameMap {
         plot.bounds.allTileCoordinates()
             .map((t) => this._tileIndex(t))
             .forEach((i) => { if (!isNaN(i)) { this._tiles[i] = plot; } });
-        debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription()}`);
+        if (!fromFile) { debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription()}`); }
         return plot;
     }
 
@@ -379,11 +493,29 @@ class GameMap {
 }
 
 class CityTime {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null);
+        deserializeAssert(data.dateDaysSinceEpoch >= 0);
+        var time = new CityTime();
+        time.speed = Game.speedOrDefaultForIndex(data.speedIndex);
+        debugLog([data, time.speed, Game.rules().speeds]);
+        time.date = new SimDate(data.dateDaysSinceEpoch);
+        return time;
+    }
+
     constructor() {
-        this.speed = Game.rules().speeds[0];
+        this.speed = Game.defaultSpeed();
         this.date = SimDate.epoch;
         this.kvo = new Kvo(CityTime, this);
     }
+
+    get objectForSerialization() {
+        return {
+            speedIndex: this.speed.index,
+            dateDaysSinceEpoch: this.date.daysSinceEpoch
+        };
+    }
+
     setSpeed(newSpeed) {
         this.kvo.speed.setValue(newSpeed);
     }
@@ -394,13 +526,48 @@ class CityTime {
 CityTime.Kvo = { "speed": "speed", "date": "date" };
 
 class City {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null, "City object required");
+        return new City({ dz: {
+            difficultyIndex: data.difficultyIndex,
+            name: data.name,
+            mayorName: data.mayorName,
+            time: CityTime.fromDeserializedWrapper(data.time, schemaVersion),
+            budget: Budget.fromDeserializedWrapper(data.budget, schemaVersion),
+            map: GameMap.fromDeserializedWrapper(data.map, schemaVersion)
+        } });
+    }
+
     constructor(config) {
-        this.name = config.name;
-        this.time = new CityTime();
-        this.budget = new Budget({ startingCash: config.difficulty.startingCash });
-        this.map = new GameMap({ terrain: config.terrain });
+        if (config.dz) {
+            this.difficulty = Game.difficultyOrDefaultForIndex(config.dz.difficultyIndex);
+            this.name = config.dz.name;
+            this.mayorName = config.dz.mayorName;
+            this.time = config.dz.time;
+            this.budget = config.dz.budget;
+            this.map = config.dz.map;
+        } else {
+            this.difficulty = config.difficulty;
+            this.name = config.name;
+            this.mayorName = config.mayorName;
+            this.time = new CityTime();
+            this.budget = new Budget({ startingCash: config.difficulty.startingCash });
+            this.map = new GameMap({ terrain: config.terrain });
+        }
+
         this.kvo = new Kvo(City, this);
         this._updateStateAfterOneDay();
+    }
+
+    get objectForSerialization() {
+        return {
+            difficultyIndex: this.difficulty.index,
+            name: this.name,
+            mayorName: this.mayorName,
+            time: this.time.objectForSerialization,
+            budget: this.budget.objectForSerialization,
+            map: this.map.objectForSerialization
+        };
     }
 
     get population() { return this._population; }
@@ -446,9 +613,22 @@ class City {
 City.Kvo = { name: "name", population: "_population", rciDemand: "_rciDemand" };
 
 class Budget {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        deserializeAssert(data != null);
+        var cash = Number.parseInt(data.cash);
+        deserializeAssert(!isNaN(cash));
+        return new Budget({ dz: { cash: cash } });
+    }
+
     constructor(config) {
-        this.cash = config.startingCash;
+        this.cash = config.dz ? config.dz.cash : config.startingCash;
         this.kvo = new Kvo(Budget, this);
+    }
+
+    get objectForSerialization() {
+        return {
+            cash: this.cash
+        };
     }
 
     spend(simoleons) {
@@ -463,13 +643,105 @@ class Budget {
 }
 Budget.Kvo = { cash: "cash" };
 
+class GameStorage {
+    constructor() {
+        this.collection = new SaveStateCollection(window.localStorage, "CitySim");
+    }
+
+    get latestSavedGameID() {
+        var valid = this.allSavedGames.filter(game => this.isSaveStateSummarySupported(game));
+        return valid.length > 0 ? valid[0].id : null;
+    }
+
+    get allSavedGames() {
+        return this.collection.itemsSortedByLastSaveTime;
+    }
+
+    isSaveStateSummarySupported(item) {
+        return item && item.metadata && item.metadata.schemaVersion && item.metadata.schemaVersion >= GameStorage.minSchemaVersion;
+    }
+
+    isSaveStateItemSupported(item) {
+        return item && item.data && item.data.schemaVersion && item.data.schemaVersion >= GameStorage.minSchemaVersion;
+    }
+
+    urlForGameID(id) {
+        var base = window.location.href.replace("index.html", "");
+        var path = `city.html?id=${id}`;
+        return new URL(path, base).href;
+    }
+}
+GameStorage.shared = new GameStorage();
+GameStorage.currentSchemaVersion = 1;
+GameStorage.minSchemaVersion = 1;
+
 class Game {
+
+    static quit() { window.location = "index.html"; }
+
+    static speedOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Game.rules().speeds, index); }
+    static defaultSpeed() { return GameContent.defaultItemFromArray(Game.rules().speeds); }
+
+    static difficultyOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Game.rules().difficulties, index); }
+    static defaultDifficulty() { return GameContent.defaultItemFromArray(Game.rules().difficulties); }
+
+    static fromDeserializedWrapper(item, rootView) {
+        deserializeAssert(item.data);
+        var city = City.fromDeserializedWrapper(item.data.city, item.data.schemaVersion);
+        return new Game({ dz: {
+            saveStateInfo: { id: item.id, lastTimestamp: Date.now() },
+            rootView: rootView,
+            city: city
+        } });
+    }
+
     constructor(config) {
-        this.city = config.city;
-        this.rootView = config.rootView;
-        var speeds = Game.rules().speeds.map((s) => new SpeedSelector(s, this));
+        if (config.dz) {
+            this.saveStateInfo = config.dz.saveStateInfo;
+            this.rootView = config.dz.rootView;
+            this.city = config.dz.city;
+        } else {
+            this.saveStateInfo = {
+                id: null,
+                lastTimestamp: 0
+            };
+            this.rootView = config.rootView;
+            this.city = config.city;
+        }
+        var speeds = Game.rules().speeds.map((s) => new SpeedSelector(s, this, s.index == this.city.time.speed.index));
         this.speedSelection = new SelectableList(speeds);
         this._started = false;
+    }
+
+    saveToStorage() {
+        this.saveStateInfo.lastTimestamp = Date.now();
+        var title = `${this.city.name}.cty`; // TODO cooler, possibly unique filename
+        var item = new SaveStateItem(this.saveStateInfo.id || SaveStateItem.newID(), title, this.saveStateInfo.lastTimestamp, this.objectForSerialization);
+        var saved = GameStorage.shared.collection.saveItem(item, this.metadataForSerialization);
+        if (saved) {
+            this.saveStateInfo.id = saved.id;
+            this.saveStateInfo.lastTimestamp = saved.timestamp;
+            debugLog(`Saved game to storage with id ${saved.id}.`);
+        } else {
+            debugWarn(`Failed to save game to storage.`);
+        }
+    }
+
+    get metadataForSerialization() {
+        return {
+            schemaVersion: GameStorage.currentSchemaVersion,
+            cityName: this.city.name,
+            population: Number.uiInteger(this.city.population.R),
+            cash: Simoleon.format(this.city.budget.cash),
+            gameDate: this.city.time.date.mediumString()
+        };
+    }
+
+    get objectForSerialization() {
+        return {
+            schemaVersion: GameStorage.currentSchemaVersion,
+            city: this.city.objectForSerialization
+        };
     }
 
     get isStarted() {
@@ -492,8 +764,8 @@ class Game {
         debugLog(`Started game with city ${this.city.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.size.width}x${this.city.map.terrain.size.height}`);
 
         engineRunLoop.addDelegate(this);
+        uiRunLoop.addDelegate(this);
         uiRunLoop.resume();
-        engineRunLoop.resume();
         GameScriptEngine.shared.execute("_beginGame", this);
     }
 
@@ -532,6 +804,12 @@ class Game {
     processFrame(rl) {
         if (rl == engineRunLoop) {
             this.city.simulateOneDay();
+        }
+        if (rl == uiRunLoop) {
+            var now = rl.latestFrameStartTimestamp();
+            if ((now - this.saveStateInfo.lastTimestamp) > (1000 * Game.rules().autoSaveIntervalSeconds)) {
+                this.saveToStorage();
+            }
         }
     }
 
@@ -1034,7 +1312,7 @@ class MapToolController {
             canvasGrid: this.canvasGrid,
             tool: tool,
             preemptedSession: preempt ? this._toolSession : null
-        }), false, true);
+        }), false, false);
         this._toolSession.resume();
     }
 
@@ -1179,7 +1457,34 @@ class RootView {
 
     setUp() {
         this._configureCommmands();
+        var storage = GameStorage.shared;
+        var url = new URL(window.location.href);
+
+        var id = url.searchParams.get("id");
+        if (id) { this.tryToLoadGame(id); return; }
+
+        var startNewGame = !!url.searchParams.get("new");
+        var id = storage.latestSavedGameID;
+        if (!startNewGame && !!id) { this.tryToLoadGame(id); return; }
+
         this.newGamePrompt.show();
+    }
+
+    tryToLoadGame(id) {
+        var storage = GameStorage.shared;
+        var data = storage.collection.getItem(id);
+        if (!data) {
+            this.failedToStartGame(Strings.str("failedToFindGameMessage"));
+        } else if (!storage.isSaveStateItemSupported(data)) {
+            this.failedToStartGame(Strings.str("failedToLoadGameMessage"));
+        } else {
+            try {
+                CitySim.game = Game.fromDeserializedWrapper(data, rootView);
+                CitySim.game.start();
+            } catch(e) {
+                this.failedToStartGame(`${Strings.str("failedToLoadGameMessage")}\n\n${e.message}`);
+            }
+        }
     }
 
     initialize(game) {
@@ -1190,10 +1495,11 @@ class RootView {
         this.views.push(new ControlsView({ game: game, root: this.root.querySelector("controls") }));
     }
 
-    failedToLoadBaseData() {
+    failedToStartGame(message) {
         new Gaming.Prompt({
             title: Strings.str("failedToLoadGameTitle"),
-            message: Strings.str("failedToLoadGameMessage"),
+            message: message,
+            buttons: [{ label: Strings.str("quitButton"), action: () => Game.quit() }],
             requireSelection: true
         }).show();
     }
@@ -1432,7 +1738,7 @@ class GameEngineControlsView {
         this.pauseButton.isSelected = !this.game.isRunning;
         this.playButton.isSelected = this.game.isRunning;
 
-        var speedIndex = Game.rules().speeds.indexOf(this.game.city.time.speed);
+        var speedIndex = this.game.city.time.speed.index;
         GameContent.shared.gameRules.speeds.forEach((speed, index) => {
             if (index < this.speedButtons.length) {
                 this.speedButtons[index].isSelected = (index == speedIndex);
@@ -1920,6 +2226,13 @@ class Strings {
         var template = Strings.str(id);
         return template ? String.fromTemplate(template, data) : null;
     }
+
+    static randomCityName() {
+        return "Metroville Acres"
+    }
+    static randomPersonName() {
+        return "Eustice von Honla"
+    }
 }
 
 class DialogManager {
@@ -1972,15 +2285,18 @@ class NewGamePrompt {
     startNewGame() {
         var terrain = new Terrain(GameContent.shared.terrains[0]);
         var city = new City({
-            name: Strings.str("defaultCityName"),
+            isNewCity: true,
+            name: Strings.randomCityName(),
+            mayorName: Strings.randomPersonName(),
             terrain: terrain,
-            difficulty: Game.rules().difficulties.easy
+            difficulty: Game.defaultDifficulty()
         });
         CitySim.game = new Game({
             city: city,
             rootView: rootView
         });
         CitySim.game.start();
+        engineRunLoop.resume();
     };
     show() {
         if (!CitySim.game) {
@@ -1995,6 +2311,123 @@ class NewGamePrompt {
                 { label: Strings.str("genericCancelButton") }
             ]
         }).show();
+    }
+}
+
+class LoadGameMenu {
+    constructor() {
+        this.mainMenuSection = document.querySelector("#mainMenu");
+        this.loadGameSection = document.querySelector("#loadGameMenu");
+        this.noGamesToLoadSection = document.querySelector("#noGamesToLoad");
+        this.gameInfoSection = document.querySelector("#gameInfo");
+        this.allSections = [this.mainMenuSection, this.loadGameSection, this.noGamesToLoadSection, this.gameInfoSection];
+        this.selectedGame = null;
+
+        document.querySelectorAll("#root .showGameList").forEach(elem => {
+            elem.addEventListener("click", evt => {
+                evt.preventDefault();
+                this.showGameList();
+            });
+        });
+        document.querySelectorAll("#root .showMainMenu").forEach(elem => {
+            elem.addEventListener("click", evt => {
+                evt.preventDefault();
+                this._showSection(this.mainMenuSection);
+            });
+        });
+        document.querySelector("#gameInfo .open").addEventListener("click", evt => {
+            evt.preventDefault();
+            this._openSelectedGame();
+        });
+        document.querySelector("#gameInfo .delete").addEventListener("click", evt => {
+            evt.preventDefault();
+            this._promptDeleteSelectedGame();
+        });
+    }
+
+    get storage() {
+        return GameStorage.shared;
+    }
+
+    showGameList() {
+        var games = this.storage.allSavedGames;
+        if (games.length == 0) {
+            this._showSection(this.noGamesToLoadSection);
+        } else {
+            var containerElem = this.loadGameSection.querySelector("tbody");
+            containerElem.removeAllChildren();
+            games.forEach(game => {
+                var row = document.createElement("tr");
+                row.addRemClass("invalid", !this.storage.isSaveStateSummarySupported(game));
+                row.append(this._td(game.title, "name"));
+                row.append(this._td(this._formatTimestamp(game.timestamp), "date"));
+                row.append(this._td(this._formatFileSize(game.sizeBytes), "size"));
+                containerElem.append(row);
+                row.addEventListener("click", evt => {
+                    evt.preventDefault();
+                    this._showDetails(game);
+                });
+                // TODO an <input> to type the file name directly to simulate an old computer. with a Load button.
+                // TODO import button to paste in JSON. Export button is within city.html in the File menu.
+            });
+            this._showSection(this.loadGameSection);
+        }
+    }
+
+    _showDetails(game) {
+        this.selectedGame = game;
+        var isValid = this.storage.isSaveStateSummarySupported(game);
+        this.gameInfoSection.addRemClass("valid", isValid);
+        this.gameInfoSection.querySelector("h2").innerText = `${game.title}, ${this._formatTimestamp(game.timestamp)}`;
+        this.gameInfoSection.querySelector(".name").innerText = game.metadata ? game.metadata.cityName : "";
+        this.gameInfoSection.querySelector(".population").innerText = game.metadata ? game.metadata.population : "";
+        this.gameInfoSection.querySelector(".cash").innerText = game.metadata ? game.metadata.cash : "";
+        this.gameInfoSection.querySelector(".date").innerText = game.metadata ? game.metadata.gameDate : "";
+        this.gameInfoSection.querySelector(".open").addRemClass("disabled", !isValid);
+        // TODO show a minimap
+        this._showSection(this.gameInfoSection);
+    }
+
+    _openSelectedGame() {
+        if (!this.storage.isSaveStateSummarySupported(this.selectedGame)) { return; }
+        var url = this.storage.urlForGameID(this.selectedGame.id);
+        window.location.assign(url);
+        debugLog("go to " + url);
+    }
+
+    _promptDeleteSelectedGame() {
+        if (!this.selectedGame) { return; }
+        if (!confirm(Strings.str("deleteGameConfirmPrompt"))) { return; }
+        debugLog(this.storage);
+        this.storage.collection.deleteItem(this.selectedGame.id);
+        this.showGameList();
+    }
+
+    _showSection(elem) {
+        this.allSections.forEach(item => {
+            item.addRemClass("hidden", item != elem);
+        });
+    }
+
+    _td(text, type) {
+        var elem = document.createElement("td");
+        elem.innerText = text;
+        elem.addRemClass(type, true);
+        return elem;
+    }
+
+    _formatTimestamp(timestamp) {
+        return new Date(timestamp).toLocaleString([], { year: "2-digit", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    }
+
+    _formatFileSize(size) {
+        if (size > (1024 * 1024) - 1) {
+            return `${(size / (1024*1024)).toFixed(2)} MB`;
+        }
+        if (size > 1023) {
+            return `${(size / 1024).toFixed(2)} KB`;
+        }
+        return Number.uiInteger(size);
     }
 }
 
@@ -2021,15 +2454,22 @@ var initialize = async function() {
 
 var dataIsReady = function(content) {
     if (!content) {
-        rootView.failedToLoadBaseData();
+        if (window.doNotInitializeGame) { return; }
+        rootView.failedToLoadGameMessage(Strings.str("failedToLoadGameMessage"));
         return;
     }
-    GameContent.shared = content;
-    GameScriptEngine.shared = new GameScriptEngine();
-    ScriptPainterStore.shared = new ScriptPainterStore();
-    KeyInputController.shared = new KeyInputController();
-    MapToolController.shared = new MapToolController();
-    rootView.setUp();
+
+    GameContent.shared = GameContent.prepare(content);
+    if (!window.doNotInitializeGame) {
+        GameScriptEngine.shared = new GameScriptEngine();
+        ScriptPainterStore.shared = new ScriptPainterStore();
+        KeyInputController.shared = new KeyInputController();
+        MapToolController.shared = new MapToolController();
+        rootView.setUp();
+    }
+    if (window.prepareLoadGamePrompt) {
+        CitySim.loadMenu = new CitySim.LoadGameMenu();
+    }
 };
 
 return {
@@ -2048,10 +2488,12 @@ return {
     GameMap: GameMap,
     City: City,
     Budget: Budget,
+    GameStorage: GameStorage,
     Game: Game,
     KeyInputController: KeyInputController,
     MapRenderer: MapRenderer,
     NewGamePrompt: NewGamePrompt,
+    LoadGameMenu: LoadGameMenu,
     ScriptPainter: ScriptPainter,
     ScriptPainterCollection: ScriptPainterCollection,
     ScriptPainterStore: ScriptPainterStore
@@ -2059,6 +2501,4 @@ return {
 
 })(); // end CitySim namespace
 
-if (!window.doNotInitializeGame) {
-    CitySim.initialize();
-}
+CitySim.initialize();

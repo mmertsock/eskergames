@@ -3,15 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <title>CitySim</title>
-    <!--
     <script>
         window.doNotInitializeGame = true;
+        window.prepareLoadGamePrompt = true;
     </script>
     <script defer src="js-yaml.min.js"></script>
     <script defer src="g.js"></script>
     <script defer src="city-content.js"></script>
     <script defer src="city.js"></script>
--->
 
 <style type="text/css">
 
@@ -23,7 +22,15 @@ https://stackoverflow.com/questions/37451189/can-one-pixelate-images-with-an-svg
 body {
     margin: 0;
     padding: 0;
-    cursor: pointer;
+}
+
+section {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+section.hidden {
+    display: none;
 }
 
 /* center h/v container */
@@ -40,7 +47,7 @@ body > div {
 }
 
 /* center h/v */
-section {
+section#root {
     display: block;
     margin: 0 auto;
 }
@@ -56,6 +63,11 @@ h1 {
     text-shadow: 0px 0px 6px hsl(0, 0%, 0%);
 }
 
+h2 {
+    margin: 0;
+    font-size: 12pt;
+}
+
 nav {
     margin: 12px;
     display: flex;
@@ -64,22 +76,22 @@ nav {
     justify-content: space-around;
 }
 
-#main {
+#root {
     width: 30em;
     max-width: 90%;
     padding: 2px;
     border-radius: 10px;
     border: 1px solid hsl(0, 0%, 20%);
-    background-color: hsl(120, 90%, 50%);
+    background-color: hsl(120, 84%, 50%);
     color: hsl(0, 0%, 100%);
 }
 
-#main > div {
+#root > div {
     /*
 
 
 TODO
-could use an outline with a negative inset on the #main instead.
+could use an outline with a negative inset on the #root instead.
 
 
 
@@ -104,7 +116,7 @@ TODO heavier styling on the font
     padding: 8px;
 }
 
-#main a, #main a:link, #main a:visited, #main a:active, #main a:hover {
+a, a:link, a:visited, a:active, a:hover {
     display: block;
     width: 40%;
     margin: 6px;
@@ -122,7 +134,7 @@ TODO heavier styling on the font
     word-spacing: 0.1em;
 }
 
-#main a:hover {
+a:hover {
     border-style: inset;
     padding: 5px 2px 2px 5px;
     background-color: hsla(0, 0%, 0%, 0.1);
@@ -137,6 +149,64 @@ screw {
     border: 5px outset hsl(0, 0%, 95%);
     box-shadow: 1px 1px 3px 1px hsl(0, 0%, 0%);
 }
+
+content {
+    display: block;
+    max-width: 20em;
+    margin: 0 auto;
+    color: hsl(0, 0%, 0%);
+    font-family: monospace;
+}
+
+content h2 {
+    text-align: center;
+}
+
+content p {
+    text-align: center;
+    margin: 0.3em 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+    empty-cells: show;
+}
+
+th, td {
+    vertical-align: top;
+    font-size: 10pt;
+    padding: 2pt 6pt;
+    border: 1px solid hsl(0, 0%, 50%);
+}
+
+tbody tr:hover {
+    background-color: hsla(0, 0%, 100%, 0.2);
+}
+
+tr.invalid {
+    color: hsl(0, 100%, 40%);
+}
+
+table .name {
+    width: 50%;
+    text-align: left;
+}
+table .date {
+    width: 30%;
+    text-align: left;
+}
+table .size {
+    width: 20%;
+    text-align: right;
+}
+
+#gameInfo .valid { display: none; }
+#gameInfo .invalid { display: block; }
+#gameInfo.valid .valid { display: block; }
+#gameInfo.valid .invalid { display: none; }
+
 </style>
 
 </head>
@@ -144,16 +214,56 @@ screw {
 <body>
 
 <div>
-    <section id="main">
+    <section id="root">
         <div>
             <screw></screw>
-            <header><h1>CitySim</h1></header>
-            <nav>
-                <a id="loadGame" href="city.html">Load Game</a>
-                <a id="newGame" class="odd" href="city.html?new=1">Start New Game</a>
-                <a id="painter" href="painter.html">Painter</a>
-                <a id="unitTests" class="odd" href="tests.html">Unit Tests</a>
-            </nav>
+            <section id="mainMenu">
+                <header><h1>CitySim</h1></header>
+                <nav>
+                    <a class="showGameList" href="city.html">Load Game</a>
+                    <a id="newGame" class="odd" href="city.html?new=1">Start New Game</a>
+                    <a id="painter" href="painter.html">Painter</a>
+                    <a id="unitTests" class="odd" href="tests.html">Unit Tests</a>
+                </nav>
+            </section>
+            <section id="loadGameMenu" class="hidden">
+                <content>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="name">File</th>
+                                <th class="date">Save Date</th>
+                                <th class="size">Size</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                    <a class="showMainMenu" href="#">Cancel</a>
+                </content>
+            </section>
+            <section id="gameInfo" class="hidden">
+                <content>
+                    <h2>title</h2>
+                    <p class="invalid">This save file is obsolete and cannot be loaded.</p>
+                    <p class="valid"><em>City name:</em> <span class="name"></span></p>
+                    <p class="valid"><em>Game date:</em> <span class="date"></span></p>
+                    <p class="valid"><em>Population:</em> <span class="population"></span></p>
+                    <p class="valid"><em>Cash:</em> <span class="cash"></span></p>
+                    <!-- minimap -->
+                    <a class="open" href="#">Open</a>
+                    <a class="delete" href="#">Delete</a>
+                    <a class="showGameList" href="#">Go Back</a>
+                </content>
+            </section>
+            <section id="noGamesToLoad" class="hidden">
+                <header><h1>CitySim</h1></header>
+                <content>
+                    <p>There are no saved games.</p>
+                    <nav>
+                        <a class="showMainMenu" href="#">Cancel</a>
+                    </nav>
+                </content>
+            </section>
             <screw></screw>
         </div>
     </section>
@@ -162,5 +272,3 @@ screw {
 </body>
 
 </html>
-
-
