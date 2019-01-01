@@ -1365,19 +1365,26 @@ class UI {
     }
 }
 
-class InputView {
+// Subclasses implement: get/set value().
+class FormValueView {
     constructor(config, elem) {
         this.elem = elem;
         if (config.parent) { config.parent.append(this.elem); }
-        this.valueElem = this.elem.querySelector("input");
-        if (config.binding) {
-            this.binding = new Binding({ source: config.binding.source, target: this, sourceFormatter: config.binding.sourceFormatter });
-        }
     }
 
     configure(block) {
         block(this);
         return this;
+    }
+}
+
+class InputView extends FormValueView {
+    constructor(config, elem) {
+        super(config, elem);
+        this.valueElem = this.elem.querySelector("input");
+        if (config.binding) {
+            this.binding = new Binding({ source: config.binding.source, target: this, sourceFormatter: config.binding.sourceFormatter });
+        }
     }
 
     get value() { return this.valueElem.value; }
@@ -1414,7 +1421,7 @@ class TextInputView extends InputView {
         var elem = document.createElement("label").addRemClass("textInput", true);
         if (config.title) {
             var title = document.createElement("span");
-            title.innerText = config.title + Strings.str("textInputLabelSuffix");
+            title.innerText = config.title;
             elem.append(title);
         }
         var input = document.createElement("input");
@@ -1441,6 +1448,42 @@ class TextInputView extends InputView {
     get isValid() {
         return this.validationRules.every(rule => rule(this));
     }
+}
+
+class SingleChoiceInputView extends InputView {
+    static createElement(config) {
+        var elem = document.createElement("label").addRemClass("singleChoiceInput", true);
+        elem.append(document.createElement("input").configure(input => {
+            input.type = "radio";
+            input.name = config.collection.id;
+            input.value = config.value;
+            input.checked = !!config.selected;
+        }));
+        elem.append(document.createElement("span").configure(item => item.innerText = config.title));
+        return elem;
+    }
+
+    constructor(config, elem) {
+        super(config, elem || SingleChoiceInputView.createElement(config));
+        this.value = config.value;
+    }
+
+    get selected() { return this.valueElem.checked; }
+    set selected(value) { this.valueElem.checked = value; }
+}
+
+class SingleChoiceInputCollection extends FormValueView {
+
+
+    get selectedIndex() {
+
+    }
+    set selectedIndex(index) {
+
+    }
+
+    get value() { return null; }
+    set value(newValue) { }
 }
 
 class ToolButton {
@@ -2385,10 +2428,17 @@ class NewGameDialog extends GameDialog {
             placeholder: "",
             validationRules: [TextInputView.notEmptyOrWhitespaceRule]
         }).configure(input => input.value = Strings.randomPersonName());
-        this.contentElem.append(formElem);
 
-        // TODO difficulty selector. Could leverage SingleSelectionList
+        // TODO consider using the SingleSelectionList class with this.
         // Strings.str("citySettingsDifficultyLabel")
+        var difficultyCollection = { id: "difficulty" };
+        this.difficulties = Game.rules().difficulties.map(difficulty => new SingleChoiceInputView({
+            parent: formElem,
+            collection: difficultyCollection,
+            title: Strings.template("difficultyChoiceLabelTemplate", Object.assign({formattedCash: Simoleon.format(difficulty.startingCash)}, difficulty)),
+            value: difficulty.index,
+            selected: !!difficulty.isDefault
+        }));
 
         // TODO come up with a standard HTML/CSS format and a shared JS class for input forms within 
         // dialogs. A form is an element within a dialog, not a type of dialog, so that you can have 
@@ -2396,6 +2446,7 @@ class NewGameDialog extends GameDialog {
         // (rather than being embedded within the form) - that way for a single form you can have the 
         // standard bottom-of-dialog buttons.
 
+        this.contentElem.append(formElem);
         this.allInputs = [this.cityNameInput, this.mayorNameInput];
     }
 
@@ -2408,7 +2459,12 @@ class NewGameDialog extends GameDialog {
     }
 
     get isValid() {
-        return this.allInputs.every(input => input.isValid);
+        return this.allInputs.every(input => input.isValid)
+            || (this.difficulties.find(item => item.selected) != null);
+    }
+
+    get difficulty() {
+        return Game.difficultyOrDefaultForIndex(this.difficulties.findIndex(item => item.selected));
     }
 
     validateAndStart() {
@@ -2424,7 +2480,7 @@ class NewGameDialog extends GameDialog {
             name: this.cityNameInput.value.trim(),
             mayorName: this.mayorNameInput.value.trim(),
             terrain: terrain,
-            difficulty: Game.defaultDifficulty()
+            difficulty: this.difficulty
         });
         CitySim.game = new Game({
             city: city,

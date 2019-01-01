@@ -355,10 +355,14 @@ gameForm .invalid input {
     background-color: hsl(0, 50%, 85%);
 }
 
-gameForm label.textInput {
+gameForm label {
     display: block;
     font-size: 10pt;
 }
+
+gameForm label.textInput span:after { content: ":"; }
+gameForm label.textInput span { padding-right: 3pt; }
+gameForm label.singleChoiceInput span { padding-left: 3pt; }
 
 /* ~~~~~~ DIALOGS ~~~~~~ */
 
