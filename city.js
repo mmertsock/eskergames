@@ -1379,15 +1379,26 @@ class FormValueView {
 }
 
 class InputView extends FormValueView {
+    static trimTransform(value) {
+        return (typeof(value) === 'string') ? value.trim() : value;
+    }
+
+    static notEmptyOrWhitespaceRule(input) {
+        return !String.isEmptyOrWhitespace(input.value);
+    }
+
     constructor(config, elem) {
         super(config, elem);
         this.valueElem = this.elem.querySelector("input");
+        this.transform = config.transform;
         if (config.binding) {
             this.binding = new Binding({ source: config.binding.source, target: this, sourceFormatter: config.binding.sourceFormatter });
         }
     }
 
-    get value() { return this.valueElem.value; }
+    get value() {
+        return this.transform ? this.transform(this.valueElem.value) : this.valueElem.value;
+    }
     set value(newValue) { this.valueElem.value = newValue; }
 
     // for Bindings
@@ -1431,10 +1442,6 @@ class TextInputView extends InputView {
         return elem;
     }
 
-    static notEmptyOrWhitespaceRule(input) {
-        return !String.isEmptyOrWhitespace(input.value);
-    }
-
     constructor(config, elem) {
         super(config, elem || TextInputView.createElement(config));
         this.validationRules = config.validationRules || [];
@@ -1473,17 +1480,34 @@ class SingleChoiceInputView extends InputView {
 }
 
 class SingleChoiceInputCollection extends FormValueView {
-
-
-    get selectedIndex() {
-
+    static createElement(config) {
+        var elem = document.createElement("div").addRemClass("singleChoiceInput", true);
+        if (config.title) {
+            elem.append(document.createElement("span").configure(item => item.innerText = config.title));
+        }
+        return elem;
     }
-    set selectedIndex(index) {
 
+    constructor(config) {
+        super(config, SingleChoiceInputCollection.createElement(config));
+        this.id = config.id;
+        this.choices = config.choices.map(item => new SingleChoiceInputView({
+            parent: this.elem,
+            collection: this,
+            title: item.title,
+            value: item.value,
+            selected: item.selected
+        }));
     }
 
-    get value() { return null; }
-    set value(newValue) { }
+    get value() {
+        var choice = this.choices.find(item => item.selected);
+        return choice ? choice.value : null;
+    }
+    set value(newValue) {
+        var choice = this.choices.find(item => item.value == newValue);
+        choice.selected = true;
+    }
 }
 
 class ToolButton {
@@ -2420,25 +2444,27 @@ class NewGameDialog extends GameDialog {
             parent: formElem,
             title: Strings.str("citySettingsCityNameLabel"),
             placeholder: "",
-            validationRules: [TextInputView.notEmptyOrWhitespaceRule]
+            transform: InputView.trimTransform,
+            validationRules: [InputView.notEmptyOrWhitespaceRule]
         }).configure(input => input.value = Strings.randomCityName());
         this.mayorNameInput = new TextInputView({
             parent: formElem,
             title: Strings.str("citySettingsMayorNameLabel"),
             placeholder: "",
-            validationRules: [TextInputView.notEmptyOrWhitespaceRule]
+            transform: InputView.trimTransform,
+            validationRules: [InputView.notEmptyOrWhitespaceRule]
         }).configure(input => input.value = Strings.randomPersonName());
 
-        // TODO consider using the SingleSelectionList class with this.
-        // Strings.str("citySettingsDifficultyLabel")
-        var difficultyCollection = { id: "difficulty" };
-        this.difficulties = Game.rules().difficulties.map(difficulty => new SingleChoiceInputView({
+        this.difficulties = new SingleChoiceInputCollection({
+            id: "difficulty",
             parent: formElem,
-            collection: difficultyCollection,
-            title: Strings.template("difficultyChoiceLabelTemplate", Object.assign({formattedCash: Simoleon.format(difficulty.startingCash)}, difficulty)),
-            value: difficulty.index,
-            selected: !!difficulty.isDefault
-        }));
+            title: Strings.str("citySettingsDifficultyLabel"),
+            choices: Game.rules().difficulties.map(difficulty => { return {
+                title: Strings.template("difficultyChoiceLabelTemplate", Object.assign({formattedCash: Simoleon.format(difficulty.startingCash)}, difficulty)),
+                value: difficulty.index,
+                selected: !!difficulty.isDefault
+            }; })
+        });
 
         // TODO come up with a standard HTML/CSS format and a shared JS class for input forms within 
         // dialogs. A form is an element within a dialog, not a type of dialog, so that you can have 
@@ -2460,11 +2486,11 @@ class NewGameDialog extends GameDialog {
 
     get isValid() {
         return this.allInputs.every(input => input.isValid)
-            || (this.difficulties.find(item => item.selected) != null);
+            && this.difficulties.value !== null;
     }
 
     get difficulty() {
-        return Game.difficultyOrDefaultForIndex(this.difficulties.findIndex(item => item.selected));
+        return Game.difficultyOrDefaultForIndex(this.difficulties.value);
     }
 
     validateAndStart() {
@@ -2475,10 +2501,8 @@ class NewGameDialog extends GameDialog {
 
         var terrain = new Terrain(GameContent.shared.terrains[0]);
         var city = new City({
-            // TODO could have a transformer func used in TextInputView.value getter 
-            // to modify the raw input.value before returning, e.g. to always trim the value.
-            name: this.cityNameInput.value.trim(),
-            mayorName: this.mayorNameInput.value.trim(),
+            name: this.cityNameInput.value,
+            mayorName: this.mayorNameInput.value,
             terrain: terrain,
             difficulty: this.difficulty
         });
