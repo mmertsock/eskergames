@@ -36,6 +36,7 @@ section.hidden {
 /* center h/v container */
 body > div {
     display: flex;
+    flex-direction: column;
     position: fixed;
     top: 0;
     right: 0;
@@ -44,6 +45,7 @@ body > div {
     margin: 0;
     padding: 0;
     align-items: center;
+    justify-content: flex-end;
 }
 
 /* center h/v */
@@ -72,8 +74,12 @@ nav {
     margin: 12px;
     display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: space-around;
+}
+
+#mainMenu nav {
+    flex-wrap: wrap;
 }
 
 #root {
@@ -116,6 +122,9 @@ TODO heavier styling on the font
     padding: 8px;
 }
 
+nav a { font-family: monospace; }
+#mainMenu nav a { font-family: inherit; }
+
 a, a:link, a:visited, a:active, a:hover {
     display: block;
     width: 40%;
@@ -150,6 +159,30 @@ screw {
     box-shadow: 1px 1px 3px 1px hsl(0, 0%, 0%);
 }
 
+/*
+post {
+    display: flex;
+    flex-direction: column;
+    width: 36px;
+    height: 200px;
+    max-height: 20%;
+    align-items: stretch;
+    background: repeating-linear-gradient(90deg, hsl(22,39%,50%) 2px, hsl(19,35%,30%) 3px, hsl(24,37%,51%) 5px, hsl(24,43%,62%) 6px, hsl(23,47%,53%) 7px, hsl(23,40%,60%) 10px, hsl(23,46%,54%) 12px, hsl(20,46%,45%) 15px, hsl(8,28%,23%) 16px)
+}
+post div:nth-child(1) { flex-basis: 20%; }
+post div:nth-child(2) { flex-basis: 50%; }
+post div:nth-child(3) { flex-basis: 30%; }
+*/
+
+post {
+    display: block;
+    width: 36px;
+    height: 200px;
+    max-height: 20%;
+    box-shadow: inset 0px 5px 4px -5px hsl(0, 0%, 0%);
+    background: repeating-linear-gradient(90deg, hsl(22,39%,50%) 2px, hsl(19,35%,30%) 3px, hsl(24,37%,51%) 5px, hsl(24,43%,62%) 6px, hsl(23,47%,53%) 7px, hsl(23,40%,60%) 10px, hsl(23,46%,54%) 12px, hsl(20,46%,45%) 15px, hsl(8,28%,23%) 16px)
+}
+
 content {
     display: block;
     max-width: 20em;
@@ -172,6 +205,8 @@ table {
     border-collapse: collapse;
     border-spacing: 0;
     empty-cells: show;
+    background-color: hsl(0, 0%, 100%);
+    box-shadow: inset 0px 0px 3px hsl(0, 0%, 0%);
 }
 
 th, td {
@@ -181,8 +216,10 @@ th, td {
     border: 1px solid hsl(0, 0%, 50%);
 }
 
+tbody { cursor: pointer; }
+
 tbody tr:hover {
-    background-color: hsla(0, 0%, 100%, 0.2);
+    background-color: hsla(0, 0%, 0%, 0.1);
 }
 
 tr.invalid {
@@ -207,11 +244,64 @@ table .size {
 #gameInfo.valid .valid { display: block; }
 #gameInfo.valid .invalid { display: none; }
 
+section#background {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(0deg, hsl(112, 28%, 50%) 0%, hsl(212, 100%, 67%) 100%);
+}
+#background span {
+    display: block;
+    position: absolute;
+}
+#background span:nth-child(1) {
+    font-size: 240pt;
+    right: 20%;
+    top: 25%;
+}
+#background span:nth-child(2) {
+    font-size: 280pt;
+    right: 0;
+    top: 35%;
+}
+#background span:nth-child(3) {
+    font-size: 180pt;
+    right: 15%;
+    top: 0;
+}
+#background span:nth-child(4) {
+    font-size: 300pt;
+    left: 25%;
+    top: 30px;
+}
+#background span:nth-child(5) {
+    font-size: 480pt;
+    left: 10%;
+    margin: 0 auto;
+}
+#background span:nth-child(6) {
+    font-size: 360pt;
+    left: 10%;
+    bottom: -10%;
+}
+
 </style>
 
 </head>
 
 <body>
+
+<section id="background">
+    <span>🌲</span>
+    <span>🌳</span>
+    <span>🌞</span>
+    <span>☁️</span>
+    <span>🏔</span>
+    <span>🐄</span>
+</section>
 
 <div>
     <section id="root">
@@ -238,8 +328,10 @@ table .size {
                         </thead>
                         <tbody></tbody>
                     </table>
-                    <a class="showMainMenu" href="#">Cancel</a>
                 </content>
+                <nav>
+                    <a class="showMainMenu" href="#">Cancel</a>
+                </nav>
             </section>
             <section id="gameInfo" class="hidden">
                 <content>
@@ -250,23 +342,26 @@ table .size {
                     <p class="valid"><em>Population:</em> <span class="population"></span></p>
                     <p class="valid"><em>Cash:</em> <span class="cash"></span></p>
                     <!-- minimap -->
+                </content>
+                <nav>
                     <a class="open" href="#">Open</a>
                     <a class="delete" href="#">Delete</a>
                     <a class="showGameList" href="#">Go Back</a>
-                </content>
+                </nav>
             </section>
             <section id="noGamesToLoad" class="hidden">
                 <header><h1>CitySim</h1></header>
                 <content>
                     <p>There are no saved games.</p>
-                    <nav>
-                        <a class="showMainMenu" href="#">Cancel</a>
-                    </nav>
                 </content>
+                <nav>
+                    <a class="showMainMenu" href="#">Cancel</a>
+                </nav>
             </section>
             <screw></screw>
         </div>
     </section>
+    <post><!-- <div></div><div></div><div></div> --></post>
 </div>
 
 </body>

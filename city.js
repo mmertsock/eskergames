@@ -2413,6 +2413,8 @@ class GameDialog {
         header.append(document.createElement("h2").configure(elem => {
             elem.innerText = this.title;
         }));
+        // So that the h2 remains centered:
+        header.append(this.dismissButton.elem.cloneNode(true).addRemClass("hidden", true));
         this.root.append(header);
         this.root.append(this.contentElem);
         var nav = document.createElement("nav");
@@ -2548,6 +2550,28 @@ class LoadGameMenu {
         document.querySelector("#gameInfo .delete").addEventListener("click", evt => {
             evt.preventDefault();
             this._promptDeleteSelectedGame();
+        });
+
+        // change to "post div" to do the multiple-gradients-within-the-post effect
+        var stopper = i => `hsl(${i.h},${i.s}%,${i.l}%) ${i.x}px`
+        document.querySelectorAll("post").forEach(elem => {
+            var x = 0;
+            var stops = [];
+            var last = null;
+            while (stops.length < 12) {
+                x += Rng.shared.nextIntOpenRange(1, 4);
+                var next = {
+                    h: Rng.shared.nextIntOpenRange(19, 25),
+                    s: Rng.shared.nextIntOpenRange(25, 50),
+                    l: Rng.shared.nextIntOpenRange(20, 60),
+                    x: x
+                };
+                if (last) { last.x = x; stops.push(stopper(last)); }
+                stops.push(stopper(next));
+                // stops.push(`hsl(${h},${s}%,${l}%) ${x}px`);
+                last = next;
+            }
+            elem.style.background = `repeating-linear-gradient(90deg, ${stops.join(", ")})`;
         });
     }
 

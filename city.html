@@ -357,7 +357,17 @@ gameForm .invalid input {
 }
 
 gameForm label {
-    display: block;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+}
+
+gameForm label.textInput span { display: flex; }
+gameForm label.textInput input { display: flex; flex-grow: 1; }
+
+gameForm label, gameForm div.singleChoiceInput {
+    margin: 2pt 0;
 }
 
 gameForm label.textInput span:after { content: ":"; }
@@ -394,6 +404,7 @@ dialog {
     margin: 0;
     flex-direction: column;
     border: 1px solid hsl(0, 0%, 0%);
+    border-radius: 4px;
     background-color: hsl(0, 0%, 100%);
     box-shadow: 0px 0px 20px hsla(0, 0%, 0%, 0.5);
 }
@@ -404,6 +415,7 @@ dialog header {
     margin: 0 0 8px 0;
     padding: 2px 4px;
     background-color: hsl(0, 0%, 75%);
+    border-radius: 4px 4px 0 0;
 }
 
 dialog header a {
@@ -434,7 +446,18 @@ dialog nav {
     margin: 8px 0 0 0;
     padding: 2px 4px;
     background-color: hsl(0, 0%, 75%);
+    border-radius: 0 0 3px 3px;
 }
+
+dialog nav a:hover, dialog header a:hover {
+    outline: 1px outset hsl(0, 0%, 50%);
+}
+
+dialog header a.tool, dialog nav a.tool { padding: 2px 4px; }
+dialog header a.tool span { font-size: 7pt; }
+/* so header > h2 remains centered */
+dialog header a.tool.hidden { display: flex; visibility: hidden; }
+
 
 /* ~~~~~~ TEMPORARY ~~~~~~ */
 
