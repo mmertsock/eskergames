@@ -244,6 +244,8 @@ table .size {
 #gameInfo.valid .valid { display: block; }
 #gameInfo.valid .invalid { display: none; }
 
+.focusable { transition: filter 0.5s; }
+
 section#background {
     display: block;
     position: fixed;
@@ -294,7 +296,7 @@ section#background {
 
 <body>
 
-<section id="background">
+<section id="background" class="focusable">
     <span>🌲</span>
     <span>🌳</span>
     <span>🌞</span>
@@ -304,8 +306,8 @@ section#background {
 </section>
 
 <div>
-    <section id="root">
-        <div>
+    <section id="root" class="parallax">
+        <div class="focusable">
             <screw></screw>
             <section id="mainMenu">
                 <header><h1>CitySim</h1></header>
@@ -313,7 +315,8 @@ section#background {
                     <a class="showGameList" href="city.html">Load Game</a>
                     <a id="newGame" class="odd" href="city.html?new=1">Start New Game</a>
                     <a id="painter" href="painter.html">Painter</a>
-                    <a id="unitTests" class="odd" href="tests.html">Unit Tests</a>
+                    <!-- a id="unitTests" class="odd" href="tests.html">Unit Tests</a -->
+                    <a id="terrain" class="odd" href="terrain.html">Terrains</a>
                 </nav>
             </section>
             <section id="loadGameMenu" class="hidden">
@@ -361,7 +364,7 @@ section#background {
             <screw></screw>
         </div>
     </section>
-    <post><!-- <div></div><div></div><div></div> --></post>
+    <post class="focusable parallax"><!-- <div></div><div></div><div></div> --></post>
 </div>
 
 </body>

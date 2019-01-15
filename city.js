@@ -2573,6 +2573,8 @@ class LoadGameMenu {
             }
             elem.style.background = `repeating-linear-gradient(90deg, ${stops.join(", ")})`;
         });
+
+        this._setUpFocusBlur();
     }
 
     get storage() {
@@ -2658,6 +2660,50 @@ class LoadGameMenu {
             return `${(size / 1024).toFixed(2)} KB`;
         }
         return Number.uiInteger(size);
+    }
+
+    _setUpFocusBlur() {
+        var containerElem = document.querySelector("body > div");
+        this.focusElems = {
+            backgrounds: [document.querySelector("#background")],
+            foregrounds: [document.querySelector("post"), document.querySelector("#root > div")],
+            all: Array.from(document.querySelectorAll(".focusable")),
+        };
+        this.parallax = {
+            width: containerElem.clientWidth,
+            height: containerElem.clientHeight,
+            magnitude: 5,
+            elems: Array.from(document.querySelectorAll(".parallax"))
+        };
+        this.focusElems.backgrounds.forEach(elem => { elem.dataset["focusgroup"] = "bg"; });
+        this.focusElems.foregrounds.forEach(elem => { elem.dataset["focusgroup"] = "fg"; });
+        this.focusElems.foregrounds.forEach(elem => {
+            var blur = "blur(1px)";
+            var nothing = "blur(0px)";
+            elem.addEventListener("mouseleave", evt => {
+                this.focusElems.all.forEach(item => {
+                    item.style.filter = (item.dataset["focusgroup"] == "fg") ? blur : nothing;
+                });
+            });
+            elem.addEventListener("mouseenter", evt => {
+                this.focusElems.all.forEach(item => {
+                    item.style.filter = (item.dataset["focusgroup"] == "fg") ? nothing : blur;
+                });
+            });
+        });
+        if (this.parallax.width > 1 && this.parallax.height > 1) {
+            document.addEventListener("mousemove", evt => {
+                var x = 1 - (evt.clientX / (0.5 * this.parallax.width));
+                var y = (this.parallax.height - evt.clientY) / this.parallax.height;
+                this._setParallax(x, y);
+            });
+        }
+    }
+
+    _setParallax(x, y) {
+        this.parallax.elems.forEach(elem => {
+            elem.style.transform = `translate(${x * this.parallax.magnitude}px, ${y * this.parallax.magnitude}px)`;
+        });
     }
 }
 
