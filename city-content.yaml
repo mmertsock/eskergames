@@ -298,6 +298,19 @@ scripts:
 
 ################## TERRAIN ################
 
+terrain:
+  sizes:
+    - name: Small
+      width: 64
+      height: 64
+    - name: Medium
+      isDefault: true
+      width: 128
+      height: 128
+    - name: Large
+      width: 256
+      height: 256
+
 terrains:
 - id: _default
   size:

@@ -362,6 +362,10 @@ class Terrain {
         } });
     }
 
+    static settings() { return GameContent.shared.terrain; }
+    static sizeOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Terrain.settings().sizes, index); }
+    static defaultSize() { return GameContent.defaultItemFromArray(Terrain.settings().sizes); }
+
     constructor(config) {
         if (config.dz) {
             this.size = config.dz.size;
@@ -375,6 +379,10 @@ class Terrain {
         return {
             size: this.size
         }
+    }
+
+    get debugDescription() {
+        return `<Terrain bounds:${this.bounds.debugDescription()}>`;
     }
 }
 
@@ -1922,6 +1930,10 @@ class NewsView {
 }
 
 class MapRenderer {
+    static defaultZoomLevel() {
+        return GameContent.defaultItemFromArray(GameContent.shared.mainMapView.zoomLevels);
+    }
+
     constructor(config) {
         this.canvas = config.canvas;
         var zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
@@ -2778,6 +2790,7 @@ return {
     ScriptPainter: ScriptPainter,
     ScriptPainterCollection: ScriptPainterCollection,
     ScriptPainterStore: ScriptPainterStore,
+    TerrainRenderer: TerrainRenderer,
     ToolButton: ToolButton
 };
 

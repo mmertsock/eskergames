@@ -93,6 +93,9 @@ class GameContent {
         if (content.mainMapView) {
             GameContent.addIndexToItemsInArray(content.mainMapView.zoomLevels);
         }
+        if (content.terrain) {
+            GameContent.addIndexToItemsInArray(content.terrain.sizes);
+        }
         return content;
     }
 

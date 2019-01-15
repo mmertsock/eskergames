@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>CitySim Terrain Editor</title>
+    <link rel="icon" href="city-icon-192.png">
+    <link rel="apple-touch-icon" href="city-icon-180.png">
+    <script>
+        window.doNotInitializeGame = true;
+        window.prepareLoadGamePrompt = false;
+    </script>
+    <script defer src="js-yaml.min.js"></script>
+    <script defer src="g.js"></script>
+    <script defer src="city-content.js"></script>
+    <script defer src="city.js"></script>
+    <script defer src="terrain.js"></script>
+    <link rel="stylesheet" href="city.css">
+
+<style type="text/css">
+</style>
+
+</head>
+
+<body>
+
+<main>
+    <div>
+        <map><canvas class="mainMap"></canvas></map>
+    </div>
+    <controls>
+        <row>
+            <block id="global-controls"></block>
+            <block id="macro-controls"></block>
+            <block id="micro-controls"></block>
+        </row>
+    </controls>
+</main>
+<!--
+TODO
+global controls:
+label: current filename
+replace current canvas with a new random terrain using various styles (island, river, ocean, blank)
+import/export via JSON or bitmap
+
+macro controls:
+plop a river
+select an edge to define as ocean
+spraypaint forests
+
+micro controls:
+paint trees on single tiles
+toggle land/water on single tiles
+-->
+
+<prompt class="hidden">
+    <panel>
+        <h1>(prompt title)</h1>
+        <p>(prompt message)</p>
+        <div>(custom content)</div>
+        <buttons class="promptButtons"></buttons>
+    </panel>
+</prompt>
+
+</body>
+
+</html>
