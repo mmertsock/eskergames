@@ -2672,8 +2672,13 @@ class LoadGameMenu {
         this.parallax = {
             width: containerElem.clientWidth,
             height: containerElem.clientHeight,
-            magnitude: 5,
-            elems: Array.from(document.querySelectorAll(".parallax"))
+            magnitude: [3, 9, 15, 25],
+            elems: [
+                Array.from(document.querySelectorAll(".parallax")),
+                Array.from(document.querySelectorAll("#background .min")),
+                Array.from(document.querySelectorAll("#background .middle")),
+                Array.from(document.querySelectorAll("#background .max"))
+            ]
         };
         this.focusElems.backgrounds.forEach(elem => { elem.dataset["focusgroup"] = "bg"; });
         this.focusElems.foregrounds.forEach(elem => { elem.dataset["focusgroup"] = "fg"; });
@@ -2695,14 +2700,15 @@ class LoadGameMenu {
             document.addEventListener("mousemove", evt => {
                 var x = 1 - (evt.clientX / (0.5 * this.parallax.width));
                 var y = (this.parallax.height - evt.clientY) / this.parallax.height;
-                this._setParallax(x, y);
+                this._setParallax(x * Math.abs(x), y * Math.abs(y));
             });
         }
     }
 
     _setParallax(x, y) {
-        this.parallax.elems.forEach(elem => {
-            elem.style.transform = `translate(${x * this.parallax.magnitude}px, ${y * this.parallax.magnitude}px)`;
+        this.parallax.elems.forEach((items, index) => {
+            var transform = `translate(${x * this.parallax.magnitude[index]}px, ${y * this.parallax.magnitude[index]}px)`;
+            items.forEach(item => { item.style.transform = transform; });
         });
     }
 }
