@@ -2777,7 +2777,8 @@ return {
     LoadGameMenu: LoadGameMenu,
     ScriptPainter: ScriptPainter,
     ScriptPainterCollection: ScriptPainterCollection,
-    ScriptPainterStore: ScriptPainterStore
+    ScriptPainterStore: ScriptPainterStore,
+    ToolButton: ToolButton
 };
 
 })(); // end CitySim namespace

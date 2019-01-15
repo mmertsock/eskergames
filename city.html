@@ -9,101 +9,8 @@
     <script defer src="g.js"></script>
     <script defer src="city-content.js"></script>
     <script defer src="city.js"></script>
+    <link rel="stylesheet" href="city.css">
     <style type="text/css">
-/* ~~~~~~ GLOBALS ~~~~~~ */
-/* (defaults. non-structural colors, fonts, etc.) */
-
-body {
-    /* retro-futuristic font */
-    font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
-    font-weight: 300;
-    color: hsl(0, 0%, 0%);
-    background-color: hsl(0, 0%, 100%);
-}
-
-.hidden {
-    display: none;
-}
-
-/* ~~~~~~ STRUCTURE ~~~~~~ */
-/* (layout only) */
-
-body {
-    margin: 0;
-    padding: 0;
-}
-
-main {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-    display: flex;
-    flex-direction: column;
-}
-
-main > div {
-    display: flex;
-    flex-direction: row;
-}
-
-palette {
-    display: block;
-    flex-grow: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-}
-
-map {
-    display: block;
-    flex-grow: 1;
-}
-
-canvas {
-    display: block;
-}
-
-canvas.mainMap {
-    width: 100%;
-    height: 100%;
-    cursor: crosshair;
-}
-
-minimaps {
-    /* float on right side of map, bottom aligned so it's near the control panel */
-    float: right;
-    max-width: 25%;
-    width: 200px;
-}
-
-minimaps canvas {
-    width: 100%;
-    min-height: 100px;
-    max-height: 30%;
-    margin: 0 0 6px 0;
-    /* TODO bottom-align. Hide any that won't fit in the vertical space allotted. */
-}
-
-controls {
-    display: flex;
-    flex-direction: column;
-}
-
-controls > div {
-    display: flex;
-    flex-direction: row;
-}
-
-block {
-    display: block;
-    padding: 2px;
-}
-
-block.container {
-    padding: 0px;
-}
 
 block#info {
     /* left side */
@@ -227,240 +134,6 @@ block#system {
     color: hsl(0, 0%, 15%);
 }
 
-a.tool {
-    display: flex;
-}
-a.tool span {
-    display: block;
-    margin: auto;
-}
-
-/* ~~~~~~ STYLE ~~~~~~ */
-/* (non structural. style for specific elements.) */
-
-palette {
-    background-color: hsl(0, 0%, 75%);
-}
-
-controls {
-    background-color: hsl(0, 0%, 75%);
-}
-
-label.textLine {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-}
-label.textLine input {
-    order: 1;
-    background-color: transparent;
-    border: none;
-    text-align: center;
-    font-size: 10pt;
-    font-weight: 500;
-}
-label.textLine span {
-    order: 2;
-    font-size: 8pt;
-    font-weight: 300;
-    text-align: center;
-}
-label.textLine.minor input {
-    font-size: 8pt;
-    font-weight: 300;
-}
-
-a.tool:link, a.tool:visited, a.tool:active, a.tool:hover {
-    color: hsl(0, 0%, 0%);
-    text-decoration: none;
-    text-align: center;
-    text-transform: uppercase;
-    font-size: 10pt;
-    font-weight: 500;
-}
-
-a.tool.selected {
-    background-color: hsl(120, 50%, 75%);
-}
-
-a.tool.selected.stop-indication {
-    background-color: hsl(0, 50%, 75%);
-}
-
-/* ~~~~~~ PROMPTS ~~~~~~ */
-
-prompt {
-    display: flex;
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    margin: 0;
-    padding: 0;
-    align-items: center;
-    font-size: 80%;
-    background-color: hsla(0, 0%, 0%, 0.3);
-}
-prompt panel {
-    display: block;
-    width: 30em;
-    max-width: 90%;
-    margin: 0 auto;
-    padding: 0.5em;
-    border-radius: 0.5em;
-    border: 1px solid hsl(0, 0%, 50%);
-    background-color: hsl(0, 0%, 100%);
-}
-h1 {
-    margin: 0.75em;
-    padding: 0;
-    text-align: center;
-    font-size: 120%;
-    font-weight: bolder;
-}
-prompt p, prompt div {
-    margin: 0.5em;
-    padding: 0;
-}
-
-buttons.promptButtons :first-child {
-    font-weight: bolder;
-}
-.unprioritized buttons.promptButtons {
-    text-align: center;
-}
-.unprioritized buttons.promptButtons :first-child {
-    font-weight: inherit;
-}
-buttons.promptButtons {
-    text-align: right;
-}
-buttons.promptButtons a {
-    margin-left: 0.5em;
-    margin-right: 0;
-}
-.unprioritized buttons.promptButtons a {
-    margin-left: 0.5em;
-    margin-right: 0.5em;
-}
-
-/* ~~~~~~ FORMS ~~~~~~ */
-
-gameForm {
-    display: block;
-    margin: 0;
-    padding: 0;
-    font-size: 10pt;
-}
-
-gameForm .invalid input {
-    background-color: hsl(0, 50%, 85%);
-}
-
-gameForm label {
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-    align-items: baseline;
-}
-
-gameForm label.textInput span { display: flex; }
-gameForm label.textInput input { display: flex; flex-grow: 1; }
-
-gameForm label, gameForm div.singleChoiceInput {
-    margin: 2pt 0;
-}
-
-gameForm label.textInput span:after { content: ":"; }
-gameForm label.textInput span { padding-right: 3pt; }
-gameForm label.singleChoiceInput span { padding-left: 3pt; }
-
-gameForm div.singleChoiceInput > span { display: block; }
-gameForm div.singleChoiceInput > span:after { content: ":"; }
-
-/* ~~~~~~ DIALOGS ~~~~~~ */
-
-templates { display: none; }
-
-#dialogs {
-    display: flex;
-    position: fixed;
-    align-items: center;
-    justify-content: center;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-}
-#dialogs.hidden {
-    display: none;
-}
-#dialogs.hasModal {
-    background-color: hsla(0, 0%, 0%, 0.3);
-}
-
-dialog {
-    display: flex;
-    position: fixed;
-    margin: 0;
-    flex-direction: column;
-    border: 1px solid hsl(0, 0%, 0%);
-    border-radius: 4px;
-    background-color: hsl(0, 0%, 100%);
-    box-shadow: 0px 0px 20px hsla(0, 0%, 0%, 0.5);
-}
-
-dialog header {
-    display: flex;
-    flex-direction: row;
-    margin: 0 0 8px 0;
-    padding: 2px 4px;
-    background-color: hsl(0, 0%, 75%);
-    border-radius: 4px 4px 0 0;
-}
-
-dialog header a {
-    display: block;
-    flex-grow: 0;
-}
-
-dialog header h2 {
-    flex-grow: 1;
-    margin: 0;
-    padding: 0;
-    font-size: 12pt;
-    font-weight: 500;
-    text-transform: uppercase;
-    text-align: center;
-}
-
-dialog content {
-    display: block;
-    margin: 0 8px;
-    padding: 0;
-}
-
-dialog nav {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-end;
-    margin: 8px 0 0 0;
-    padding: 2px 4px;
-    background-color: hsl(0, 0%, 75%);
-    border-radius: 0 0 3px 3px;
-}
-
-dialog nav a:hover, dialog header a:hover {
-    outline: 1px outset hsl(0, 0%, 50%);
-}
-
-dialog header a.tool, dialog nav a.tool { padding: 2px 4px; }
-dialog header a.tool span { font-size: 7pt; }
-/* so header > h2 remains centered */
-dialog header a.tool.hidden { display: flex; visibility: hidden; }
-
-
 /* ~~~~~~ TEMPORARY ~~~~~~ */
 
 block#tools {
@@ -479,7 +152,7 @@ block#tools {
         </map>
     </div>
     <controls>
-        <div>
+        <row>
             <block id="info" class="container">
                 <block id="cityStatus"></block>
                 <block id="rci"><canvas></canvas></block>
@@ -500,11 +173,11 @@ block#tools {
                     <zoom></zoom>
                 </nav>
             </block>
-        </div>
-        <div>
+        </row>
+        <row>
             <block id="news"><article></article><div></div></block>
             <block id="system"></block>
-        </div>
+        </row>
     </controls>
     <help class="hidden">
         <ul>
@@ -523,17 +196,6 @@ block#tools {
 </main>
 
 <div id="dialogs" class="hidden"></div>
-
-<templates>
-    <dialog id="newGame">
-        <content>
-            <label><input></label>
-            City name: ___<br>
-            Mayor name: ___<br>
-            Difficulty: ___
-        </content>
-    </dialog>
-</templates>
 
 <prompt class="hidden">
     <panel>
