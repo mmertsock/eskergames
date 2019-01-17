@@ -3,6 +3,7 @@
 window.UnitTests = (function(outputElement) {
 
 var Binding = Gaming.Binding;
+var BoolArray = Gaming.BoolArray;
 var CircularArray = Gaming.CircularArray;
 var Dispatch = Gaming.Dispatch;
 var DispatchTarget = Gaming.DispatchTarget;
@@ -335,6 +336,50 @@ var manhattanDistanceFromTest = function() {
         this.assertEqual(result.dx, -8);
         this.assertEqual(result.dy, 2);
         this.assertEqual(result.magnitude, 8);
+    }).build()();
+}
+
+var boolArrayTest = function() {
+    new UnitTest("BoolArray", function() {
+        var sut = new BoolArray(0);
+        this.assertEqual(sut.length, 0, "length");
+
+        sut = new BoolArray(1);
+        this.assertEqual(sut.length, 1, "length");
+        this.assertFalse(sut.getValue(0), "0 unset");
+        sut.setValue(0, true);
+        this.assertTrue(sut.getValue(0), "0 set");
+        sut.setValue(0, false);
+        this.assertFalse(sut.getValue(0), "0 clear");
+
+        sut = new BoolArray(11);
+        this.assertEqual(sut.length, 11, "length");
+        this.assertFalse(sut.getValue(3), "3 unset");
+        sut.setValue(3, true);
+        this.assertTrue(sut.getValue(3), "3 set");
+        this.assertFalse(sut.getValue(7), "7 unset");
+        sut.setValue(7, true);
+        this.assertTrue(sut.getValue(7), "7 set");
+        sut.setValue(7, false);
+        this.assertFalse(sut.getValue(7), "7 clear");
+        sut.setValue(8, true);
+        this.assertTrue(sut.getValue(8));
+        for (var i = 0; i < 11; i += 1) {
+            sut.setValue(i, true);
+            this.assertTrue(sut.getValue(i), `${i} set (loop)`);
+        }
+        for (var i = 0; i < 11; i += 1) {
+            sut.setValue(i, false);
+            this.assertFalse(sut.getValue(i), `${i} clear (loop)`);
+        }
+        for (var i = 0; i < 11; i += 1) {
+            sut.setValue(i, Rng.shared.nextUnitFloat() > 0.5);
+        }
+        sut.setValue(2, true); sut.setValue(5, false); sut.setValue(6, true);
+        debugDump(sut.debugDescription);
+        this.assertTrue(sut.getValue(2), "2 after randomize");
+        this.assertFalse(sut.getValue(5), "5 after randomize");
+        this.assertTrue(sut.getValue(6), "6 after randomize");
     }).build()();
 }
 
@@ -1192,7 +1237,7 @@ TestSession.current = new TestSession([
     simDateTest,
     gameMapTest
 ]);
-TestSession.current = new TestSession([undoStackTest]);
+TestSession.current = new TestSession([boolArrayTest]);
 
 return TestSession.current;
 

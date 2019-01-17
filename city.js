@@ -2084,13 +2084,13 @@ class TerrainRenderer {
             for (var y = 0; y < tiles.length; y += 1) {
                 for (var x = 0; x < tiles[y].length; x += 1) {
                     var tile = tiles[y][x];
-                    if (tile == "O") {
+                    var color = null;
+                    if (tile == "O") { color = "hsl(200, 100%, 29%)"; }
+                    else if (tile == "R") { color = "hsl(215, 100%, 42%)"; }
+                    else if (tile == "F") { color = "hsl(112, 100%, 23%)"; }
+                    if (color) {
                         var rect = this.canvasGrid.rectForTile(new Point(x, y));
-                        ctx.fillStyle = "hsl(200, 100%, 29%)";
-                        ctx.rectFill(rect);
-                    } else if (tile == "R") {
-                        var rect = this.canvasGrid.rectForTile(new Point(x, y));
-                        ctx.fillStyle = "hsl(215, 100%, 42%)";
+                        ctx.fillStyle = color;
                         ctx.rectFill(rect);
                     }
                 }

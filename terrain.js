@@ -1,5 +1,14 @@
 "use-strict";
 
+/*
+TODOs
+- Think about tile coordinates. Bottom left = (0,0) may be more sane for stuff like directions, edges, etc., and also it makes more sense to the end user
+- River generator
+- Figure out actual model representation for terrain features in GameMaps
+- Replace hacked TerrainRenderer with Painters for terrain features
+*/
+
+
 window.CitySimTerrain = (function() {
 
 var debugLog = Gaming.debugLog;
@@ -8,6 +17,7 @@ var once = Gaming.once;
 var deserializeAssert = Gaming.deserializeAssert;
 var directions = Gaming.directions;
 var Binding = Gaming.Binding;
+var BoolArray = Gaming.BoolArray;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var Kvo = Gaming.Kvo;
 var PerfTimer = Gaming.PerfTimer;
@@ -90,6 +100,46 @@ MapEdge.E = new MapEdge(directions.E);
 MapEdge.S = new MapEdge(directions.S);
 MapEdge.W = new MapEdge(directions.W);
 
+class RandomBlobGenerator {
+    constructor(config) {
+        this.size = config.size;
+        this.roughness = config.roughness;
+        this.variance = config.variance; // % of diameter
+    }
+    nextBlob() {
+        var values = [];
+        // make a solid block of True, then && a random column and && a random row
+        for (var y = 0; y < this.size.height; y += 1) {
+            values.push(new BoolArray(this.size.width).fill(true));
+        }
+        var generators = [
+            new RandomLineGenerator({ min: 0, max: this.variance * this.size.width, roughness: this.roughness }),
+            new RandomLineGenerator({ min: (1 - this.variance) * this.size.width, max: this.size.width, roughness: this.roughness })
+        ];
+        for (var y = 0; y < this.size.height; y += 1) {
+            var min = Math.round(generators[0].nextValue());
+            var max = Math.round(generators[1].nextValue());
+            for (var x = 0; x < this.size.width; x += 1) {
+                var keep = x >= min && x <= max;
+                values[y].setValue(x, keep && values[y].getValue(x));
+            }
+        }
+        var generators = [
+            new RandomLineGenerator({ min: 0, max: this.variance * this.size.height, roughness: this.roughness }),
+            new RandomLineGenerator({ min: (1 - this.variance) * this.size.height, max: this.size.height, roughness: this.roughness })
+        ];
+        for (var x = 0; x < this.size.width; x += 1) {
+            var min = Math.round(generators[0].nextValue());
+            var max = Math.round(generators[1].nextValue());
+            for (var y = 0; y < this.size.height; y += 1) {
+                var keep = y >= min && y <= max;
+                values[y].setValue(x, keep && values[y].getValue(x));
+            }
+        }
+        return values;
+    }
+}
+
 class TileGenerator {
     generateInto(tiles, generator) { }
     get debugDescription() { return `<${this.constructor.name}>`; }
@@ -104,6 +154,24 @@ class TileGenerator {
 }
 
 class OceanTileGenerator extends TileGenerator {
+
+    static defaultForEdge(edge, size) {
+        var settings = Terrain.settings().oceanGenerator;
+        if (edge.edge == directions.N || edge.edge == directions.S) {
+            var shoreDistance = size.height * settings.shoreDistanceFraction[size.index];
+        } else {
+            var shoreDistance = size.width * settings.shoreDistanceFraction[size.index];
+        }
+        var variance = settings.shoreDistanceVariance[size.index];
+        var roughness = settings.roughness[size.index];
+        return new OceanTileGenerator({
+            edge: edge,
+            averageShoreDistanceFromEdge: shoreDistance,
+            variance: shoreDistance * variance,
+            roughness: roughness
+        });
+    }
+
     constructor(config) {
         super();
         this.edge = config.edge; // MapEdge
@@ -156,28 +224,183 @@ class RiverTileGenerator extends TileGenerator {
     }
 }
 
+class BlobFillTileGenerator extends TileGenerator {
+    static defaultConfig(settings, size) {
+        return {
+            coverageRatio: settings.coverageRatio[size.index],
+            maxCount: settings.maxCount[size.index],
+            minDiameter: settings.minDiameter[size.index],
+            maxDiameter: settings.maxDiameter[size.index],
+            roughness: { min: settings.roughness[0], max: settings.roughness[1] },
+            variance: settings.variance[size.index]
+        };
+    }
+
+    constructor(config) {
+        super();
+        this.coverageRatio = config.coverageRatio;
+        this.maxCount = config.maxCount;
+        this.minDiameter = config.minDiameter;
+        this.maxDiameter = config.maxDiameter;
+        this.roughness = config.roughness;
+        this.variance = config.variance;
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} %${this.coverageRatio}>`;
+    }
+
+    generateInto(tiles, generator) {
+        var generations = 0;
+        while (this.currentCoverageRatio(tiles) < this.coverageRatio && generations < this.maxCount) {
+            var config = {
+                size: {
+                    width: Rng.shared.nextIntOpenRange(this.minDiameter, this.maxDiameter),
+                    height: Rng.shared.nextIntOpenRange(this.minDiameter, this.maxDiameter)
+                },
+                roughness: Rng.shared.nextFloatOpenRange(this.roughness.min, this.roughness.max),
+                variance: this.variance, //Rng.shared.nextFloatOpenRange(this.variance.min, this.variance.max)
+            };
+            this.makeBlobGenerator(config).generateInto(tiles, generator);
+            generations += 1;
+        }
+        debugLog(`${this.constructor.name}: produced ${generations} generations filling ${(this.currentCoverageRatio(tiles) * 100).toFixed(2)}%.`);
+    }
+
+    // subclass must implment
+    currentCoverageRatio(tiles) { return 1; }
+
+    // subclass must implement
+    makeBlobGenerator(config) { return undefined; }
+}
+
+class ForestTileGenerator extends BlobFillTileGenerator {
+    static defaultGenerator(size) {
+        return new ForestTileGenerator(BlobFillTileGenerator.defaultConfig(Terrain.settings().forestFiller, size));
+    }
+
+    currentCoverageRatio(tiles) {
+        var treeCount = 0;
+        var landCount = 0;
+        tiles.forEach(row => {
+            row.forEach(tile => {
+                if (tile == "F") { treeCount += 1; }
+                if (!TerrainGenerator.isWater(tile)) { landCount += 1; }
+            });
+        });
+        return (landCount > 0) ? (treeCount / landCount) : 1;
+    }
+
+    makeBlobGenerator(config) { return new WoodsTileGenerator(config); }
+}
+
+class FreshWaterTileGenerator extends BlobFillTileGenerator {
+    static defaultGenerator(size) {
+        return new FreshWaterTileGenerator(BlobFillTileGenerator.defaultConfig(Terrain.settings().freshWaterFiller, size));
+    }
+
+    currentCoverageRatio(tiles) {
+        var freshCount = 0;
+        var landCount = 0;
+        tiles.forEach(row => {
+            row.forEach(tile => {
+                if (tile == "R") { freshCount += 1; }
+                if (tile != "O") { landCount += 1; }
+            });
+        });
+        return (landCount > 0) ? (freshCount / landCount) : 1;
+    }
+
+    makeBlobGenerator(config) { return new LakeTileGenerator(config); }
+}
+
+class BlobTileGenerator extends TileGenerator {
+    constructor(config) {
+        super();
+        this.value = config.value; // tile value
+        this.size = config.size; // in tiles
+        this.roughness = config.roughness;
+        this.variance = config.variance;
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} ${this.size.width}x${this.size.height} =${this.value}>`;
+    }
+
+    shouldFill(point, tiles, generator) {
+        return true;
+    }
+
+    generateInto(tiles, generator) {
+        var center = new Point(Rng.shared.nextIntOpenRange(0, generator.bounds.width), Rng.shared.nextIntOpenRange(0, generator.bounds.height));
+        var origin = center.adding(this.size.width * 0.5, this.size.height * 0.5).integral();
+        var blob = new RandomBlobGenerator({ size: this.size, roughness: this.roughness, variance: this.variance }).nextBlob();
+        var values = [];
+        // debugLog(blob.map(item => item.debugDescription).join("\n"));
+        for (var y = 0; y < blob.length; y += 1) {
+            var row = blob[y];
+            for (var x = 0; x < row.length; x += 1) {
+                var point = origin.adding(x, y);
+                if (generator.bounds.containsTile(point)
+                    && row.getValue(x)
+                    && this.shouldFill(point, tiles, generator)) {
+                    values.push(point);
+                }
+            }
+        }
+        this.fill(tiles, this.value, values, generator);
+    }
+}
+
+class LakeTileGenerator extends BlobTileGenerator {
+    constructor(config) {
+        super(Object.assign({value: "R"}, config));
+    }
+
+    shouldFill(point, tiles, generator) {
+        return !TerrainGenerator.isWater(tiles[point.y][point.x]);
+    }
+}
+
+class WoodsTileGenerator extends BlobTileGenerator {
+    constructor(config) {
+        super(Object.assign({value: "F"}, config));
+    }
+
+    shouldFill(point, tiles, generator) {
+        return !TerrainGenerator.isWater(tiles[point.y][point.x]);
+    }
+}
+
 class TerrainGenerator {
+    static isWater(tile) {
+        return tile == "R" || tile == "O";
+    }
+
     constructor(config) {
         this.map = new GameMap({
             size: config.size
         });
-        var settings = Terrain.settings().oceanGenerator;
-        var shoreDistanceW = this.size.width * settings.shoreDistanceFraction[config.size.index];
-        var shoreDistanceH = this.size.height * settings.shoreDistanceFraction[config.size.index];
-        var variance = settings.shoreDistanceVariance[config.size.index];
-        var roughness = settings.roughness[config.size.index];
-        this.builders = [
-            new RiverTileGenerator({
-                sourceTile: new Point(32, 32),
-                mouthCenterTile: new Point(16, 0),
+
+        this.builders = [];
+        if (config.template == "river") {
+            this.builders.push(new RiverTileGenerator({
+                sourceTile: new Point(this.size.width * 0.5, this.size.height * 0.5).integral(),
+                mouthCenterTile: new Point(this.size.width * 0.25, 0).integral(),
                 mouthWidth: 1,
                 snakiness: 0
-            }),
-            new OceanTileGenerator({ edge: MapEdge.N, averageShoreDistanceFromEdge: shoreDistanceH, variance: shoreDistanceH * variance, roughness: roughness }),
-            new OceanTileGenerator({ edge: MapEdge.E, averageShoreDistanceFromEdge: shoreDistanceW, variance: shoreDistanceW * variance, roughness: roughness }),
-            new OceanTileGenerator({ edge: MapEdge.S, averageShoreDistanceFromEdge: shoreDistanceH, variance: shoreDistanceH * variance, roughness: roughness }),
-            new OceanTileGenerator({ edge: MapEdge.W, averageShoreDistanceFromEdge: shoreDistanceW, variance: shoreDistanceW * variance, roughness: roughness })
-        ];
+            }));
+        }
+        if (config.template == "island") {
+            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.N, config.size));
+            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.E, config.size));
+            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.S, config.size));
+            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.W, config.size));
+        }
+        if (config.template != "blank") {
+            this.builders.push(ForestTileGenerator.defaultGenerator(config.size));
+            this.builders.push(FreshWaterTileGenerator.defaultGenerator(config.size));
+        }
     }
 
     get size() { return this.map.size; }
@@ -363,6 +586,18 @@ class NewTerrainDialog extends GameDialog {
                 selected: !!size.isDefault
             }; })
         });
+        this.templates = new SingleChoiceInputCollection({
+            id: "template",
+            parent: formElem,
+            title: Strings.str("terrainSettingsTemplateLabel"),
+            choices: [
+                { title: Strings.str("terrainSettingsBlankTemplateLabel"), value: "blank", selected: false },
+                { title: Strings.str("terrainSettingsLandlockedTemplateLabel"), value: "landlocked", selected: false },
+                { title: Strings.str("terrainSettingsRiverTemplateLabel"), value: "river", selected: true },
+                { title: Strings.str("terrainSettingsIslandTemplateLabel"), value: "island", selected: false }
+            ]
+        });
+
         this.contentElem.append(formElem);
         this.allInputs = [this.nameInput];
     }
@@ -373,7 +608,8 @@ class NewTerrainDialog extends GameDialog {
 
     get isValid() {
         return this.allInputs.every(input => input.isValid)
-            && this.sizes.value !== null;
+            && this.sizes.value !== null
+            && this.templates.value !== null;
     }
 
     get selectedSize() { return Terrain.sizeOrDefaultForIndex(this.sizes.value); }
@@ -382,7 +618,8 @@ class NewTerrainDialog extends GameDialog {
         if (!this.isValid) { debugLog("NOT VALID"); return; }
 
         var generator = new TerrainGenerator({
-            size: this.selectedSize
+            size: this.selectedSize,
+            template: this.templates.value
         });
         var map = generator.generateMap();
         if (this.session) {
@@ -400,7 +637,7 @@ class NewTerrainDialog extends GameDialog {
     }
 
     dismissButtonClicked() {
-        Terrain.quit(false);
+        EditSession.quit(!!this.session);
     }
 }
 

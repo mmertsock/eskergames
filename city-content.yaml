@@ -294,7 +294,12 @@ strings:
   citySettingsDifficultyLabel: Difficulty
   terrainSettingsNameLabel: Name
   terrainSettingsSizeLabel: Size
+  terrainSettingsTemplateLabel: Style
   newTerrainDialogCreateButton: Create
+  terrainSettingsBlankTemplateLabel: Blank
+  terrainSettingsLandlockedTemplateLabel: Landlocked
+  terrainSettingsRiverTemplateLabel: River
+  terrainSettingsIslandTemplateLabel: Island
 
 ################## SCRIPTS ################
 
@@ -322,6 +327,20 @@ terrain:
     shoreDistanceFraction: [0.13, 0.13, 0.13]
     shoreDistanceVariance: [0.5, 0.3, 0.2]
     roughness: [0.4, 0.32, 0.25]
+  forestFiller:
+    coverageRatio: [0.3, 0.28, 0.25]
+    maxCount: [50, 100, 200]
+    minDiameter: [5, 5, 5]
+    maxDiameter: [10, 20, 30]
+    variance: [0.5, 0.4, 0.3]
+    roughness: [0.2, 0.7] # not per-size. a min/max range
+  freshWaterFiller:
+    coverageRatio: [0.05, 0.05, 0.05]
+    maxCount: [10, 15, 30]
+    minDiameter: [3, 5, 7]
+    maxDiameter: [5, 10, 15]
+    variance: [0.45, 0.4, 0.3]
+    roughness: [0.2, 0.7] # not per-size. a min/max range
 
 terrains:
 - id: _default

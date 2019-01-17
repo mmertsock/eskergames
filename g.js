@@ -297,6 +297,40 @@ class RandomLineGenerator {
     }
 }
 
+class BoolArray {
+    constructor(length) {
+        this.length = length;
+        this.array = new Int8Array(Math.ceil(length / 8));
+        this.view = new DataView(this.array.buffer, 0, this.array.length);
+    }
+    getValue(index) {
+        var byte = this.view.getUint8(this._arrayIndex(index));
+        return (byte & this._mask(index)) > 0;
+    }
+    setValue(index, value) {
+        var byte = this.view.getUint8(this._arrayIndex(index));
+        var oldByte = byte;
+        if (value) { byte = byte | this._mask(index); } else { byte = byte & ~this._mask(index); }
+        this.view.setUint8(this._arrayIndex(index), byte);
+    }
+    fill(value) { this.array.fill(0xff); return this; }
+
+    get debugDescription() {
+        var bytes = [];
+        for (var i = 0; i < this.array.length; i += 1) {
+            var value = this.view.getUint8(i).toString(2).padStart(8, "0").split("").reverse().join("");
+            if (i == this.array.length - 1) {
+                value = value.substring(0, 1 + ((this.length - 1) % 8));
+            }
+            bytes.push(value);
+        }
+        return bytes.join(" ");
+    }
+
+    _arrayIndex(index) { return Math.floor(index / 8); }
+    _mask(index) { return 0x1 << (index % 8); }
+}
+
 class CircularArray {
     constructor(maxLength) {
         this.maxLength = maxLength;
@@ -2110,15 +2144,16 @@ return {
     debugWarn: debugWarn,
     once: once,
     deserializeAssert: deserializeAssert,
-    GameSelector: GameSelector,
     directions: directions,
     Binding: Binding,
+    BoolArray: BoolArray,
     CanvasGrid: CanvasGrid,
     CircularArray: CircularArray,
     Dispatch: Dispatch,
     DispatchTarget: DispatchTarget,
     Easing: Easing,
     FlexCanvasGrid: FlexCanvasGrid,
+    GameSelector: GameSelector,
     KeyboardState: KeyboardState,
     Kvo: Kvo,
     Movement: Movement,
