@@ -272,12 +272,16 @@ strings:
   gameProductTitle: CitySim
   genericCancelButton: Cancel
   helpButtonLabel: Help
+  undoButtonLabel: Undo
+  redoButtonLabel: Redo
   helpDismiss: Thanks!
   newGameDialogStartButton: Start Game
   newGameDialogTitle: New Game
+  newTerrainDialogTitle: New Terrain
   optionsButtonLabel: Options
   quitButton: Quit
   quitGameConfirmPrompt: "Are you sure you want to quit? You may have unsaved changes."
+  regenerateTerrainPrompt: "Are you sure? This will destroy the current terrain."
   saveAndQuitButton: Save and Quit
   saveButton: Save
   systemMenuTitle: System
@@ -288,6 +292,9 @@ strings:
   citySettingsCityNameLabel: City Name
   citySettingsMayorNameLabel: Mayor Name
   citySettingsDifficultyLabel: Difficulty
+  terrainSettingsNameLabel: Name
+  terrainSettingsSizeLabel: Size
+  newTerrainDialogCreateButton: Create
 
 ################## SCRIPTS ################
 
@@ -299,6 +306,7 @@ scripts:
 ################## TERRAIN ################
 
 terrain:
+  metersPerTile: 100
   sizes:
     - name: Small
       width: 64
@@ -310,6 +318,10 @@ terrain:
     - name: Large
       width: 256
       height: 256
+  oceanGenerator:
+    shoreDistanceFraction: [0.13, 0.13, 0.13]
+    shoreDistanceVariance: [0.5, 0.3, 0.2]
+    roughness: [0.4, 0.32, 0.25]
 
 terrains:
 - id: _default

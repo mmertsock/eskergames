@@ -37,6 +37,31 @@
     li.warn {
         color: hsl(20, 88%, 50%);
     }
+
+    .sparkline {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        justify-content: stretch;
+        align-items: end;
+        margin: 0.5em;
+        padding: 0;
+        list-style-type: none;
+        outline: 1px solid blue;
+        background-color: blue;
+        height: 50px;
+    }
+    .sparkline li {
+        flex-grow: 1;
+        display: flex;
+        margin: 0;
+        padding: 0;
+        list-style-type: none;
+        background-color: white;
+    }
+    .sparkline span {
+        display: none;
+    }
     </style>
 </head>
 <body>

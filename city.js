@@ -355,34 +355,60 @@ class Plot {
 // ########################### MAP/GAME #######################
 
 class Terrain {
-    static fromDeserializedWrapper(data, schemaVersion) {
-        deserializeAssert(data != null && data.size != null);
-        return new Terrain({ dz: {
-            size: { width: data.size.width, height: data.size.height }
-        } });
-    }
 
     static settings() { return GameContent.shared.terrain; }
     static sizeOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Terrain.settings().sizes, index); }
     static defaultSize() { return GameContent.defaultItemFromArray(Terrain.settings().sizes); }
 
+    static kmForTileCount(tiles) {
+        return (Terrain.settings().metersPerTile * tiles) / 1000;
+    }
+
     constructor(config) {
         if (config.dz) {
-            this.size = config.dz.size;
+            this.saveStateInfo = config.dz.saveStateInfo;
+            this.name = config.dz.name;
+            this.map = config.dz.map;
         } else {
-            this.size = config.size; // <width/height>
+            this.name = config.name;
+            this.saveStateInfo = { id: null, lastTimestamp: 0 };
+            this.map = config.map;
         }
-        this.bounds = new Rect(new Point(0, 0), this.size);
+    }
+
+    saveToStorage() {
+        this.saveStateInfo.lastTimestamp = Date.now();
+        var title = `${this.name}.ter`; // TODO cooler, possibly unique filename
+        var item = new SaveStateItem(this.saveStateInfo.id || SaveStateItem.newID(), title, this.saveStateInfo.lastTimestamp, this.objectForSerialization);
+        var saved = GameStorage.shared.terrainCollection.saveItem(item, this.metadataForSerialization);
+        if (saved) {
+            this.saveStateInfo.id = saved.id;
+            this.saveStateInfo.lastTimestamp = saved.timestamp;
+            debugLog(`Saved terrain to storage with id ${saved.id}.`);
+            return true;
+        } else {
+            debugWarn(`Failed to save terrain to storage.`);
+            return false;
+        }
+    }
+
+    get metadataForSerialization() {
+        return {
+            schemaVersion: GameStorage.currentSchemaVersion,
+            name: this.name,
+            size: `${this.map.size.width}x${this.map.size.height}`
+        };
     }
 
     get objectForSerialization() {
         return {
-            size: this.size
-        }
+            schemaVersion: GameStorage.currentSchemaVersion,
+            map: this.map.objectForSerialization
+        };
     }
 
     get debugDescription() {
-        return `<Terrain bounds:${this.bounds.debugDescription()}>`;
+        return `<Terrain ${this.map.debugDescription}>`;
     }
 }
 
@@ -395,8 +421,10 @@ class Terrain {
 class GameMap {
     static fromDeserializedWrapper(data, schemaVersion) {
         deserializeAssert(data != null);
+        deserializeAssert(data.size != null || data.terrain != null);
+        deserializeAssert(Array.isArray(data.plots));
         return new GameMap({ dz: {
-            terrain: Terrain.fromDeserializedWrapper(data.terrain, schemaVersion),
+            size: data.terrain ? data.terrain.size : data.size,
             plots: data.plots.map(plot => Plot.fromDeserializedWrapper(plot, schemaVersion))
         } });
     }
@@ -406,32 +434,35 @@ class GameMap {
         this._plots = [];
         this._tiles = [];
         if (config.dz) {
-            this.terrain = config.dz.terrain;
+            this.size = config.dz.size;
             config.dz.plots.forEach(plot => {
                 this.addPlot(plot, true);
             });
         } else {
-            this.terrain = config.terrain;
+            this.size = { width: config.size.width, height: config.size.height };
         }
+        this.bounds = new Rect(new Point(0, 0), this.size);
     }
 
     get objectForSerialization() {
         var plots = [];
         this.visitEachPlot(plot => plots.push(plot.objectForSerialization));
         return {
-            terrain: this.terrain.objectForSerialization,
+            size: this.size,
             plots: plots
         };
     }
 
-    get bounds() { return this.terrain.bounds; }
+    get debugDescription() {
+        return `<GameMap ${this.size.width}x${this.size.height} with ${this._plots.length} plots>`;
+    }
 
     isValidCoordinate(x, y) {
-        return this.terrain.bounds.containsTile(x, y);
+        return this.bounds.containsTile(x, y);
     }
 
     isTileRectWithinBounds(rect) {
-        return this.terrain.bounds.contains(rect);
+        return this.bounds.contains(rect);
     }
 
     addPlot(plot, fromFile) {
@@ -489,7 +520,7 @@ class GameMap {
             px = x.x; py = x.y;
         }
         if (!this.isValidCoordinate(px, py)) { return NaN; }
-        return py * this.terrain.size.height + px;
+        return py * this.size.height + px;
     }
 }
 
@@ -553,7 +584,7 @@ class City {
             this.mayorName = config.mayorName;
             this.time = new CityTime();
             this.budget = new Budget({ startingCash: config.difficulty.startingCash });
-            this.map = new GameMap({ terrain: config.terrain });
+            this.map = new GameMap({ size: Terrain.defaultSize() });
         }
 
         this.kvo = new Kvo(this);
@@ -646,7 +677,8 @@ Budget.Kvo = { cash: "cash" };
 
 class GameStorage {
     constructor() {
-        this.collection = new SaveStateCollection(window.localStorage, "CitySim");
+        this.gameCollection = new SaveStateCollection(window.localStorage, "CitySim");
+        this.terrainCollection = new SaveStateCollection(window.localStorage, "CitySimTerrain");
     }
 
     get latestSavedGameID() {
@@ -654,9 +686,8 @@ class GameStorage {
         return valid.length > 0 ? valid[0].id : null;
     }
 
-    get allSavedGames() {
-        return this.collection.itemsSortedByLastSaveTime;
-    }
+    get allSavedGames() { return this.gameCollection.itemsSortedByLastSaveTime; }
+    get allSavedTerrains() { return this.terrainCollection.itemsSortedByLastSaveTime; }
 
     isSaveStateSummarySupported(item) {
         return item && item.metadata && item.metadata.schemaVersion && item.metadata.schemaVersion >= GameStorage.minSchemaVersion;
@@ -669,6 +700,12 @@ class GameStorage {
     urlForGameID(id) {
         var base = window.location.href.replace("index.html", "");
         var path = `city.html?id=${id}`;
+        return new URL(path, base).href;
+    }
+
+    urlForTerrainID(id) {
+        var base = window.location.href.replace("index.html", "");
+        var path = `terrain.html?id=${id}`;
         return new URL(path, base).href;
     }
 }
@@ -722,7 +759,7 @@ class Game {
         this.saveStateInfo.lastTimestamp = Date.now();
         var title = `${this.city.name}.cty`; // TODO cooler, possibly unique filename
         var item = new SaveStateItem(this.saveStateInfo.id || SaveStateItem.newID(), title, this.saveStateInfo.lastTimestamp, this.objectForSerialization);
-        var saved = GameStorage.shared.collection.saveItem(item, this.metadataForSerialization);
+        var saved = GameStorage.shared.gameCollection.saveItem(item, this.metadataForSerialization);
         if (saved) {
             this.saveStateInfo.id = saved.id;
             this.saveStateInfo.lastTimestamp = saved.timestamp;
@@ -768,7 +805,7 @@ class Game {
         this.gameSpeedActivated(this.engineSpeed);
         this.rootView.initialize(this);
         this._started = true;
-        debugLog(`Started game with city ${this.city.name} @ ${this.city.time.date.longString()}, map ${this.city.map.terrain.size.width}x${this.city.map.terrain.size.height}`);
+        debugLog(`Started game with city ${this.city.name} @ ${this.city.time.date.longString()}, map ${this.city.map.size.width}x${this.city.map.size.height}`);
 
         engineRunLoop.addDelegate(this);
         uiRunLoop.addDelegate(this);
@@ -1587,7 +1624,7 @@ class RootView {
 
     tryToLoadGame(id) {
         var storage = GameStorage.shared;
-        var data = storage.collection.getItem(id);
+        var data = storage.gameCollection.getItem(id);
         if (!data) {
             this.failedToStartGame(Strings.str("failedToFindGameMessage"));
         } else if (!storage.isSaveStateItemSupported(data)) {
@@ -2037,11 +2074,28 @@ class TerrainRenderer {
         this.canvasGrid = config.canvasGrid;
         this.game = config.game;
     }
-    render(ctx, settings) {
+    render(ctx, settings, tiles) {
         ctx.fillStyle = settings.edgePaddingFillStyle;
         ctx.rectFill(this.canvasGrid.rectForFullCanvas);
         ctx.fillStyle = settings.emptyFillStyle;
         ctx.rectFill(this.canvasGrid.rectForAllTiles);
+        // HACK
+        if (tiles) {
+            for (var y = 0; y < tiles.length; y += 1) {
+                for (var x = 0; x < tiles[y].length; x += 1) {
+                    var tile = tiles[y][x];
+                    if (tile == "O") {
+                        var rect = this.canvasGrid.rectForTile(new Point(x, y));
+                        ctx.fillStyle = "hsl(200, 100%, 29%)";
+                        ctx.rectFill(rect);
+                    } else if (tile == "R") {
+                        var rect = this.canvasGrid.rectForTile(new Point(x, y));
+                        ctx.fillStyle = "hsl(215, 100%, 42%)";
+                        ctx.rectFill(rect);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -2370,6 +2424,9 @@ class Strings {
     static randomPersonName() {
         return "Eustice von Honla"
     }
+    static randomTerrainName() {
+        return "Blue Skipes"
+    }
 }
 
 class GameDialogManager {
@@ -2409,6 +2466,7 @@ GameDialogManager.shared = new GameDialogManager();
 // Optional: get isModal() -> bool
 class GameDialog {
     static createContentElem() { return document.createElement("content"); }
+    static createFormElem() { return document.createElement("gameForm"); }
 
     constructor() {
         this.manager = GameDialogManager.shared;
@@ -2453,7 +2511,7 @@ class NewGameDialog extends GameDialog {
             click: () => this.validateAndStart()
         });
         this.contentElem = GameDialog.createContentElem();
-        var formElem = document.createElement("gameForm");
+        var formElem = GameDialog.createFormElem();
         this.cityNameInput = new TextInputView({
             parent: formElem,
             title: Strings.str("citySettingsCityNameLabel"),
@@ -2512,12 +2570,9 @@ class NewGameDialog extends GameDialog {
             debugLog("NOT VALID");
             return;
         }
-
-        var terrain = new Terrain(GameContent.shared.terrains[0]);
         var city = new City({
             name: this.cityNameInput.value,
             mayorName: this.mayorNameInput.value,
-            terrain: terrain,
             difficulty: this.difficulty
         });
         CitySim.game = new Game({
@@ -2643,7 +2698,7 @@ class LoadGameMenu {
         if (!this.selectedGame) { return; }
         if (!confirm(Strings.str("deleteGameConfirmPrompt"))) { return; }
         debugLog(this.storage);
-        this.storage.collection.deleteItem(this.selectedGame.id);
+        this.storage.gameCollection.deleteItem(this.selectedGame.id);
         this.showGameList();
     }
 
@@ -2784,13 +2839,18 @@ return {
     Budget: Budget,
     GameStorage: GameStorage,
     Game: Game,
+    GameDialog: GameDialog,
+    InputView: InputView,
     KeyInputController: KeyInputController,
     MapRenderer: MapRenderer,
     LoadGameMenu: LoadGameMenu,
     ScriptPainter: ScriptPainter,
     ScriptPainterCollection: ScriptPainterCollection,
     ScriptPainterStore: ScriptPainterStore,
+    SingleChoiceInputCollection: SingleChoiceInputCollection,
+    Strings: Strings,
     TerrainRenderer: TerrainRenderer,
+    TextInputView: TextInputView,
     ToolButton: ToolButton
 };
 

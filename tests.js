@@ -2,17 +2,19 @@
 
 window.UnitTests = (function(outputElement) {
 
-var Point = Gaming.Point;
-var Rect = Gaming.Rect;
+var Binding = Gaming.Binding;
 var CircularArray = Gaming.CircularArray;
-var FlexCanvasGrid = Gaming.FlexCanvasGrid;
-var SaveStateItem = Gaming.SaveStateItem;
 var Dispatch = Gaming.Dispatch;
 var DispatchTarget = Gaming.DispatchTarget;
+var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var Kvo = Gaming.Kvo;
-var Binding = Gaming.Binding;
-var SimDate = CitySim.SimDate;
+var Point = Gaming.Point;
+var RandomLineGenerator = Gaming.RandomLineGenerator;
+var Rect = Gaming.Rect;
+var SaveStateItem = Gaming.SaveStateItem;
+var UndoStack = Gaming.UndoStack;
 var GameMap = CitySim.GameMap;
+var SimDate = CitySim.SimDate;
 
 function appendOutputItem(msg, className) {
     if (!outputElement) { return; }
@@ -144,11 +146,167 @@ class UnitTest {
         }
         return true;
     }
+    assertFalse(value, msg) {
+        this.expectations += 1;
+        if (value != false) {
+            this.logFailure(this._assertMessage("assertFalse failure", msg));
+            return false;
+        }
+        return true;
+    }
     _assertMessage(main, supplement) {
         var messages = [main];
         if (supplement) { messages.push(supplement); }
         return messages.join(" — ");
     }
+}
+
+class Sparkline {
+    constructor(config) {
+        this.elem = document.createElement("ol").addRemClass("sparkline", true);
+        this.style = config.style; // bar, point
+        this.min = config.min;
+        this.max = config.max;
+        this.count = 0;
+        if (config.width) {
+            this.elem.style.width = `${config.width}px`;
+            this.autoWidth = false;
+        } else {
+            this.autoWidth = true;
+        }
+        if (config.height) {
+            this.elem.style.height = `${config.height}px`;
+        }
+    }
+    append(values) {
+        values.forEach(value => this.push(value));
+    }
+    push(value) {
+        var magnitude = Math.scaleValueLinear(value, { min: this.min, max: this.max }, { min: 0, max: 100 });
+        var item = document.createElement("li");
+        item.style.height = `${100 - magnitude}%`;
+        var span = document.createElement("span");
+        span.innerText = value;
+        item.append(span);
+        this.count += 1;
+        this.elem.append(item);
+        if (this.autoWidth) {
+            this.elem.style.width = `${this.count}px`;
+        }
+    }
+}
+
+var randomLineTest = function() {
+    new UnitTest("RandomLineGenerator", function() {
+        var styles = ["walk", "reach"];
+        styles.forEach(style => {
+            var roughnesses = [0.05, 0.5, 1];
+            roughnesses.forEach(roughness => {
+                var config = { min: 5, max: 9, roughness: roughness, style: style };
+                var sut = new RandomLineGenerator(config);
+                console.log(sut.debugDescription);
+                var values = [];
+                for (var i = 0; i < 100; i += 1) {
+                    var value = sut.nextValue();
+                    if (value < config.min || value > config.max) { this.assertTrue(false); }
+                    values.push(sut.nextValue());
+                }
+                // logTestMsg(values.join(", "));
+                var sparkline = new Sparkline({ min: 0, max: 10, width: 200, height: 50 });
+                sparkline.append(values);
+                document.body.append(sparkline.elem);
+            });
+        });
+    }).build()();
+}
+
+class UndoItem {
+    constructor(target, value, oldValue) {
+        this.target = target;
+        this.value = value;
+        this.oldValue = oldValue;
+    }
+    undo() { this.target.value = this.oldValue; }
+    redo() { this.target.value = this.value; }
+}
+
+var undoStackTest = function() {
+    new UnitTest("UndoStack", function() {
+        var obj = { value: 0 };
+        var sut = new UndoStack();
+        var perform = function(value) {
+            var oldValue = obj.value;
+            obj.value = value;
+            sut.push(new UndoItem(obj, value, oldValue));
+        };
+
+        this.assertFalse(sut.canUndo);
+        this.assertEqual(sut.nextUndoItem, null);
+        this.assertFalse(sut.canRedo);
+        this.assertEqual(sut.nextRedoItem, null);
+        this.assertFalse(sut.undo());
+        this.assertFalse(sut.redo());
+
+        perform(1); // [#0>1]
+        this.assertEqual(obj.value, 1);
+        if (this.assertTrue(sut.canUndo)) {
+            this.assertEqual(sut.nextUndoItem.value, 1);
+        }
+        this.assertFalse(sut.canRedo);
+        this.assertEqual(sut.nextRedoItem, null);
+
+        perform(2); // [0>1 #1>2]
+        this.assertEqual(obj.value, 2);
+        if (this.assertTrue(sut.canUndo)) {
+            this.assertEqual(sut.nextUndoItem.value, 2);
+        }
+        this.assertFalse(sut.canRedo);
+        this.assertEqual(sut.nextRedoItem, null);
+
+        this.assertTrue(sut.undo()); // [#0>1 1>2]
+        this.assertEqual(obj.value, 1);
+        if (this.assertTrue(sut.canUndo)) {
+            this.assertEqual(sut.nextUndoItem.value, 1);
+        }
+        if (this.assertTrue(sut.canRedo)) {
+            this.assertEqual(sut.nextRedoItem.value, 2);
+        }
+
+        this.assertTrue(sut.redo()); // [0>1 #1>2]
+        this.assertEqual(obj.value, 2);
+        if (this.assertTrue(sut.canUndo)) {
+            this.assertEqual(sut.nextUndoItem.value, 2);
+        }
+        this.assertFalse(sut.canRedo);
+        this.assertEqual(sut.nextRedoItem, null);
+
+        this.assertTrue(sut.undo()); // [#0>1 1>2]
+        this.assertEqual(obj.value, 1);
+        this.assertTrue(sut.canUndo);
+        this.assertTrue(sut.canRedo);
+
+        perform(20); // [0>1 #1>20]
+        this.assertEqual(obj.value, 20);
+        if (this.assertTrue(sut.canUndo)) {
+            this.assertEqual(sut.nextUndoItem.value, 20);
+        }
+        this.assertFalse(sut.canRedo);
+        this.assertEqual(sut.nextRedoItem, null);
+
+        this.assertTrue(sut.undo()); // [#0>1 1>20]
+        this.assertEqual(obj.value, 1);
+        this.assertTrue(sut.canUndo);
+        this.assertTrue(sut.canRedo);
+
+        this.assertTrue(sut.undo()); // [# 0>1 1>20]
+        this.assertEqual(obj.value, 0);
+        this.assertFalse(sut.canUndo);
+        this.assertTrue(sut.canRedo);
+
+        this.assertFalse(sut.undo());
+        this.assertTrue(sut.redo());
+        this.assertEqual(obj.value, 1);
+    }).build()();
 }
 
 var manhattanDistanceFromTest = function() {
@@ -191,20 +349,20 @@ var circularArrayTest = function() {
 
         sut.push("A");
         this.assertEqual(sut.maxLength, 5);
-        this.assertTrue(!sut.isEmpty);
+        this.assertFalse(sut.isEmpty);
         this.assertEqual(sut.size, 1);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "A");
 
         sut.push("B");
-        this.assertTrue(!sut.isEmpty);
+        this.assertFalse(sut.isEmpty);
         this.assertEqual(sut.size, 2);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "B");
 
         sut.push("C");
         sut.push("D");
-        this.assertTrue(!sut.isEmpty);
+        this.assertFalse(sut.isEmpty);
         this.assertEqual(sut.size, 4);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "D");
@@ -232,7 +390,7 @@ var circularArrayTest = function() {
         this.assertEqual(sut.last, null);
 
         sut.push("A");
-        this.assertTrue(!sut.isEmpty);
+        this.assertFalse(sut.isEmpty);
         this.assertEqual(sut.size, 1);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "A");
@@ -311,7 +469,7 @@ function selectableListTest() {
         this.assertEqual(sut.selectedItem, items[1]);
         sut.setSelectedIndex(2);
         this.assertEqual(sut.selectedIndex, 2);
-        this.assertTrue(!items[1].isSelected);
+        this.assertFalse(items[1].isSelected);
         this.assertTrue(items[2].isSelected);
         this.assertEqual(sut.selectedItem, items[2]);
         sut.setSelectedItem(items[0]);
@@ -870,8 +1028,8 @@ function cityRectExtensionsTest() {
             this.assertTrue(rect1.containsTile(p.x, p.y), p.debugDescription() + " decomposed");
         });
         [new Point(16, 9), new Point(17, 8), new Point(21, 9), new Point(17, 16)].forEach((p) => {
-            this.assertTrue(!rect1.containsTile(p), p.debugDescription());
-            this.assertTrue(!rect1.containsTile(p.x, p.y), p.debugDescription() + " decomposed");
+            this.assertFalse(rect1.containsTile(p), p.debugDescription());
+            this.assertFalse(rect1.containsTile(p.x, p.y), p.debugDescription() + " decomposed");
         });
         var coords = rect1.allTileCoordinates();
         this.assertEqual(coords.length, 28);
@@ -883,8 +1041,8 @@ function cityRectExtensionsTest() {
 
         var rect1x1 = new Rect(5, 2, 1, 1);
         this.assertTrue(rect1x1.containsTile(5, 2));
-        this.assertTrue(!rect1x1.containsTile(4, 2));
-        this.assertTrue(!rect1x1.containsTile(5, 3));
+        this.assertFalse(rect1x1.containsTile(4, 2));
+        this.assertFalse(rect1x1.containsTile(5, 3));
         coords = rect1x1.allTileCoordinates();
         this.assertEqual(coords.length, 1);
         this.assertEqual(coords[0].x, 5);
@@ -892,7 +1050,7 @@ function cityRectExtensionsTest() {
 
         var rectEmpty = new Rect(3, 2, 0, 0);
         coords = rectEmpty.allTileCoordinates();
-        this.assertTrue(!rectEmpty.containsTile(3, 2));
+        this.assertFalse(rectEmpty.containsTile(3, 2));
         this.assertEqual(coords.length, 0);
     }).build()();
 }
@@ -906,8 +1064,8 @@ function gameMapTest() {
             this.assertTrue(sut.isValidCoordinate(p.x, p.y), p.debugDescription());
         });
         [new Point(-1, 0), new Point(0, -1), new Point(-1, -1), new Point(0, 6), new Point(10, 0), new Point(10, 6), new Point(15, 15)].forEach((p) => {
-            this.assertTrue(!sut.isValidCoordinate(p), p.debugDescription());
-            this.assertTrue(!sut.isValidCoordinate(p.x, p.y), p.debugDescription());
+            this.assertFalse(sut.isValidCoordinate(p), p.debugDescription());
+            this.assertFalse(sut.isValidCoordinate(p.x, p.y), p.debugDescription());
         });
 
         var visits = [];
@@ -1017,6 +1175,7 @@ function gameMapTest() {
 
 TestSession.current = new TestSession([
     // rectHashTest,
+    randomLineTest,
     manhattanDistanceFromTest,
     circularArrayTest,
     randomTest,
@@ -1033,6 +1192,7 @@ TestSession.current = new TestSession([
     simDateTest,
     gameMapTest
 ]);
+TestSession.current = new TestSession([undoStackTest]);
 
 return TestSession.current;
 

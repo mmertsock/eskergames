@@ -21,6 +21,24 @@ function deserializeAssert(condition, message) {
     throw new Error(error);
 }
 
+Object.isPrimitive = function(o) {
+    var type = typeof(o);
+    return type == 'boolean' || type == 'number' || type == 'string';
+}
+
+Object.forSerialization = function(o) {
+    if (typeof(o) == 'undefined') { return null; }
+    if (o === undefined || o === null || Object.isPrimitive(o)) { return o; }
+    var sz = o.objectForSerialization;
+    if (typeof(sz) != 'undefined') { return sz; }
+    if (Array.isArray(o)) { return o.map(Object.forSerialization); }
+    sz = {};
+    Object.getOwnPropertyNames(o).forEach(key => {
+        sz[key] = Object.forSerialization(o[key]);
+    });
+    return sz;
+};
+
 String.isEmpty = function(value) {
     return !value || value.length == 0;
 };
@@ -89,6 +107,10 @@ class Rng {
     nextIntOpenRange(minValue, maxValueExclusive) {
         var r = this.nextUnitFloat() * (maxValueExclusive - minValue);
         return Math.floor(r) + minValue;
+    }
+    nextFloatOpenRange(minValue, maxValueExclusive) {
+        var r = this.nextUnitFloat() * (maxValueExclusive - minValue);
+        return r + minValue;
     }
     nextHexString(length) {
         var str = "";
@@ -242,6 +264,39 @@ Mixins.Gaming.DelegateSet = function(cls) {
     });
 };
 
+class RandomLineGenerator {
+    constructor(config) {
+        this.min = config.min;
+        this.max = config.max;
+        this.roughness = Math.clamp(config.roughness, { min: 0, max: 1 });
+        this.roughnessFactor = (1 - this.roughness * this.roughness)
+        this.lastValue = Rng.shared.nextFloatOpenRange(this.min, this.max);
+        this.width = (config.max - config.min) * this.roughness;
+        this.style = config.style || "walk";
+    }
+    nextValue() {
+        if (this.style == "walk") {
+            var range = {
+                min: this.lastValue - 0.5 * this.width,
+                max: this.lastValue + 0.5 * this.width
+            };
+            if (range.min < this.min) { range.min = this.min; range.max = range.min + this.width; }
+            else if (range.max > this.max) { range.max = this.max; range.min = range.max - this.width; }
+        } else {
+            var range = {
+                min: this.min + this.roughnessFactor * (this.lastValue - this.min),
+                max: this.max - this.roughnessFactor * (this.max - this.lastValue)
+            };
+        }
+        this.lastValue = Rng.shared.nextFloatOpenRange(range.min, range.max);
+        // debugLog([range, this.lastValue]);
+        return this.lastValue;
+    }
+    get debugDescription() {
+        return `<${this.constructor.name} [${this.min},${this.max}] ^${this.roughness} w${this.width} last=${this.lastValue}>`;
+    }
+}
+
 class CircularArray {
     constructor(maxLength) {
         this.maxLength = maxLength;
@@ -320,6 +375,50 @@ class SelectableList {
     }
 }
 
+class UndoStack {
+    constructor() {
+        this.stack = [];
+        this.index = 0;
+    }
+
+    get redoIndex() { return this.index + 1; }
+    get canUndo() { return this.stack.isIndexValid(this.index); }
+    get canRedo() { return this.stack.isIndexValid(this.redoIndex); }
+    get nextUndoItem() {
+        return this.canUndo ? this.stack[this.index] : null;
+    }
+    get nextRedoItem() {
+        return this.canRedo ? this.stack[this.redoIndex] : null;
+    }
+
+    push(item) {
+        if (this.canRedo) {
+            // index points to middle of stack. Remove everything past the index
+            this.stack.splice(this.redoIndex, this.stack.length, item);
+            this.index += 1;
+        } else {
+            this.stack.push(item);
+            this.index = this.stack.length - 1;
+        }
+    }
+
+    undo() {
+        var item = this.nextUndoItem;
+        if (!item) { return false; }
+        item.undo();
+        this.index -= 1;
+        return true;
+    }
+
+    redo() {
+        var item = this.nextRedoItem;
+        if (!item) { return false; }
+        item.redo();
+        this.index += 1;
+        return true;
+    }
+}
+
 var GameSelector = function(config) {
     this.show = function() {
         new Gaming.Prompt({
@@ -346,6 +445,7 @@ var directions = {
     W: 6,
     NW: 7
 };
+directions.opposite = function(id) { return (id + 4) % 8; };
 
 Mixins.Gaming.XYValue = function(cls) {
     Mixins.mix(cls.prototype, "isEqual", function(p2, tol) {
@@ -391,6 +491,9 @@ Mixins.Gaming.XYValue(Point);
 Point.zeroConst = new Point();
 Point.prototype.scaled = function(factor, factorY) {
     return new Point(this.x * factor, this.y * (typeof factorY === 'undefined' ? factor : factorY));
+};
+Point.prototype.integral = function() {
+    return new Point(Math.round(this.x), Math.round(this.y));
 };
 Point.min = function(p1, p2) {
     return new Point(Math.min(p1.x, p2.x), Math.min(p1.y, p2.y));
@@ -520,12 +623,28 @@ var Vector = function(x, y) {
     }
 };
 Mixins.Gaming.XYValue(Vector);
+Vector.prototype.integral = function() {
+    return new Vector(Math.round(this.x), Math.round(this.y));
+};
 Vector.prototype.scaled = function(factor, factorY) {
     return new Vector(this.x * factor, this.y * (typeof factorY === 'undefined' ? factor : factorY));
 };
 Vector.prototype.offsettingPosition = function(position, scale) {
     if (scale === undefined) { scale = 1; }
     return position.adding(scale * this.x, scale * this.y);
+};
+Vector.prototype.magnitude = function() {
+    return Math.sqrt(this.x * this.x + this.y * this.y);
+};
+Vector.prototype.unit = function() {
+    var m = this.magnitude();
+    if (m < 0.01) { return null; }
+    // 2, 2 is magnitude 4. scaled 0.25: 0.5, 0.5
+    // 
+    return this.scaled(1 / m);
+}
+Vector.betweenPoints = function(a, b) {
+    return new Vector(b.x - a.x, b.y - a.y);
 };
 
 var diag = 0.7071;
@@ -1041,6 +1160,32 @@ Movement.prototype.processFrame = function(rl) {
 };
 
 // ----------------------------------------------------------------------
+
+class PerfTimer {
+    constructor(name) {
+        this.isEnabled = !!performance;
+        this.name = name;
+    }
+    start() {
+        if (!this.isEnabled) { return; }
+        performance.mark(`${this.name}.start`);
+        return this;
+    }
+    end() {
+        if (!this.isEnabled) { return; }
+        performance.mark(`${this.name}.end`);
+        return this;
+    }
+    get summary() {
+        if (!this.isEnabled) { return "(performance not available)"; }
+        performance.measure(this.name, `${this.name}.start`, `${this.name}.end`);
+        var measure = performance.getEntriesByName(this.name)[0];
+        performance.clearMarks(this.name);
+        performance.clearMeasures(this.name);
+        measure = measure ? measure.duration : "?";
+        return `${this.name}: ${measure} ms`;
+    }
+}
 
 var RunStates = {
     notStarted: 0,
@@ -1967,28 +2112,31 @@ return {
     deserializeAssert: deserializeAssert,
     GameSelector: GameSelector,
     directions: directions,
-    Point: Point,
-    Rect: Rect,
-    Vector: Vector,
-    Scene: Scene,
+    Binding: Binding,
+    CanvasGrid: CanvasGrid,
+    CircularArray: CircularArray,
+    Dispatch: Dispatch,
+    DispatchTarget: DispatchTarget,
     Easing: Easing,
-    Sprite: Sprite,
-    Movement: Movement,
+    FlexCanvasGrid: FlexCanvasGrid,
     KeyboardState: KeyboardState,
+    Kvo: Kvo,
+    Movement: Movement,
+    PerfTimer: PerfTimer,
+    Point: Point,
+    Prompt: Prompt,
+    RandomLineGenerator: RandomLineGenerator,
+    Rect: Rect,
+    RectSlider: RectSlider,
     RunLoop: RunLoop,
     SaveStateCollection: SaveStateCollection,
     SaveStateItem: SaveStateItem,
-    Dispatch: Dispatch,
-    DispatchTarget: DispatchTarget,
-    Kvo: Kvo,
-    Binding: Binding,
-    FlexCanvasGrid: FlexCanvasGrid,
-    CanvasGrid: CanvasGrid,
-    Prompt: Prompt,
-    Slider: Slider,
-    CircularArray: CircularArray,
+    Scene: Scene,
     SelectableList: SelectableList,
-    RectSlider: RectSlider
+    Slider: Slider,
+    Sprite: Sprite,
+    UndoStack: UndoStack,
+    Vector: Vector
 };
 
 })(); // end Gaming namespace decl
