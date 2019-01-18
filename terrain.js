@@ -383,14 +383,6 @@ class TerrainGenerator {
         });
 
         this.builders = [];
-        if (config.template == "river") {
-            this.builders.push(new RiverTileGenerator({
-                sourceTile: new Point(this.size.width * 0.5, this.size.height * 0.5).integral(),
-                mouthCenterTile: new Point(this.size.width * 0.25, 0).integral(),
-                mouthWidth: 1,
-                snakiness: 0
-            }));
-        }
         if (config.template == "island") {
             this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.N, config.size));
             this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.E, config.size));
@@ -400,6 +392,14 @@ class TerrainGenerator {
         if (config.template != "blank") {
             this.builders.push(ForestTileGenerator.defaultGenerator(config.size));
             this.builders.push(FreshWaterTileGenerator.defaultGenerator(config.size));
+        }
+        if (config.template == "river") {
+            this.builders.push(new RiverTileGenerator({
+                sourceTile: new Point(this.size.width * 0.25, 0).integral(),
+                mouthCenterTile: new Point(this.size.width * 0.75, this.size.height - 1).integral(),
+                mouthWidth: 1,
+                snakiness: 0
+            }));
         }
     }
 
@@ -603,7 +603,9 @@ class NewTerrainDialog extends GameDialog {
     }
 
     get isModal() { return true; }
-    get title() { return Strings.str("newTerrainDialogTitle"); }
+    get title() {
+        return this.session ? Strings.str("replaceTerrainDialogTitle") : Strings.str("newTerrainDialogTitle");
+    }
     get dialogButtons() { return [this.createButton.elem]; }
 
     get isValid() {
@@ -637,7 +639,11 @@ class NewTerrainDialog extends GameDialog {
     }
 
     dismissButtonClicked() {
-        EditSession.quit(!!this.session);
+        if (this.session) {
+            super.dismissButtonClicked();
+        } else {
+            EditSession.quit(false);
+        }
     }
 }
 
@@ -671,12 +677,14 @@ class TerrainView {
     processFrame(rl) {
         if (!this.session || this.session.changeToken == this._lastTokenDrawn) { return; }
         this._lastTokenDrawn = this.session.changeToken;
+        var settings = Object.assign({}, this.settings);
+        settings.edgePaddingFillStyle = "white";
         debugLog("DRAWING TERRAIN");
         var ctx = this.drawContext;
         if (this.session && this.session.map) {
-            this._terrainRenderer.render(ctx, this.settings, this.session.map.terrain);
+            this._terrainRenderer.render(ctx, settings, this.session.map.terrain);
         } else {
-            this._terrainRenderer.render(ctx, this.settings);
+            this._terrainRenderer.render(ctx, settings);
         }
     }
 }
@@ -690,14 +698,19 @@ class ControlsView {
         var globalBlock = this.root.querySelector("#global-controls");
         this.buttons.push(new ToolButton({parent: globalBlock, title: "Restart", clickScript: "regenerate"}));
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("optionsButtonLabel"), clickScript: "showFileMenu"}));
-        this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("undoButtonLabel"), clickScript: "terrainUndo"}));
-        this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("redoButtonLabel"), clickScript: "terrainRedo"}));
+        this.undoButton = new ToolButton({parent: globalBlock, title: Strings.str("undoButtonLabel"), clickScript: "terrainUndo"});
+        this.redoButton = new ToolButton({parent: globalBlock, title: Strings.str("redoButtonLabel"), clickScript: "terrainRedo"});
+        this.buttons.push(this.undoButton);
+        this.buttons.push(this.redoButton);
         this.buttons.push(new ToolButton({parent: globalBlock, title: "Help", clickScript: "showGameHelp"}));
         this._configureCommmands();
+        this._update();
     }
 
     setUp(session) {
         this.session = session;
+        this.session.kvo.changeToken.addObserver(this, () => this._update());
+        this._update();
     }
 
     showFileMenu() {
@@ -711,6 +724,11 @@ class ControlsView {
                 { label: Strings.str("genericCancelButton") }
             ]
         }).show();
+    }
+
+    _update() {
+        this.undoButton.isEnabled = this.session && this.session.undoStack.canUndo;
+        this.redoButton.isEnabled = this.session && this.session.undoStack.canRedo;
     }
 
     _configureCommmands() {

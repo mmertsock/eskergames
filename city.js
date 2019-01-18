@@ -1591,12 +1591,16 @@ class ToolButton {
         return this;
     }
 
-    get isSelected() {
-        return this._selected;
-    }
+    get isSelected() { return this._selected; }
     set isSelected(value) {
         this._selected = value;
         this.elem.addRemClass("selected", value);
+    }
+
+    get isEnabled() { return this._enabled; }
+    set isEnabled(value) {
+        this._enabled = value;
+        this.elem.addRemClass("disabled", !value);
     }
 }
 
@@ -2075,12 +2079,12 @@ class TerrainRenderer {
         this.game = config.game;
     }
     render(ctx, settings, tiles) {
-        ctx.fillStyle = settings.edgePaddingFillStyle;
-        ctx.rectFill(this.canvasGrid.rectForFullCanvas);
-        ctx.fillStyle = settings.emptyFillStyle;
-        ctx.rectFill(this.canvasGrid.rectForAllTiles);
         // HACK
-        if (tiles) {
+        if (tiles && tiles.length > 0) {
+            ctx.fillStyle = settings.edgePaddingFillStyle;
+            ctx.rectFill(this.canvasGrid.rectForFullCanvas);
+            ctx.fillStyle = settings.emptyFillStyle;
+            ctx.rectFill(this.canvasGrid.rectForTileRect(new Rect(0, 0, tiles[0].length, tiles.length)));
             for (var y = 0; y < tiles.length; y += 1) {
                 for (var x = 0; x < tiles[y].length; x += 1) {
                     var tile = tiles[y][x];
@@ -2095,6 +2099,11 @@ class TerrainRenderer {
                     }
                 }
             }
+        } else {
+            ctx.fillStyle = settings.edgePaddingFillStyle;
+            ctx.rectFill(this.canvasGrid.rectForFullCanvas);
+            ctx.fillStyle = settings.emptyFillStyle;
+            ctx.rectFill(this.canvasGrid.rectForAllTiles);
         }
     }
 }

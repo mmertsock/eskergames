@@ -148,9 +148,13 @@ a.tool:link, a.tool:visited, a.tool:active, a.tool:hover {
 a.tool.selected {
     background-color: hsl(120, 50%, 75%);
 }
-
 a.tool.selected.stop-indication {
     background-color: hsl(0, 50%, 75%);
+}
+
+a.tool.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 /* ~~~~~~ PROMPTS ~~~~~~ */
 
