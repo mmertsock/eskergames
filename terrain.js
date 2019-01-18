@@ -704,13 +704,15 @@ class ControlsView {
         this.buttons.push(this.redoButton);
         this.buttons.push(new ToolButton({parent: globalBlock, title: "Help", clickScript: "showGameHelp"}));
         this._configureCommmands();
-        this._update();
+
+        this._dirty = true;
+        CitySimTerrain.uiRunLoop.addDelegate(this);
     }
 
     setUp(session) {
         this.session = session;
-        this.session.kvo.changeToken.addObserver(this, () => this._update());
-        this._update();
+        this.session.kvo.changeToken.addObserver(this, () => { this._dirty = true; });
+        this._dirty = true;
     }
 
     showFileMenu() {
@@ -726,9 +728,11 @@ class ControlsView {
         }).show();
     }
 
-    _update() {
-        this.undoButton.isEnabled = this.session && this.session.undoStack.canUndo;
-        this.redoButton.isEnabled = this.session && this.session.undoStack.canRedo;
+    processFrame(rl) {
+        if (!this._dirty) { return; }
+        this._dirty = false;
+        this.undoButton.isEnabled = !!this.session && this.session.undoStack.canUndo;
+        this.redoButton.isEnabled = !!this.session && this.session.undoStack.canRedo;
     }
 
     _configureCommmands() {
