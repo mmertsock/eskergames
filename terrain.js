@@ -7,16 +7,18 @@ TODOs
 - Smoother riverbanks
 - Figure out actual model representation for terrain features in GameMaps
 - Replace hacked TerrainRenderer with Painters for terrain features
+- Whenever regenerating, encode the raw parameters + RNG seed into a hex value, store that 
+  with the terrain, so you can use that key to recreate the random map.
 */
-
 
 window.CitySimTerrain = (function() {
 
 var debugLog = Gaming.debugLog;
 var debugWarn = Gaming.debugWarn;
-var once = Gaming.once;
 var deserializeAssert = Gaming.deserializeAssert;
 var directions = Gaming.directions;
+var once = Gaming.once;
+
 var Binding = Gaming.Binding;
 var BoolArray = Gaming.BoolArray;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
@@ -25,13 +27,17 @@ var PerfTimer = Gaming.PerfTimer;
 var Point = Gaming.Point;
 var RandomLineGenerator = Gaming.RandomLineGenerator;
 var Rect = Gaming.Rect;
+var Rng = Gaming.Rng;
 var SaveStateCollection = Gaming.SaveStateCollection;
 var SaveStateItem = Gaming.SaveStateItem;
 var SelectableList = Gaming.SelectableList;
 var UndoStack = Gaming.UndoStack;
 var Vector = Gaming.Vector;
+
+var GameContent = CitySimContent.GameContent;
 var GameDialog = CitySim.GameDialog;
 var GameMap = CitySim.GameMap;
+var GameScriptEngine = CitySimContent.GameScriptEngine;
 var GameStorage = CitySim.GameStorage;
 var InputView = CitySim.InputView;
 var MapRenderer = CitySim.MapRenderer;
@@ -42,8 +48,6 @@ var Terrain = CitySim.Terrain;
 var TerrainRenderer = CitySim.TerrainRenderer;
 var TextInputView = CitySim.TextInputView;
 var ToolButton = CitySim.ToolButton;
-var GameContent = CitySimContent.GameContent;
-var GameScriptEngine = CitySimContent.GameScriptEngine;
 
 Point.tilesBetween = function(a, b, log) {
     var v = Vector.betweenPoints(a, b);
@@ -71,7 +75,6 @@ function scanTiles(a, b, block) {
     var end = b.integral();
     var zeroToOne = { min: 0, max: 1 };
     var v = Vector.betweenPoints(start, end);
-    debugLog(v);
     if (Math.abs(v.y) > Math.abs(v.x)) { // scan vertically, slices are horizontal
         var sliceDirection = new Vector(1, 0);
         var range = { min: start.x, max: end.x };
@@ -109,8 +112,8 @@ class MapEdge {
         }
     }
     edgeTiles(bounds) {
-        var extremes = bounds.getExtremes();
-        var e = bounds.getExtremes();
+        var extremes = bounds.extremes;
+        var e = bounds.extremes;
         switch (this.edge) {
             case directions.N:
                 return Point.tilesBetween(new Point(e.min.x, e.min.y), new Point(e.max.x - 1, e.min.y));
@@ -268,7 +271,7 @@ class RiverTileGenerator extends TileGenerator {
     }
 
     get debugDescription() {
-        return `<${this.constructor.name} ${this.sourceTile.debugDescription()}->${this.mouthCenterTile.debugDescription()}>`;
+        return `<${this.constructor.name} ${this.sourceTile.debugDescription}->${this.mouthCenterTile.debugDescription}>`;
     }
 
     generateInto(tiles, generator) {

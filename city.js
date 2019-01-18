@@ -4,16 +4,19 @@ window.CitySim = (function() {
 
 var debugLog = Gaming.debugLog;
 var debugWarn = Gaming.debugWarn;
-var once = Gaming.once;
 var deserializeAssert = Gaming.deserializeAssert;
-var Rect = Gaming.Rect;
-var Point = Gaming.Point;
-var SelectableList = Gaming.SelectableList;
-var SaveStateCollection = Gaming.SaveStateCollection;
-var SaveStateItem = Gaming.SaveStateItem;
-var Kvo = Gaming.Kvo;
+var once = Gaming.once;
+
 var Binding = Gaming.Binding;
 var FlexCanvasGrid = Gaming.FlexCanvasGrid;
+var Kvo = Gaming.Kvo;
+var Point = Gaming.Point;
+var Rect = Gaming.Rect;
+var Rng = Gaming.Rng;
+var SaveStateCollection = Gaming.SaveStateCollection;
+var SaveStateItem = Gaming.SaveStateItem;
+var SelectableList = Gaming.SelectableList;
+
 var GameContent = CitySimContent.GameContent;
 var GameScriptEngine = CitySimContent.GameScriptEngine;
 
@@ -36,7 +39,7 @@ Rect.prototype.containsTile = function(x, y) {
 
 // ordered by row then column
 Rect.prototype.allTileCoordinates = function() {
-    var extremes = this.getExtremes();
+    var extremes = this.extremes;
     var coords = [];
     for (var y = extremes.min.y; y < extremes.max.y; y += 1) {
         for (var x = extremes.min.x; x < extremes.max.x; x += 1) {
@@ -56,8 +59,8 @@ Rect.tileRectWithCenter = function(center, size) {
 // If it doesn't fit, sets origin == bounds.origin.
 Rect.prototype.clampedWithinTileBounds = function(bounds) {
     if (bounds.contains(this)) { return this; }
-    var myExtremes = this.getExtremes();
-    var theirExtremes = bounds.getExtremes();
+    var myExtremes = this.extremes;
+    var theirExtremes = bounds.extremes;
     var dx = 0, dy = 0;
     if (myExtremes.max.x > theirExtremes.max.x) { dx = theirExtremes.max.x - myExtremes.max.x; }
     if (myExtremes.min.x < theirExtremes.min.x) { dx = theirExtremes.min.x - myExtremes.min.x; }
@@ -320,14 +323,14 @@ class Plot {
             this.bounds = config.bounds; // <Rect>. rect.origin = top-left tile.
             this.item = config.item; // <Zone> or other
             this.data = {
-                variantKey: config.bounds.hashValue()
+                variantKey: config.bounds.hashValue
             };
         }
     }
 
     get objectForSerialization() {
         return {
-            bounds: this.bounds.objectForSerialization(),
+            bounds: this.bounds.objectForSerialization,
             itemClass: this.item.constructor.name,
             item: this.item.objectForSerialization,
             data: {
@@ -433,15 +436,17 @@ class GameMap {
         // flat sparse arrays in drawing order. See _tileIndex for addressing
         this._plots = [];
         this._tiles = [];
+        var plotsToAdd = [];
         if (config.dz) {
             this.size = config.dz.size;
-            config.dz.plots.forEach(plot => {
-                this.addPlot(plot, true);
-            });
+            plotsToAdd = config.dz.plots;
         } else {
             this.size = { width: config.size.width, height: config.size.height };
         }
         this.bounds = new Rect(new Point(0, 0), this.size);
+        plotsToAdd.forEach(plot => {
+            this.addPlot(plot, true);
+        });
     }
 
     get objectForSerialization() {
@@ -467,31 +472,31 @@ class GameMap {
 
     addPlot(plot, fromFile) {
         if (!this.isTileRectWithinBounds(plot.bounds)) {
-            debugLog(`Plot is outside of map bounds: ${plot.bounds.debugDescription()}`);
+            debugLog(`Plot is outside of map bounds: ${plot.bounds.debugDescription}`);
             return null;
         }
-        var index = this._tileIndex(plot.bounds.getOrigin());
+        var index = this._tileIndex(plot.bounds.origin);
         if (isNaN(index)) { return null; }
         if (this.plotsInRect(plot.bounds).length > 0) {
-            debugLog(`Cannot add plot at ${plot.bounds.debugDescription()}: overlaps other plots.`);
+            debugLog(`Cannot add plot at ${plot.bounds.debugDescription}: overlaps other plots.`);
             return null;
         }
         this._plots[index] = plot;
         plot.bounds.allTileCoordinates()
             .map((t) => this._tileIndex(t))
             .forEach((i) => { if (!isNaN(i)) { this._tiles[i] = plot; } });
-        if (!fromFile) { debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription()}`); }
+        if (!fromFile) { debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription}`); }
         return plot;
     }
 
     removePlot(plot) {
-        var index = this._tileIndex(plot.bounds.getOrigin());
+        var index = this._tileIndex(plot.bounds.origin);
         if (!isNaN(index) && this._plots[index] === plot) {
             this._plots[index] = null;
             plot.bounds.allTileCoordinates()
                 .map((t) => this._tileIndex(t))
                 .forEach((i) => { if (!isNaN(i) && this._tiles[i] === plot) { this._tiles[i] = null; } });
-            debugLog(`Removed plot ${plot.title} at ${plot.bounds.debugDescription()}`);
+            debugLog(`Removed plot ${plot.title} at ${plot.bounds.debugDescription}`);
             return plot;
         }
         return null;
@@ -893,7 +898,7 @@ class _PointInputNoopDelegate {
         return false;
     }
     pointSessionChanged(sequence, controller) {
-        debugLog(`_PointInputNoopDelegate: ${sequence.latestEvent.type} @ ${sequence.latestPoint.debugDescription()}`);
+        debugLog(`_PointInputNoopDelegate: ${sequence.latestEvent.type} @ ${sequence.latestPoint.debugDescription}`);
     }
 }
 
@@ -1022,7 +1027,7 @@ class MapToolPointer {
     focusRectForTileCoordinate(session, tile) { return null; }
 
     performSingleClickAction(session, tile) {
-        debugLog("TODO center map on " + tile.debugDescription());
+        debugLog("TODO center map on " + tile.debugDescription);
     }
 }
 
@@ -1041,7 +1046,7 @@ class MapToolQuery {
     }
 
     performSingleClickAction(session, tile) {
-        debugLog("TODO query " + tile.debugDescription());
+        debugLog("TODO query " + tile.debugDescription);
     }
 
     _getFocusRect(plot, tile) {
@@ -1103,7 +1108,7 @@ class MapToolPlopZone {
         var rect = this.focusRectForTileCoordinate(session, tile);
         var result = { code: null, price: null, formattedPrice: null, focusTileRect: rect };
         if (!rect) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
-        var plot = Zone.newPlot({ type: this.settings.zoneType, topLeft: rect.getOrigin() });
+        var plot = Zone.newPlot({ type: this.settings.zoneType, topLeft: rect.origin });
         result.price = this.zoneInfo.newPlotCost;
         result.formattedPrice = Simoleon.format(result.price);
         var purchased = session.game.city.spend(result.price);
@@ -1134,7 +1139,7 @@ class MapToolPlopProp {
         var rect = this.focusRectForTileCoordinate(session, tile);
         var result = { code: null, price: null, formattedPrice: null, focusTileRect: rect };
         if (!rect) { result.code = MapToolSession.ActionResult.notAllowed; return result; }
-        var plot = TerrainProp.newPlot({ type: this.settings.propType, topLeft: rect.getOrigin() });
+        var plot = TerrainProp.newPlot({ type: this.settings.propType, topLeft: rect.origin });
         result.price = this.propInfo.newPlotCost;
         result.formattedPrice = Simoleon.format(result.price);
         var purchased = session.game.city.spend(result.price);
@@ -1639,6 +1644,7 @@ class RootView {
                 CitySim.game.start();
             } catch(e) {
                 this.failedToStartGame(`${Strings.str("failedToLoadGameMessage")}\n\n${e.message}`);
+                debugLog(e);
             }
         }
     }
@@ -2269,7 +2275,7 @@ class ScriptPainter {
         // Path2d or CanvasGradient when possible) with fixed "model" coordinates, then do the final runtime
         // scaling/translation via CanvasRenderingContext2D transformation matrix.
         if (Array.isEmpty(this.lines)) { return; }
-        var ext = rect.getExtremes();
+        var ext = rect.extremes;
         var xDomain = { min: ext.min.x, max: ext.max.x };
         var yDomain = { min: ext.min.y, max: ext.max.y };
         var xRange = { min: 0, max: rect.width };

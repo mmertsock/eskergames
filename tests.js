@@ -12,6 +12,7 @@ var Kvo = Gaming.Kvo;
 var Point = Gaming.Point;
 var RandomLineGenerator = Gaming.RandomLineGenerator;
 var Rect = Gaming.Rect;
+var Rng = Gaming.Rng;
 var SaveStateItem = Gaming.SaveStateItem;
 var UndoStack = Gaming.UndoStack;
 var GameMap = CitySim.GameMap;
@@ -82,7 +83,11 @@ class UnitTest {
     build() {
         return function(config, expect) {
             logTestHeader(this.name);
-            this.body(config, expect);
+            try {
+                this.body(config, expect);
+            } catch(e) {
+                this.logFailure(`Exception thrown: ${e}\n${e.stack}`);
+            }
             if (!this.hadExpectations) { return; }
             if (this.isOK) {
                 TestSession.current.testsPassed += 1;
@@ -98,6 +103,10 @@ class UnitTest {
             }
             logTestHeader(`END ${this.name}`);
         }.bind(this);
+    }
+
+    buildAndRun() {
+        return this.build()();
     }
 
     usage(msg) {
@@ -231,7 +240,7 @@ var randomLineTest = function() {
         var sparkline = new Sparkline({ min: 0, max: 20, width: 200, height: 50 });
         sparkline.append(values);
         document.body.append(sparkline.elem);
-    }).build()();
+    }).buildAndRun();
 }
 
 class UndoItem {
@@ -320,7 +329,7 @@ var undoStackTest = function() {
         this.assertFalse(sut.undo());
         this.assertTrue(sut.redo());
         this.assertEqual(obj.value, 1);
-    }).build()();
+    }).buildAndRun();
 }
 
 var manhattanDistanceFromTest = function() {
@@ -349,7 +358,7 @@ var manhattanDistanceFromTest = function() {
         this.assertEqual(result.dx, -8);
         this.assertEqual(result.dy, 2);
         this.assertEqual(result.magnitude, 8);
-    }).build()();
+    }).buildAndRun();
 }
 
 var boolArrayTest = function() {
@@ -389,11 +398,11 @@ var boolArrayTest = function() {
             sut.setValue(i, Rng.shared.nextUnitFloat() > 0.5);
         }
         sut.setValue(2, true); sut.setValue(5, false); sut.setValue(6, true);
-        debugDump(sut.debugDescription);
+        logTestMsg(sut.debugDescription);
         this.assertTrue(sut.getValue(2), "2 after randomize");
         this.assertFalse(sut.getValue(5), "5 after randomize");
         this.assertTrue(sut.getValue(6), "6 after randomize");
-    }).build()();
+    }).buildAndRun();
 }
 
 var circularArrayTest = function() {
@@ -452,7 +461,7 @@ var circularArrayTest = function() {
         this.assertEqual(sut.size, 1);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "A");
-    }).build()();
+    }).buildAndRun();
 }
 
 var randomTest = function() {
@@ -553,7 +562,7 @@ function selectableListTest() {
         this.assertEqual(sut.selectedIndex, 2);
         sut.setSelectedIndex(-1);
         this.assertEqual(sut.selectedIndex, 0);
-    }).build()();
+    }).buildAndRun();
 }
 
 var simDateTest = function() {
@@ -664,7 +673,7 @@ function saveStateTest() {
         this.assertEqual(sut.getItem(item1.id), null);
         this.assertEqual(sut.itemsSortedByLastSaveTime.length, 1);
         this.assertTrue(sut.getItem(item2.id) != null);
-    }).build()();
+    }).buildAndRun();
 }
 
 function dispatchTest() {
@@ -720,7 +729,7 @@ function dispatchTest() {
         sut.remove(target2.id);
         sut.postEventSync("e2", 8);
         this.assertEqual(got.length, 8);
-    }).build()();
+    }).buildAndRun();
 }
 
 class Employee {
@@ -792,7 +801,7 @@ function kvoTest() {
         this.assertEqual(house1.kvoHistory.length, 0);
         person1.setTitle("manager");
         this.assertEqual(person1.salary, 100);
-    }).build()();
+    }).buildAndRun();
 
     new UnitTest("Kvo-TopLevel", function() {
         var business1 = new Business({ bagger: 10, manager: 100 });
@@ -817,7 +826,7 @@ function kvoTest() {
         Kvo.stopObservations(house1);
         person1.setName("C");
         this.assertEqual(house1.kvoHistory.length, 3);
-    }).build()();
+    }).buildAndRun();
 
     new UnitTest("Kvo-Property", function() {
         var business1 = new Business({ bagger: 10, manager: 100 });
@@ -842,7 +851,7 @@ function kvoTest() {
         person1.setTitle("bagger");
         this.assertEqual(house1.salaryHistory.length, 2);
         this.assertEqual(house1.kvoHistory.length, 2);
-    }).build()();
+    }).buildAndRun();
 
     new UnitTest("Kvo-Combined", function() {
         var business1 = new Business({ bagger: 10, manager: 100 });
@@ -863,7 +872,7 @@ function kvoTest() {
             this.assertEqual(house1.kvoHistory[2].source, person1);
             this.assertEqual(house1.kvoHistory[2].via, "top");
         }
-    }).build()();
+    }).buildAndRun();
 }
 
 // person1 is raw, person2 has sourceSormatter, and also have a global thing.
@@ -908,7 +917,7 @@ function bindingTest() {
         this.assertEqual(view.person1title, person1.title);
         this.assertEqual(view.person1name, person1.name);
         this.assertEqual(view.person2name, "P2" + person2.name);
-    }).build()();
+    }).buildAndRun();
 }
 
 function flexCanvasGridTest(config, expect) {
@@ -964,7 +973,7 @@ function flexCanvasGridTest(config, expect) {
     for (var i = 0; i < expect.points.length; i += 1) {
         var got = sut.tileForCanvasPoint(expect.points[i].p);
         var exp = expect.points[i].t;
-        var pfx = `tileForCanvasPoint ${i} ${expect.points[i].p.debugDescription()}: `;
+        var pfx = `tileForCanvasPoint ${i} ${expect.points[i].p.debugDescription}: `;
         if (!exp) {
             this.assertTrue(got == null, exp, pfx + "should be null");
         } else {
@@ -1066,7 +1075,7 @@ var rectHashTest = function() {
     for (var y = 0; y < rows; y++) {
         var line = "";
         for (var x = 0; x < columns; x++) {
-            var h = new Rect(x, y, 1, 1).hashValue();
+            var h = new Rect(x, y, 1, 1).hashValue;
             var item = chars[h % chars.length];
             if (verbose) {
                 logTestMsg([x, y, h, item]);
@@ -1082,12 +1091,12 @@ function cityRectExtensionsTest() {
     new UnitTest("RectExtensions-City", function() {
         var rect1 = new Rect(17, 9, 4, 7);
         [new Point(17, 9), new Point(19, 11), new Point(20, 9), new Point(17, 15), new Point(20, 15)].forEach((p) => {
-            this.assertTrue(rect1.containsTile(p), p.debugDescription());
-            this.assertTrue(rect1.containsTile(p.x, p.y), p.debugDescription() + " decomposed");
+            this.assertTrue(rect1.containsTile(p), p.debugDescription);
+            this.assertTrue(rect1.containsTile(p.x, p.y), p.debugDescription + " decomposed");
         });
         [new Point(16, 9), new Point(17, 8), new Point(21, 9), new Point(17, 16)].forEach((p) => {
-            this.assertFalse(rect1.containsTile(p), p.debugDescription());
-            this.assertFalse(rect1.containsTile(p.x, p.y), p.debugDescription() + " decomposed");
+            this.assertFalse(rect1.containsTile(p), p.debugDescription);
+            this.assertFalse(rect1.containsTile(p.x, p.y), p.debugDescription + " decomposed");
         });
         var coords = rect1.allTileCoordinates();
         this.assertEqual(coords.length, 28);
@@ -1110,20 +1119,20 @@ function cityRectExtensionsTest() {
         coords = rectEmpty.allTileCoordinates();
         this.assertFalse(rectEmpty.containsTile(3, 2));
         this.assertEqual(coords.length, 0);
-    }).build()();
+    }).buildAndRun();
 }
 
 function gameMapTest() {
     new UnitTest("GameMap",function() {
-        var terrain = { bounds: new Rect(0, 0, 10, 6), size: { width: 10, height: 6} };
-        var sut = new GameMap({ terrain: terrain });
+        var config = { size: {width: 10, height: 6} };
+        var sut = new GameMap(config);
         [new Point(0, 0), new Point(3, 3), new Point(0, 5), new Point(9, 0), new Point(9, 5)].forEach((p) => {
-            this.assertTrue(sut.isValidCoordinate(p), p.debugDescription());
-            this.assertTrue(sut.isValidCoordinate(p.x, p.y), p.debugDescription());
+            this.assertTrue(sut.isValidCoordinate(p), p.debugDescription);
+            this.assertTrue(sut.isValidCoordinate(p.x, p.y), p.debugDescription);
         });
         [new Point(-1, 0), new Point(0, -1), new Point(-1, -1), new Point(0, 6), new Point(10, 0), new Point(10, 6), new Point(15, 15)].forEach((p) => {
-            this.assertFalse(sut.isValidCoordinate(p), p.debugDescription());
-            this.assertFalse(sut.isValidCoordinate(p.x, p.y), p.debugDescription());
+            this.assertFalse(sut.isValidCoordinate(p), p.debugDescription);
+            this.assertFalse(sut.isValidCoordinate(p.x, p.y), p.debugDescription);
         });
 
         var visits = [];
@@ -1206,7 +1215,7 @@ function gameMapTest() {
         this.assertEqual(sut.plotsInRect(sut.bounds).length, 0);
 
         // Plots outside the map bounds, overlapping plots, etc.
-        sut = new GameMap({ terrain: terrain });
+        sut = new GameMap(config);
 
         visits = [];
         this.assertEqual(sut.addPlot(makePlot("X", 14, 27, 1, 1)), null);
@@ -1228,14 +1237,15 @@ function gameMapTest() {
         sut.visitEachPlot(visitor);
         this.assertElementsEqual(visits.map(p => p.name), [plot3432.name]);
 
-    }).build()();
+    }).buildAndRun();
 }
 
 TestSession.current = new TestSession([
     // rectHashTest,
-    randomLineTest,
     manhattanDistanceFromTest,
+    boolArrayTest,
     circularArrayTest,
+    randomLineTest,
     randomTest,
     stringTemplateTest,
     selectableListTest,
@@ -1250,7 +1260,6 @@ TestSession.current = new TestSession([
     simDateTest,
     gameMapTest
 ]);
-TestSession.current = new TestSession([randomLineTest]);
 
 return TestSession.current;
 
