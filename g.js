@@ -266,14 +266,23 @@ Mixins.Gaming.DelegateSet = function(cls) {
 
 class RandomLineGenerator {
     constructor(config) {
+        this.style = config.style || "walk";
         this.min = config.min;
         this.max = config.max;
-        this.roughness = Math.clamp(config.roughness, { min: 0, max: 1 });
-        this.roughnessFactor = (1 - this.roughness * this.roughness)
         this.lastValue = Rng.shared.nextFloatOpenRange(this.min, this.max);
-        this.width = (config.max - config.min) * this.roughness;
-        this.style = config.style || "walk";
+        this.variance = config.variance;
     }
+
+    get variance() { return this._variance; }
+    set variance(value) {
+        this._variance = Math.clamp(value, { min: 0, max: 1 });
+        if (this.style == "walk") {
+            this.width = (this.max - this.min) * this._variance;
+        } else {
+            this.varianceFactor = (1 - this.variance * this.variance)
+        }
+    }
+
     nextValue() {
         if (this.style == "walk") {
             var range = {
@@ -284,8 +293,8 @@ class RandomLineGenerator {
             else if (range.max > this.max) { range.max = this.max; range.min = range.max - this.width; }
         } else {
             var range = {
-                min: this.min + this.roughnessFactor * (this.lastValue - this.min),
-                max: this.max - this.roughnessFactor * (this.max - this.lastValue)
+                min: this.min + this.varianceFactor * (this.lastValue - this.min),
+                max: this.max - this.varianceFactor * (this.max - this.lastValue)
             };
         }
         this.lastValue = Rng.shared.nextFloatOpenRange(range.min, range.max);
@@ -293,7 +302,7 @@ class RandomLineGenerator {
         return this.lastValue;
     }
     get debugDescription() {
-        return `<${this.constructor.name} [${this.min},${this.max}] ^${this.roughness} w${this.width} last=${this.lastValue}>`;
+        return `<${this.constructor.name} [${this.min},${this.max}] ^${this.variance} w${this.width} last=${this.lastValue}>`;
     }
 }
 

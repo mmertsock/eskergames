@@ -201,16 +201,19 @@ var randomLineTest = function() {
     new UnitTest("RandomLineGenerator", function() {
         var styles = ["walk", "reach"];
         styles.forEach(style => {
-            var roughnesses = [0.05, 0.5, 1];
-            roughnesses.forEach(roughness => {
-                var config = { min: 5, max: 9, roughness: roughness, style: style };
+            var variances = [0.05, 0.5, 1];
+            variances.forEach(variance => {
+                var config = { min: 5, max: 9, variance: variance, style: style };
                 var sut = new RandomLineGenerator(config);
                 console.log(sut.debugDescription);
                 var values = [];
                 for (var i = 0; i < 100; i += 1) {
                     var value = sut.nextValue();
+                    if (i == 75 && style == "walk" && variance < 0.5) {
+                        sut.variance = 0.5;
+                    }
                     if (value < config.min || value > config.max) { this.assertTrue(false); }
-                    values.push(sut.nextValue());
+                    values.push(value);
                 }
                 // logTestMsg(values.join(", "));
                 var sparkline = new Sparkline({ min: 0, max: 10, width: 200, height: 50 });
@@ -218,6 +221,16 @@ var randomLineTest = function() {
                 document.body.append(sparkline.elem);
             });
         });
+
+        sut = new RandomLineGenerator({ min: 10, max: 20, variance: 0, style: "walk" });
+        var values = [];
+        for (var i = 0; i < 100; i += 1) {
+            sut.variance = i / 200.0;
+            values.push(sut.nextValue());
+        }
+        var sparkline = new Sparkline({ min: 0, max: 20, width: 200, height: 50 });
+        sparkline.append(values);
+        document.body.append(sparkline.elem);
     }).build()();
 }
 
@@ -1237,7 +1250,7 @@ TestSession.current = new TestSession([
     simDateTest,
     gameMapTest
 ]);
-TestSession.current = new TestSession([boolArrayTest]);
+TestSession.current = new TestSession([randomLineTest]);
 
 return TestSession.current;
 

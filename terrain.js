@@ -3,7 +3,8 @@
 /*
 TODOs
 - Think about tile coordinates. Bottom left = (0,0) may be more sane for stuff like directions, edges, etc., and also it makes more sense to the end user
-- River generator
+- Smoothing property for RandomLineGenerator: number of previous generations to average
+- Smoother riverbanks
 - Figure out actual model representation for terrain features in GameMaps
 - Replace hacked TerrainRenderer with Painters for terrain features
 */
@@ -65,6 +66,39 @@ Point.tilesBetween = function(a, b, log) {
     return tiles;
 };
 
+function scanTiles(a, b, block) {
+    var start = a.integral();
+    var end = b.integral();
+    var zeroToOne = { min: 0, max: 1 };
+    var v = Vector.betweenPoints(start, end);
+    debugLog(v);
+    if (Math.abs(v.y) > Math.abs(v.x)) { // scan vertically, slices are horizontal
+        var sliceDirection = new Vector(1, 0);
+        var range = { min: start.x, max: end.x };
+        var length = Math.abs(end.y - start.y);
+        var incr = v.y > 0 ? 1 : -1;
+        var y = start.y;
+        for (var i = 0; i <= length; i += 1) {
+            var fraction = i / length;
+            var x = Math.round(Math.scaleValueLinear(fraction, zeroToOne, range));
+            block(new Point(x, y), fraction, sliceDirection);
+            y += incr;
+        }
+    } else { // sacn horizontally, slices are vertical
+        var sliceDirection = new Vector(0, 1);
+        var range = { min: start.y, max: end.y };
+        var length = Math.abs(end.x - start.x) + 1;
+        var incr = v.x > 0 ? 1 : -1;
+        var x = start.x;
+        for (var i = 0; i <= length; i += 1) {
+            var fraction = i / length;
+            var y = Math.round(Math.scaleValueLinear(fraction, zeroToOne, range));
+            block(new Point(x, y), fraction, sliceDirection);
+            x += incr;
+        }
+    }
+};
+
 class MapEdge {
     constructor(edge) {
         this.edge = edge; // Gaming.directions value
@@ -103,8 +137,8 @@ MapEdge.W = new MapEdge(directions.W);
 class RandomBlobGenerator {
     constructor(config) {
         this.size = config.size;
-        this.roughness = config.roughness;
-        this.variance = config.variance; // % of diameter
+        this.edgeVariance = config.edgeVariance;
+        this.radiusVariance = config.radiusVariance; // % of diameter
     }
     nextBlob() {
         var values = [];
@@ -113,8 +147,8 @@ class RandomBlobGenerator {
             values.push(new BoolArray(this.size.width).fill(true));
         }
         var generators = [
-            new RandomLineGenerator({ min: 0, max: this.variance * this.size.width, roughness: this.roughness }),
-            new RandomLineGenerator({ min: (1 - this.variance) * this.size.width, max: this.size.width, roughness: this.roughness })
+            new RandomLineGenerator({ min: 0, max: this.radiusVariance * this.size.width, variance: this.edgeVariance }),
+            new RandomLineGenerator({ min: (1 - this.radiusVariance) * this.size.width, max: this.size.width, variance: this.edgeVariance })
         ];
         for (var y = 0; y < this.size.height; y += 1) {
             var min = Math.round(generators[0].nextValue());
@@ -125,8 +159,8 @@ class RandomBlobGenerator {
             }
         }
         var generators = [
-            new RandomLineGenerator({ min: 0, max: this.variance * this.size.height, roughness: this.roughness }),
-            new RandomLineGenerator({ min: (1 - this.variance) * this.size.height, max: this.size.height, roughness: this.roughness })
+            new RandomLineGenerator({ min: 0, max: this.radiusVariance * this.size.height, variance: this.edgeVariance }),
+            new RandomLineGenerator({ min: (1 - this.radiusVariance) * this.size.height, max: this.size.height, variance: this.edgeVariance })
         ];
         for (var x = 0; x < this.size.width; x += 1) {
             var min = Math.round(generators[0].nextValue());
@@ -162,13 +196,13 @@ class OceanTileGenerator extends TileGenerator {
         } else {
             var shoreDistance = size.width * settings.shoreDistanceFraction[size.index];
         }
-        var variance = settings.shoreDistanceVariance[size.index];
-        var roughness = settings.roughness[size.index];
+        var shoreDistanceVariance = settings.shoreDistanceVariance[size.index];
+        var edgeVariance = settings.edgeVariance[size.index];
         return new OceanTileGenerator({
             edge: edge,
             averageShoreDistanceFromEdge: shoreDistance,
-            variance: shoreDistance * variance,
-            roughness: roughness
+            shoreDistanceVariance: shoreDistance * shoreDistanceVariance,
+            edgeVariance: edgeVariance
         });
     }
 
@@ -178,9 +212,9 @@ class OceanTileGenerator extends TileGenerator {
         // number of tiles from the configured edge to the shore. Can be non-integer
         this.averageShoreDistanceFromEdge = config.averageShoreDistanceFromEdge;
         this.lineGenerator = new RandomLineGenerator({
-            min: this.averageShoreDistanceFromEdge - config.variance,
-            max: this.averageShoreDistanceFromEdge + config.variance,
-            roughness: config.roughness
+            min: this.averageShoreDistanceFromEdge - config.shoreDistanceVariance,
+            max: this.averageShoreDistanceFromEdge + config.shoreDistanceVariance,
+            variance: config.edgeVariance
         });
     }
 
@@ -195,7 +229,6 @@ class OceanTileGenerator extends TileGenerator {
         }
         debugLog(`Generate into with ${this.debugDescription}`);
         var edgeTiles = this.edge.edgeTiles(generator.bounds);
-        // debugLog(edgeTiles);
         edgeTiles.forEach(edgeTile => {
             var shoreDistance = this.lineGenerator.nextValue();
             var line = this.edge.lineOfTiles(edgeTile, shoreDistance);
@@ -205,13 +238,33 @@ class OceanTileGenerator extends TileGenerator {
 }
 
 class RiverTileGenerator extends TileGenerator {
+    static defaultForCrossMap(start, end, size) {
+        var settings = Terrain.settings().riverGenerator;
+        return new RiverTileGenerator({
+            snakiness: settings.snakiness,
+            start: { center: start, width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize },
+            end:   { center: end,   width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize }
+        });
+    }
+
+    static defaultStream(source, mouth, size) {
+        var settings = Terrain.settings().riverGenerator;
+        return new RiverTileGenerator({
+            snakiness: settings.snakiness,
+            start: { center: source, width: 0, bendSize: 0 },
+            end:   { center: mouth,  width: settings.mouthWidth[size.index] * 0.5, bendSize: settings.largeBendSize }
+        });
+    }
+
     constructor(config) {
         super();
         this.sourceTile = config.sourceTile;
-        this.mouthCenterTile = config.mouthCenterTile;
-        this.mouthWidth = config.mouthWidth; // in tiles, can be decimal
-        // array. first elem is snakiness at source, last elem is snakiness at mouth
+        // zero width start for a stream sourced mid-map. otherwise, assumed a full river crossing the map
+        // snakiness = RandomLineGenerator variance for how quickly to curve
+        // bendSize = decimal multiple of width; can be greater than 1
         this.snakiness = config.snakiness;
+        this.start = { center: config.start.center, width: config.start.width, bendSize: config.start.bendSize };
+        this.end = { center: config.end.center, width: config.end.width, bendSize: config.end.bendSize };
     }
 
     get debugDescription() {
@@ -219,8 +272,28 @@ class RiverTileGenerator extends TileGenerator {
     }
 
     generateInto(tiles, generator) {
-        var line = Point.tilesBetween(this.sourceTile, this.mouthCenterTile);
-        this.fill(tiles, "R", line, generator);
+        var water = [];
+        var zeroToOne = { min: 0, max: 1 };
+        var widthRange = { min: this.start.width, max: this.end.width };
+        var bendRange = { min: this.start.bendSize, max: this.end.bendSize };
+        var offsetGenerator = new RandomLineGenerator({ min: -1, max: 1, variance: this.snakiness });
+
+        scanTiles(this.start.center, this.end.center, (origin, fraction, axis) => {
+            var sliceWidth = Math.scaleValueLinear(fraction, zeroToOne, widthRange);
+            var s = Math.scaleValueLinear(fraction, zeroToOne, bendRange);
+            var bendSize = sliceWidth * s * s;
+            var offset = (bendSize * offsetGenerator.nextValue()) - (0.5 * sliceWidth);
+            var point = origin.adding(axis.scaled(offset)).integral();
+            sliceWidth = Math.round(sliceWidth);
+            for (var i = 0; i < sliceWidth; i += 1) {
+                if (generator.bounds.containsTile(point)
+                    && !TerrainGenerator.isWater(tiles[point.y][point.x])) {
+                    water.push(point);
+                }
+                point = point.adding(axis);
+            }
+        });
+        this.fill(tiles, "R", water, generator);
     }
 }
 
@@ -231,8 +304,8 @@ class BlobFillTileGenerator extends TileGenerator {
             maxCount: settings.maxCount[size.index],
             minDiameter: settings.minDiameter[size.index],
             maxDiameter: settings.maxDiameter[size.index],
-            roughness: { min: settings.roughness[0], max: settings.roughness[1] },
-            variance: settings.variance[size.index]
+            edgeVariance: { min: settings.edgeVariance[0], max: settings.edgeVariance[1] },
+            radiusVariance: settings.radiusVariance[size.index]
         };
     }
 
@@ -242,8 +315,8 @@ class BlobFillTileGenerator extends TileGenerator {
         this.maxCount = config.maxCount;
         this.minDiameter = config.minDiameter;
         this.maxDiameter = config.maxDiameter;
-        this.roughness = config.roughness;
-        this.variance = config.variance;
+        this.edgeVariance = config.edgeVariance;
+        this.radiusVariance = config.radiusVariance;
     }
 
     get debugDescription() {
@@ -258,8 +331,8 @@ class BlobFillTileGenerator extends TileGenerator {
                     width: Rng.shared.nextIntOpenRange(this.minDiameter, this.maxDiameter),
                     height: Rng.shared.nextIntOpenRange(this.minDiameter, this.maxDiameter)
                 },
-                roughness: Rng.shared.nextFloatOpenRange(this.roughness.min, this.roughness.max),
-                variance: this.variance, //Rng.shared.nextFloatOpenRange(this.variance.min, this.variance.max)
+                edgeVariance: Rng.shared.nextFloatOpenRange(this.edgeVariance.min, this.edgeVariance.max),
+                radiusVariance: this.radiusVariance, //Rng.shared.nextFloatOpenRange(this.variance.min, this.variance.max)
             };
             this.makeBlobGenerator(config).generateInto(tiles, generator);
             generations += 1;
@@ -319,8 +392,8 @@ class BlobTileGenerator extends TileGenerator {
         super();
         this.value = config.value; // tile value
         this.size = config.size; // in tiles
-        this.roughness = config.roughness;
-        this.variance = config.variance;
+        this.edgeVariance = config.edgeVariance;
+        this.radiusVariance = config.radiusVariance;
     }
 
     get debugDescription() {
@@ -334,7 +407,7 @@ class BlobTileGenerator extends TileGenerator {
     generateInto(tiles, generator) {
         var center = new Point(Rng.shared.nextIntOpenRange(0, generator.bounds.width), Rng.shared.nextIntOpenRange(0, generator.bounds.height));
         var origin = center.adding(this.size.width * 0.5, this.size.height * 0.5).integral();
-        var blob = new RandomBlobGenerator({ size: this.size, roughness: this.roughness, variance: this.variance }).nextBlob();
+        var blob = new RandomBlobGenerator({ size: this.size, edgeVariance: this.edgeVariance, radiusVariance: this.radiusVariance }).nextBlob();
         var values = [];
         // debugLog(blob.map(item => item.debugDescription).join("\n"));
         for (var y = 0; y < blob.length; y += 1) {
@@ -388,18 +461,20 @@ class TerrainGenerator {
             this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.E, config.size));
             this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.S, config.size));
             this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.W, config.size));
+            // this.builders.push(RiverTileGenerator.defaultStream(
+            //     new Point(this.size.width * 0.5, this.size.height * 0.5),
+            //     new Point(this.size.width * Rng.shared.nextFloatOpenRange(0.3, 0.7), 0),
+            //     config.size));
         }
         if (config.template != "blank") {
             this.builders.push(ForestTileGenerator.defaultGenerator(config.size));
             this.builders.push(FreshWaterTileGenerator.defaultGenerator(config.size));
         }
         if (config.template == "river") {
-            this.builders.push(new RiverTileGenerator({
-                sourceTile: new Point(this.size.width * 0.25, 0).integral(),
-                mouthCenterTile: new Point(this.size.width * 0.75, this.size.height - 1).integral(),
-                mouthWidth: 1,
-                snakiness: 0
-            }));
+            this.builders.push(RiverTileGenerator.defaultForCrossMap(
+                new Point(this.size.width * Rng.shared.nextFloatOpenRange(0.25, 0.75), 0),
+                new Point(this.size.width * Rng.shared.nextFloatOpenRange(0.25, 0.75), this.size.height - 1),
+                config.size));
         }
     }
 
@@ -418,7 +493,6 @@ class TerrainGenerator {
         }
 
         this.builders.forEach(builder => builder.generateInto(tiles, this));
-        // debugLog("TILES\n" + this.ascii(tiles) + "\nEND");
         this.map.terrain = tiles;
         debugLog(timer.end().summary);
 
