@@ -13,11 +13,7 @@ TODOs
 
 window.CitySimTerrain = (function() {
 
-var debugLog = Gaming.debugLog;
-var debugWarn = Gaming.debugWarn;
-var deserializeAssert = Gaming.deserializeAssert;
-var directions = Gaming.directions;
-var once = Gaming.once;
+const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
 var Binding = Gaming.Binding;
 var BoolArray = Gaming.BoolArray;

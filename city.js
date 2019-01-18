@@ -2,23 +2,20 @@
 
 window.CitySim = (function() {
 
-var debugLog = Gaming.debugLog;
-var debugWarn = Gaming.debugWarn;
-var deserializeAssert = Gaming.deserializeAssert;
-var once = Gaming.once;
+const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, once = Gaming.once;
 
-var Binding = Gaming.Binding;
-var FlexCanvasGrid = Gaming.FlexCanvasGrid;
-var Kvo = Gaming.Kvo;
-var Point = Gaming.Point;
-var Rect = Gaming.Rect;
-var Rng = Gaming.Rng;
-var SaveStateCollection = Gaming.SaveStateCollection;
-var SaveStateItem = Gaming.SaveStateItem;
-var SelectableList = Gaming.SelectableList;
+const Binding = Gaming.Binding;
+const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const Kvo = Gaming.Kvo;
+const Point = Gaming.Point;
+const Rect = Gaming.Rect;
+const Rng = Gaming.Rng;
+const SaveStateCollection = Gaming.SaveStateCollection;
+const SaveStateItem = Gaming.SaveStateItem;
+const SelectableList = Gaming.SelectableList;
 
-var GameContent = CitySimContent.GameContent;
-var GameScriptEngine = CitySimContent.GameScriptEngine;
+const GameContent = CitySimContent.GameContent;
+const GameScriptEngine = CitySimContent.GameScriptEngine;
 
 // ########################### GLOBAL #######################
 

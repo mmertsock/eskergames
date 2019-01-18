@@ -597,6 +597,13 @@ class Rect {
     }
 
     isEmpty(tol) { return Math.fequal(this.width, 0, tol) && Math.fequal(this.height, 0, tol); }
+    isEqual(r2, tol) {
+        tol = (tol === undefined) ? 0 : 0.01;
+        return Math.fequal(this.x, r2.x, tol)
+            && Math.fequal(this.y, r2.y, tol)
+            && Math.fequal(this.width, r2.width, tol)
+            && Math.fequal(this.height, r2.height, tol);
+    }
     contains(other) {
         var e1 = this.extremes;
         var e2 = other.extremes;
@@ -1206,6 +1213,40 @@ KeyboardState.prototype.reset = function() {
 
 // ----------------------------------------------------------------------
 
+// Finite plane of square tiles. A defined origin and size.
+// Model coordinates have origin at bottom left, screen coordinates 
+// have origin at top left.
+//
+// left axis: model Y. right axis: screen Y
+//  0123456
+// 4       0
+// 3       1
+// 2       2
+// 1       3
+// 0       4
+// -1      5   (and model 5 == screen -1)
+class TilePlane {
+    constructor(size) {
+        this.width = size.width;
+        this.height = size.height;
+        this._yMinuend = this.height - 1;
+    }
+    get size() { return { width: this.width, height: this.height }; }
+    screenTileForModel(tile) {
+        return new Point(tile.x, this._flippedY(tile.y));
+    }
+    screenRectForModel(rect) {
+        return new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height);
+    }
+    modelTileForScreen(tile) {
+        return new Point(tile.x, this._flippedY(tile.y));
+    }
+    modelRectForScreen(rect) {
+        return new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height);
+    }
+    _flippedY(y) { return this._yMinuend - y; }
+}
+
 /*
 Grid of tiles rendered on a Canvas. Does not change canvas display size; 
 reacts to canvas size changes to modify the number of tiles rendered 
@@ -1465,6 +1506,7 @@ return {
     SaveStateCollection: SaveStateCollection,
     SaveStateItem: SaveStateItem,
     SelectableList: SelectableList,
+    TilePlane: TilePlane,
     UndoStack: UndoStack,
     Vector: Vector
 };

@@ -2,21 +2,23 @@
 
 window.UnitTests = (function(outputElement) {
 
-var Binding = Gaming.Binding;
-var BoolArray = Gaming.BoolArray;
-var CircularArray = Gaming.CircularArray;
-var Dispatch = Gaming.Dispatch;
-var DispatchTarget = Gaming.DispatchTarget;
-var FlexCanvasGrid = Gaming.FlexCanvasGrid;
-var Kvo = Gaming.Kvo;
-var Point = Gaming.Point;
-var RandomLineGenerator = Gaming.RandomLineGenerator;
-var Rect = Gaming.Rect;
-var Rng = Gaming.Rng;
-var SaveStateItem = Gaming.SaveStateItem;
-var UndoStack = Gaming.UndoStack;
-var GameMap = CitySim.GameMap;
-var SimDate = CitySim.SimDate;
+const Binding = Gaming.Binding;
+const BoolArray = Gaming.BoolArray;
+const CircularArray = Gaming.CircularArray;
+const Dispatch = Gaming.Dispatch;
+const DispatchTarget = Gaming.DispatchTarget;
+const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const Kvo = Gaming.Kvo;
+const Point = Gaming.Point;
+const RandomLineGenerator = Gaming.RandomLineGenerator;
+const Rect = Gaming.Rect;
+const Rng = Gaming.Rng;
+const SaveStateItem = Gaming.SaveStateItem;
+const TilePlane = Gaming.TilePlane;
+
+const UndoStack = Gaming.UndoStack;
+const GameMap = CitySim.GameMap;
+const SimDate = CitySim.SimDate;
 
 function appendOutputItem(msg, className) {
     if (!outputElement) { return; }
@@ -920,6 +922,40 @@ function bindingTest() {
     }).buildAndRun();
 }
 
+function tilePlaneTest() {
+    new UnitTest("TilePlane", function() {
+        var sut = new TilePlane({ width: 7, height: 5 });
+        this.assertEqual(sut.size.width, 7);
+        this.assertEqual(sut.size.height, 5);
+        this.assertTrue(sut.screenTileForModel(new Point(0, 0)).isEqual(new Point(0, 4)), "screenTileForModel BL");
+        this.assertTrue(sut.screenTileForModel(new Point(6, 0)).isEqual(new Point(6, 4)), "screenTileForModel BR");
+        this.assertTrue(sut.screenTileForModel(new Point(6, 4)).isEqual(new Point(6, 0)), "screenTileForModel TR");
+        this.assertTrue(sut.screenTileForModel(new Point(0, 4)).isEqual(new Point(0, 0)), "screenTileForModel TL");
+        this.assertTrue(sut.screenTileForModel(new Point(1, 3)).isEqual(new Point(1, 1)), "screenTileForModel MID");
+
+        this.assertTrue(sut.screenTileForModel(new Point(-1, 0)).isEqual(new Point(-1, 4)), "screenTileForModel OOB");
+        this.assertTrue(sut.screenTileForModel(new Point(7, 0)).isEqual(new Point(7, 4)), "screenTileForModel OOB");
+        this.assertTrue(sut.screenTileForModel(new Point(0, -1)).isEqual(new Point(0, 5)), "screenTileForModel OOB");
+        this.assertTrue(sut.screenTileForModel(new Point(0, 5)).isEqual(new Point(0, -1)), "screenTileForModel OOB");
+
+        this.assertTrue(sut.modelTileForScreen(new Point(0, 0)).isEqual(new Point(0, 4)), "modelTileForScreen TL");
+        this.assertTrue(sut.modelTileForScreen(new Point(6, 0)).isEqual(new Point(6, 4)), "modelTileForScreen TR");
+        this.assertTrue(sut.modelTileForScreen(new Point(6, 4)).isEqual(new Point(6, 0)), "modelTileForScreen BR");
+        this.assertTrue(sut.modelTileForScreen(new Point(0, 4)).isEqual(new Point(0, 0)), "modelTileForScreen BL");
+        this.assertTrue(sut.modelTileForScreen(new Point(1, 3)).isEqual(new Point(1, 1)), "modelTileForScreen MID");
+
+        this.assertTrue(sut.modelTileForScreen(new Point(-1, 0)).isEqual(new Point(-1, 4)), "modelTileForScreen OOB");
+        this.assertTrue(sut.modelTileForScreen(new Point(7, 0)).isEqual(new Point(7, 4)), "modelTileForScreen OOB");
+        this.assertTrue(sut.modelTileForScreen(new Point(0, -1)).isEqual(new Point(0, 5)), "modelTileForScreen OOB");
+        this.assertTrue(sut.modelTileForScreen(new Point(0, 5)).isEqual(new Point(0, -1)), "modelTileForScreen OOB");
+
+        this.assertTrue(sut.screenRectForModel(new Rect(1, 3, 1, 1)).isEqual(new Rect(1, 1, 1, 1)), "screenRectForModel 1311");
+        this.assertTrue(sut.screenRectForModel(new Rect(0, 1, 3, 2)).isEqual(new Rect(0, 2, 3, 2)), "screenRectForModel 0123");
+        this.assertTrue(sut.modelRectForScreen(new Rect(1, 1, 1, 1)).isEqual(new Rect(1, 3, 1, 1)), "screenRectForModel 1111");
+        this.assertTrue(sut.modelRectForScreen(new Rect(-2, 4, 7, 3)).isEqual(new Rect(-2, -2, 7, 3)), "modelRectForScreen -2473");
+    }).buildAndRun();
+};
+
 function flexCanvasGridTest(config, expect) {
     if (!config || !expect) {
         this.usage("call(config, expect)");
@@ -1253,6 +1289,7 @@ TestSession.current = new TestSession([
     dispatchTest,
     kvoTest,
     bindingTest,
+    tilePlaneTest,
     flexCanvasGridTest1,
     flexCanvasGridTest2,
     flexCanvasGridTest3,
@@ -1260,6 +1297,7 @@ TestSession.current = new TestSession([
     simDateTest,
     gameMapTest
 ]);
+// TestSession.current = new TestSession([tilePlaneTest]);
 
 return TestSession.current;
 
