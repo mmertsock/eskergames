@@ -1,17 +1,30 @@
 ## Next tasks
 
+### First bits of game logic
+
+Initial zone growth and RCI:
+- Change density/level of zones
+- Calculate population based on zone status
+- Update RCI meter
+
 ### Misc
 
 Auto generate help dialog text for keyboard commands.
 Game-specific fonts for zones, maps, controls, etc.
 JS: set keyword for setters, instead of setX()
 JS: var, let, const
+JS: modules/import
 
 ### requestAnimationFrame
 
 Run the UI loop either as fast as possible or up to X frames/sec.
 Run an iteration of the game engine at the end of a UI loop, whenever X milliseconds have passed since the start of the previous iteration, depending on game speed. 
 Perhaps divide the work of a single game engine iteration among several animation frames to avoid the potential lag caused by a doing a full iteration during one frame.
+
+web works + requestAnimationFrame: would be a good time to eliminate direct coupling between renderers/views and the Game object hierarchy. introduce view models with simple, clean, flat KVO structure. the game worker sends updates the view models which trigger KVO notifications in the window context (KVO observations can't travel between worker and window anyway unless i implement remote-kvo), and the UI listens to the view model KVO.
+
+https://www.destroyallsoftware.com/talks/boundaries
+GUI app starting around 21 minutes. reminds me of the design ideas i have for using web workers.
 
 ### MapTool incremental development
 
@@ -182,6 +195,10 @@ On startup, parse the HTML. Attach TextLineViews and Bindings to matching HTML e
 - - - - - -
 # Resources
 
+https://github.com/graememcc/micropolisJS
+
 http://bucephalus.org/text/CanvasHandbook/CanvasHandbook.html
 
 https://developer.mozilla.org/en-US/docs/Games/Anatomy
+
+https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers

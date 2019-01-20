@@ -175,8 +175,8 @@ mapTools:
 #################### UI ###################
 
 mainMapView:
-  edgePaddingFillStyle: "hsl(33, 37%, 87%)" # or try *PANELFILL
-  emptyFillStyle: "hsl(33, 37%, 87%)"
+  edgePaddingFillStyle: &DIRTBASECOLOR "hsl(33, 33%, 80%)" # or try *PANELFILL  # was "hsl(33, 37%, 80%)""
+  emptyFillStyle: *DIRTBASECOLOR
   zoomLevels:
   - tileWidth: 3
   - tileWidth: 6
@@ -206,11 +206,16 @@ rciView:
 
 # command, args...
 # units: p = device independent pixels. r = 0...1 relative size. px = device pixels.
-# stroke args: style, shape, thickness, thick units, coords, coord units.
+# angle units: d = degrees. r = radians
+# commands:
+# stroke: style, shape, thickness, thick units, coords, coord units.
 #   e.g. stroke,red,rect,1,p,0.25,0.25,0.5,0.5,r
-# fill args: style, shape, coords, coord units
-# text args: style, text size, size units, align, baseline, center coords, center units, text
-# poly args: stroke style, fill style, width, width units, coord units, x1, y1, x2, y2, ..., [close]
+# fill: style, shape, coords, coord units
+# text: style, text size, size units, align, baseline, center coords, center units, text
+# poly: stroke style, fill style, width, width units, coord units, x1, y1, x2, y2, ..., [close]
+# rotate: amount, units
+# script: id, variant key (-1 to use current variant key)
+# Directional edge variant collections: first item is no-edges, then N, NE, E, SE, ...
 painters:
   toolPaletteUnselectedBase:
     - [innerStroke,"hsl(0,0%,50%)",rect,1,p,0,0,1,1,r]
@@ -253,6 +258,66 @@ painters:
         - [fill,"hsl(120, 35%, 50%)",ellipse,0.25,-0.1,0.5,0.8,r]
       - - [fill,"hsl(35, 66%, 33%)",rect,0.4,0.5,0.2,0.5,r]
         - [fill,"hsl(120, 55%, 45%)",ellipse,0.2,0.1,0.6,0.6,r]
+  terrain_dirt:
+    variants:
+      - - [fill,*DIRTBASECOLOR,rect,0,0,1,1,r]
+        - [fill,'hsl(33, 25%, 70%)',rect,0.2,0.2,0.15,0.15,r]
+        - [fill,'hsl(33, 20%, 70%)',rect,0.4,0.7,0.15,0.15,r]
+        - [fill,'hsl(33, 30%, 65%)',rect,0.7,0.5,0.15,0.15,r]
+      - - [fill,*DIRTBASECOLOR,rect,0,0,1,1,r]
+        - [fill,"hsl(33, 30%, 65%)",rect,0.1,0.3,0.15,0.15,r]
+        - [fill,"hsl(33, 25%, 70%)",rect,0.5,0.2,0.15,0.15,r]
+        - [fill,"hsl(33, 20%, 70%)",rect,0.8,0.6,0.15,0.15,r]
+  terrain_freshwater:
+    variants:
+      - - [fill,"hsl(215, 100%, 42%)",rect,0,0,1,1,r]
+        - [fill,"hsl(215, 100%, 52%)",rect,0.2,0.2,0.15,0.15,r]
+        - [fill,"hsl(215, 100%, 52%)",rect,0.4,0.7,0.15,0.15,r]
+        - [fill,"hsl(215, 100%, 52%)",rect,0.7,0.5,0.15,0.15,r]
+      - - [fill,*DIRTBASECOLOR,rect,0,0,1,0.2,r]
+        - [fill,"hsl(215, 100%, 67%)",rect,0,0.2,1,0.2,r]
+      - - [fill,"hsl(215, 100%, 67%)",rect,0.6,0,0.4,0.2,r]
+        - [fill,"hsl(215, 100%, 67%)",rect,0.8,0,0.2,0.4,r]
+        - [fill,*DIRTBASECOLOR,rect,0.8,0,0.2,0.2,r]
+      - [[rotate,90,d], [script,terrain_freshwater,1]]
+      - [[rotate,90,d], [script,terrain_freshwater,2]]
+      - [[rotate,180,d],[script,terrain_freshwater,1]]
+      - [[rotate,180,d],[script,terrain_freshwater,2]]
+      - [[rotate,270,d],[script,terrain_freshwater,1]]
+      - [[rotate,270,d],[script,terrain_freshwater,2]]
+  terrain_saltwater:
+    variants:
+      - - [fill,"hsl(200, 100%, 29%)",rect,0,0,1,1,r]
+        - [fill,"hsl(200, 100%, 47%)",rect,0.2,0.2,0.15,0.15,r]
+        - [fill,"hsl(200, 100%, 47%)",rect,0.4,0.7,0.15,0.15,r]
+        - [fill,"hsl(200, 100%, 47%)",rect,0.7,0.5,0.15,0.15,r]
+      - - [fill,*DIRTBASECOLOR,rect,0,0,1,0.2,r]
+        - [fill,"hsl(200, 100%, 67%)",rect,0,0.2,1,0.2,r]
+      - - [fill,"hsl(200, 100%, 67%)",rect,0.6,0,0.4,0.2,r]
+        - [fill,"hsl(200, 100%, 67%)",rect,0.8,0,0.2,0.4,r]
+        - [fill,*DIRTBASECOLOR,rect,0.8,0,0.2,0.2,r]
+      - [[rotate,90,d], [script,terrain_saltwater,1]]
+      - [[rotate,90,d], [script,terrain_saltwater,2]]
+      - [[rotate,180,d],[script,terrain_saltwater,1]]
+      - [[rotate,180,d],[script,terrain_saltwater,2]]
+      - [[rotate,270,d],[script,terrain_saltwater,1]]
+      - [[rotate,270,d],[script,terrain_saltwater,2]]
+  terrain_trees:
+    variants:
+      - - [fill,"hsl(112, 100%, 23%)",rect,0,0,1,1,r]
+        - [fill,"hsl(112, 100%, 37%)",rect,0.2,0.2,0.15,0.15,r]
+        - [fill,"hsl(112, 100%, 37%)",rect,0.4,0.7,0.15,0.15,r]
+        - [fill,"hsl(112, 100%, 37%)",rect,0.7,0.5,0.15,0.15,r]
+      - - [fill,*DIRTBASECOLOR,rect,0.1,0,0.3,0.1,r]
+        - [fill,*DIRTBASECOLOR,rect,0.6,0,0.3,0.2,r]
+      - - [fill,*DIRTBASECOLOR,rect,0.7,0,0.3,0.1,r]
+        - [fill,*DIRTBASECOLOR,rect,0.9,0,0.1,0.2,r]
+      - [[rotate,90,d], [script,terrain_trees,1]]
+      - [[rotate,90,d], [script,terrain_trees,2]]
+      - [[rotate,180,d],[script,terrain_trees,1]]
+      - [[rotate,180,d],[script,terrain_trees,2]]
+      - [[rotate,270,d],[script,terrain_trees,1]]
+      - [[rotate,270,d],[script,terrain_trees,2]]
 
 ################## STRINGS ################
 

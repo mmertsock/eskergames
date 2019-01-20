@@ -2,7 +2,7 @@
 
 window.CitySim = (function() {
 
-const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, once = Gaming.once;
+const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
 const Binding = Gaming.Binding;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
@@ -13,12 +13,15 @@ const Rng = Gaming.Rng;
 const SaveStateCollection = Gaming.SaveStateCollection;
 const SaveStateItem = Gaming.SaveStateItem;
 const SelectableList = Gaming.SelectableList;
+const TilePlane = Gaming.TilePlane;
+const Vector = Gaming.Vector;
 
 const GameContent = CitySimContent.GameContent;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 
 // ########################### GLOBAL #######################
 
+var radiansPerDegree = Math.PI / 180;
 var _stringTemplateRegexes = {};
 var _zeroToOne = { min: 0, max: 1 };
 
@@ -354,6 +357,90 @@ class Plot {
 
 // ########################### MAP/GAME #######################
 
+class TerrainTile {
+    constructor(value) {
+        this.value = value; // byte
+    }
+    get isLand() { return (this.value & TerrainTile.flags.water) == 0; }
+    get isWater() { return (this.value & TerrainTile.flags.water) != 0; }
+    get isSaltwater() { return this.isWater && (this.value & TerrainTile.flags.large); }
+    get isFreshwater() { return this.isWater && !(this.value & TerrainTile.flags.large); }
+    has(flag) { return (this.value & flag) != 0; }
+
+    painterInfoList(point, terrain) {
+        if (this.isSaltwater) {
+            return this._edgeVariants(point, terrain, "saltwater", i => i.tile.isLand);
+        } else if (this.isFreshwater) {
+            return this._edgeVariants(point, terrain, "freshwater", i => i.tile.isLand);
+        } else if (this.has(TerrainTile.flags.trees)) {
+            return this._edgeVariants(point, terrain, "trees", i => !i.tile.has(TerrainTile.flags.trees));
+        } else {
+            return [{ id: "terrain_dirt", variantKey: hashArrayOfInts([point.x, point.y]) }];
+        }
+    }
+
+    _edgeVariants(point, terrain, id, filter) {
+        // HMM inside corners
+        // i think the rule is that diagonals should only be used if:
+        // BOTH of the adjacent cardinal edges are found (eg inside corner)
+        // or NEITHER of the adjacent cardinal edges are found (eg outside corner)
+        // if we do that, this should clean up some things
+        id = "terrain_" + id;
+        let surrounding = this.getSurroundingTiles(point, terrain, true).filter(filter);
+        let firstBatch = [], secondBatch = [];
+        for (let i = 0; i < surrounding.length; i += 1) {
+            if (surrounding[i].direction % 2 == 1) { // diagonal
+                firstBatch.push(surrounding[i].direction + 1);
+            } else {
+                secondBatch.push(surrounding[i].direction + 1);
+            }
+        }
+        return [0].concat(firstBatch).concat(secondBatch)
+            .map(i => { return { id: id, variantKey: i } });
+    }
+
+    getSurroundingTiles(point, terrain) {
+        return Vector.manhattanUnits.map((v, direction) => {
+            var p = point.adding(v);
+            if (!terrain.map.isValidCoordinate(p)) {
+                return null;
+            } else {
+                // debugLog(p, terrain, direction);
+                return { direction: direction, point: p, tile: terrain.map.terrain[p.y][p.x] };
+            }
+        }).filter(i => i != null);
+    }
+
+    encodeNeighbors(surrounding) {
+        return surrounding.reduce((v, i) => (v | 1 << i.direction), 0)
+    }
+}
+TerrainTile.flags = {
+    dirt:      0x0,
+    water:     0x1 << 0,
+    trees:     0x1 << 1,
+    reserved1: 0x1 << 2,
+    large:     0x1 << 3,
+    deep:      0x1 << 4,
+    edge:      0x1 << 5,
+    reserved2: 0x1 << 6,
+    reserved3: 0x1 << 7
+};
+
+TerrainTile.dirt  = new TerrainTile(TerrainTile.flags.dirt);
+TerrainTile.water = new TerrainTile(TerrainTile.flags.water);
+TerrainTile.trees = new TerrainTile(TerrainTile.flags.trees);
+// freshwater variants
+TerrainTile.riverbank = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.edge);
+// saltwater variants
+TerrainTile.shore = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.large | TerrainTile.flags.edge);
+TerrainTile.sea   = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.large);
+TerrainTile.ocean = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.large | TerrainTile.flags.deep);
+// trees variants
+TerrainTile.forest     = new TerrainTile(TerrainTile.flags.trees | TerrainTile.flags.large);
+TerrainTile.forestEdge = new TerrainTile(TerrainTile.flags.trees | TerrainTile.flags.large);
+TerrainTile.wilderness = new TerrainTile(TerrainTile.flags.trees | TerrainTile.flags.large | TerrainTile.flags.deep);
+
 class Terrain {
 
     static settings() { return GameContent.shared.terrain; }
@@ -441,6 +528,7 @@ class GameMap {
             this.size = { width: config.size.width, height: config.size.height };
         }
         this.bounds = new Rect(new Point(0, 0), this.size);
+        this.tilePlane = new TilePlane(this.size);
         plotsToAdd.forEach(plot => {
             this.addPlot(plot, true);
         });
@@ -1527,6 +1615,10 @@ class SingleChoiceInputView extends InputView {
 }
 
 class SingleChoiceInputCollection extends FormValueView {
+    static selectionRequiredRule(collection) {
+        return collection.value !== null;
+    }
+
     static createElement(config) {
         var elem = document.createElement("div").addRemClass("singleChoiceInput", true);
         if (config.title) {
@@ -1538,6 +1630,7 @@ class SingleChoiceInputCollection extends FormValueView {
     constructor(config) {
         super(config, SingleChoiceInputCollection.createElement(config));
         this.id = config.id;
+        this.validationRules = config.validationRules || [];
         this.choices = config.choices.map(item => new SingleChoiceInputView({
             parent: this.elem,
             collection: this,
@@ -1545,6 +1638,10 @@ class SingleChoiceInputCollection extends FormValueView {
             value: item.value,
             selected: item.selected
         }));
+    }
+
+    get isValid() {
+        return this.validationRules.every(rule => rule(this));
     }
 
     get value() {
@@ -2081,24 +2178,24 @@ class TerrainRenderer {
         this.canvasGrid = config.canvasGrid;
         this.game = config.game;
     }
-    render(ctx, settings, tiles) {
+    render(ctx, settings, terrain) {
         // HACK
-        if (tiles && tiles.length > 0) {
+        if (terrain && terrain.map && terrain.map.terrain && terrain.map.terrain.length > 0) {
             ctx.fillStyle = settings.edgePaddingFillStyle;
             ctx.rectFill(this.canvasGrid.rectForFullCanvas);
             ctx.fillStyle = settings.emptyFillStyle;
-            ctx.rectFill(this.canvasGrid.rectForTileRect(new Rect(0, 0, tiles[0].length, tiles.length)));
-            for (var y = 0; y < tiles.length; y += 1) {
-                for (var x = 0; x < tiles[y].length; x += 1) {
-                    var tile = tiles[y][x];
-                    var color = null;
-                    if (tile == "O") { color = "hsl(200, 100%, 29%)"; }
-                    else if (tile == "R") { color = "hsl(215, 100%, 42%)"; }
-                    else if (tile == "F") { color = "hsl(112, 100%, 23%)"; }
-                    if (color) {
-                        var rect = this.canvasGrid.rectForTile(new Point(x, y));
-                        ctx.fillStyle = color;
-                        ctx.rectFill(rect);
+            var size = terrain.map.tilePlane.size;
+            ctx.rectFill(this.canvasGrid.rectForTileRect(terrain.map.tilePlane.screenRectForModel(new Rect(0, 0, size.width, size.height))));
+
+            var tileSize = { width: 1, height: 1 };
+            for (var y = size.height - 1; y >= 0; y -= 1) {
+                for (var x = 0; x < size.width; x += 1) {
+                    var origin = new Point(x, y);
+                    var tile = terrain.map.terrain[y][x];
+                    var rect = this.canvasGrid.rectForTileRect(terrain.map.tilePlane.screenRectForModel(new Rect(origin, tileSize)));
+                    if (rect) {
+                        var painters = this._getPainterSessions(tile, origin, terrain, ScriptPainterStore.shared);
+                        painters.forEach(painter => painter.render(ctx, rect, this.canvasGrid, {}));
                     }
                 }
             }
@@ -2108,6 +2205,11 @@ class TerrainRenderer {
             ctx.fillStyle = settings.emptyFillStyle;
             ctx.rectFill(this.canvasGrid.rectForAllTiles);
         }
+    }
+
+    _getPainterSessions(tile, point, terrain, store) {
+        var info = tile.painterInfoList(point, terrain);
+        return info.map(item => store.getPainterSession(item.id, item.variantKey));
     }
 }
 
@@ -2120,20 +2222,18 @@ class PlotRenderer {
     }
     render(plot, ctx) {
         var rect = this.canvasGrid.rectForTileRect(plot.bounds);
-        var painter = this._getPainter(plot, ScriptPainterStore.shared);
-        if (painter) {
-            painter.render(ctx, rect, this.canvasGrid, plot.textTemplateInfo);
-        }
+        var painter = this._getPainterSession(plot, ScriptPainterStore.shared);
+        painter.render(ctx, rect, this.canvasGrid, plot.textTemplateInfo);
     }
 
-    _getPainter(plot, store) {
+    _getPainterSession(plot, store) {
         switch (plot.item.constructor.name) {
             case Zone.name:
                 var id = `zone${plot.item.type}d0v0`;
-                return store.getPainter(id, plot.data.variantKey);
+                return store.getPainterSession(id, plot.data.variantKey);
             case TerrainProp.name:
                 var id = `prop${plot.item.type}`;
-                return store.getPainter(id, plot.data.variantKey);
+                return store.getPainterSession(id, plot.data.variantKey);
         }
     }
 }
@@ -2145,9 +2245,9 @@ class MapToolSessionRenderer {
         this._feedbackSettings = Object.assign({}, MapToolController.settings().feedback);
         this._style = MapToolController.settings().mapOverlayStyle;
         this._frameCounter = 0;
-        this.focusRectPainter = ScriptPainterStore.shared.getPainter(this._style.focusRectPainter);
+        this.focusRectPainter = ScriptPainterStore.shared.getPainterSession(this._style.focusRectPainter);
         Object.getOwnPropertyNames(this._feedbackSettings).forEach((key) => {
-            this._feedbackSettings[key].painter = ScriptPainterStore.shared.getPainter(this._feedbackSettings[key].painter);
+            this._feedbackSettings[key].painter = ScriptPainterStore.shared.getPainterSession(this._feedbackSettings[key].painter);
         });
     }
 
@@ -2195,13 +2295,13 @@ class ScriptPainterCollection {
         return { width: 1, height: 1 };
     }
 
-    static fromYaml(source, deviceScale) {
+    static fromYaml(id, source, deviceScale) {
         var config = jsyaml.safeLoad(source);
         if (!config) { return null; }
-        return ScriptPainterCollection.fromObject(config, deviceScale);
+        return ScriptPainterCollection.fromObject(id, config, deviceScale);
     }
 
-    static fromObject(config, deviceScale) {
+    static fromObject(id, config, deviceScale) {
         if (config instanceof Array) {
             config = { variants: [config], expectedSize: ScriptPainterCollection.defaultExpectedSize(), deviceScale: deviceScale };
         } else {
@@ -2216,10 +2316,11 @@ class ScriptPainterCollection {
         if (!config.expectedSize || config.expectedSize.width < 1 || config.expectedSize.height < 1) {
             throw new TypeError("Invalid ScriptPainter YAML: invalid expectedSize.");
         }
-        return new ScriptPainterCollection(config);
+        return new ScriptPainterCollection(id, config);
     }
 
-    constructor(config) {
+    constructor(id, config) {
+        this.id = id;
         this.config = config;
         this.variants = config.variants.map(item => new ScriptPainter({ lines: item, expectedSize: config.expectedSize, deviceScale: config.deviceScale }));
     }
@@ -2240,6 +2341,18 @@ class ScriptPainterCollection {
 
     getVariant(variantKey) {
         return this.variants[variantKey % this.variants.length];
+    }
+}
+
+class ScriptPainterSession {
+    constructor(id, variantKey, painter) {
+        this.id = id;
+        this.variantKey = variantKey;
+        this.painter = painter;
+    }
+    render(ctx, rect, canvasGrid, modelMetadata) {
+        if (!this.painter) { return; }
+        this.painter.render(ctx, rect, canvasGrid, modelMetadata, this);
     }
 }
 
@@ -2266,7 +2379,7 @@ class ScriptPainter {
         return jsyaml.dump(this.lines, {condenseFlow: true, flowLevel: 1});
     }
 
-    render(ctx, rect, canvasGrid, modelMetadata) {
+    render(ctx, rect, canvasGrid, modelMetadata, session) {
         // TODO can we compile the lines so you don't parse them every frame?
         // Idea would be to create Path objects, Text objects, etc. (using native Canvas stuff like
         // Path2d or CanvasGradient when possible) with fixed "model" coordinates, then do the final runtime
@@ -2278,7 +2391,8 @@ class ScriptPainter {
         var xRange = { min: 0, max: rect.width };
         var yRange = { min: 0, max: rect.height };
         var twRange = { min: 0, max: canvasGrid.tileWidth };
-        var info = { rect: rect, xDomain: xDomain, yDomain: yDomain, xRange: xRange, yRange: yRange, twRange: twRange, modelMetadata: modelMetadata };
+        var info = { session: session, canvasGrid: canvasGrid, rect: rect, xDomain: xDomain, yDomain: yDomain, xRange: xRange, yRange: yRange, twRange: twRange, modelMetadata: modelMetadata };
+        ctx.save();
         for (var i = 0; i < this.lines.length; i++) {
             var line = this.lines[i];
             if (line.length == 0) { continue; }
@@ -2287,8 +2401,11 @@ class ScriptPainter {
                 case "innerStroke": this._innerStroke(line, ctx, info); break;
                 case "poly": this._poly(line, ctx, info); break;
                 case "text": this._text(line, ctx, info); break;
+                case "rotate": this._rotate(line, ctx, info); break;
+                case "script": this._script(line, ctx, info); break;
             }
         }
+        ctx.restore();
     }
 
     _toPx(value, units, domain, twRange) {
@@ -2313,6 +2430,13 @@ class ScriptPainter {
             this._toPx(line[xIndex + 1], units, info.yDomain, info.twRange),
             this._toPx(line[xIndex + 2], units, info.xRange, info.twRange),
             this._toPx(line[xIndex + 3], units, info.yRange, info.twRange))
+    }
+
+    _toRadians(value, units) {
+        switch (units) {
+            case "r": return value;
+            case "d": return value * radiansPerDegree;
+        }
     }
 
     // [fill,red,rect,0,0,1,1,r]
@@ -2377,6 +2501,24 @@ class ScriptPainter {
         var text = String.fromTemplate(line[9], info.modelMetadata);
         ctx.textFill(text, new Point(x, y));
     }
+
+    // [rotate,amount,d]
+    _rotate(line, ctx, info) {
+        var rad = this._toRadians(line[1], line[2]);
+        var dx = info.rect.x + 0.5 * info.rect.width;
+        var dy = info.rect.y + 0.5 * info.rect.height;
+        ctx.translate(dx, dy);
+        ctx.rotate(rad);
+        ctx.translate(-dx, -dy);
+    }
+
+    // [script,id,variantKey]
+    _script(line, ctx, info) {
+        var variantKey = parseInt(line[2]);
+        if (isNaN(variantKey) || variantKey < 0) { variantKey = info.session.variantKey; }
+        var painter = ScriptPainterStore.shared.getPainterSession(line[1], variantKey);
+        painter.render(ctx, info.rect, info.canvasGrid, info.modelMetadata);
+    }
 }
 
 class ScriptPainterStore {
@@ -2392,9 +2534,9 @@ class ScriptPainterStore {
         var data = GameContent.shared.painters[id];
         if (!data) { return null; }
         try {
-            var item = ScriptPainterCollection.fromObject(data, this.deviceScale);
+            var item = ScriptPainterCollection.fromObject(id, data, this.deviceScale);
             if (!item) { return null; }
-            this.cache[id] = item;
+            this.collectionCache[id] = item;
             return item;
         } catch(e) {
             debugLog(e.message);
@@ -2416,6 +2558,13 @@ class ScriptPainterStore {
         var ds = this.deviceScale;
         this.cache[id] = variants.map(v => new ScriptPainter({ lines: v, expectedSize: expectedSize, deviceScale: ds }));
         return this.getPainter(id, variantKey)
+    }
+
+    getPainterSession(id, variantKey) {
+        variantKey = parseInt(variantKey);
+        variantKey = isNaN(variantKey) ? 0 : variantKey;
+        var painter = this.getPainter(id, variantKey);
+        return new ScriptPainterSession(id, variantKey, painter);
     }
 }
 
@@ -2543,6 +2692,7 @@ class NewGameDialog extends GameDialog {
             id: "difficulty",
             parent: formElem,
             title: Strings.str("citySettingsDifficultyLabel"),
+            validationRules: [SingleChoiceInputCollection.selectionRequiredRule],
             choices: Game.rules().difficulties.map(difficulty => { return {
                 title: Strings.template("difficultyChoiceLabelTemplate", Object.assign({formattedCash: Simoleon.format(difficulty.startingCash)}, difficulty)),
                 value: difficulty.index,
@@ -2557,7 +2707,7 @@ class NewGameDialog extends GameDialog {
         // standard bottom-of-dialog buttons.
 
         this.contentElem.append(formElem);
-        this.allInputs = [this.cityNameInput, this.mayorNameInput];
+        this.allInputs = [this.cityNameInput, this.mayorNameInput, this.difficulties];
     }
 
     get isModal() { return true; }
@@ -2569,8 +2719,7 @@ class NewGameDialog extends GameDialog {
     }
 
     get isValid() {
-        return this.allInputs.every(input => input.isValid)
-            && this.difficulties.value !== null;
+        return this.allInputs.every(input => input.isValid);
     }
 
     get difficulty() {
@@ -2834,36 +2983,38 @@ var dataIsReady = function(content) {
 };
 
 return {
-    game: null,
     engineRunLoop: engineRunLoop,
-    uiRunLoop: uiRunLoop,
-    rootView: rootView,
+    game: null,
     initialize: initialize,
-    Z: Z,
-    Simoleon: Simoleon,
-    RCIValue: RCIValue,
-    SimDate: SimDate,
-    Zone: Zone,
-    Plot: Plot,
-    Terrain: Terrain,
-    GameMap: GameMap,
-    City: City,
+    rootView: rootView,
+    uiRunLoop: uiRunLoop,
     Budget: Budget,
-    GameStorage: GameStorage,
+    City: City,
     Game: Game,
     GameDialog: GameDialog,
+    GameMap: GameMap,
+    GameStorage: GameStorage,
     InputView: InputView,
     KeyInputController: KeyInputController,
-    MapRenderer: MapRenderer,
     LoadGameMenu: LoadGameMenu,
+    MapRenderer: MapRenderer,
+    Plot: Plot,
+    RCIValue: RCIValue,
     ScriptPainter: ScriptPainter,
     ScriptPainterCollection: ScriptPainterCollection,
+    ScriptPainterSession: ScriptPainterSession,
     ScriptPainterStore: ScriptPainterStore,
+    SimDate: SimDate,
+    Simoleon: Simoleon,
     SingleChoiceInputCollection: SingleChoiceInputCollection,
     Strings: Strings,
+    Terrain: Terrain,
     TerrainRenderer: TerrainRenderer,
+    TerrainTile: TerrainTile,
     TextInputView: TextInputView,
-    ToolButton: ToolButton
+    ToolButton: ToolButton,
+    Z: Z,
+    Zone: Zone,
 };
 
 })(); // end CitySim namespace

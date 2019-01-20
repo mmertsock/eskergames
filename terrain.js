@@ -15,35 +15,36 @@ window.CitySimTerrain = (function() {
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
-var Binding = Gaming.Binding;
-var BoolArray = Gaming.BoolArray;
-var FlexCanvasGrid = Gaming.FlexCanvasGrid;
-var Kvo = Gaming.Kvo;
-var PerfTimer = Gaming.PerfTimer;
-var Point = Gaming.Point;
-var RandomLineGenerator = Gaming.RandomLineGenerator;
-var Rect = Gaming.Rect;
-var Rng = Gaming.Rng;
-var SaveStateCollection = Gaming.SaveStateCollection;
-var SaveStateItem = Gaming.SaveStateItem;
-var SelectableList = Gaming.SelectableList;
-var UndoStack = Gaming.UndoStack;
-var Vector = Gaming.Vector;
+const Binding = Gaming.Binding;
+const BoolArray = Gaming.BoolArray;
+const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const Kvo = Gaming.Kvo;
+const PerfTimer = Gaming.PerfTimer;
+const Point = Gaming.Point;
+const RandomLineGenerator = Gaming.RandomLineGenerator;
+const Rect = Gaming.Rect;
+const Rng = Gaming.Rng;
+const SaveStateCollection = Gaming.SaveStateCollection;
+const SaveStateItem = Gaming.SaveStateItem;
+const SelectableList = Gaming.SelectableList;
+const UndoStack = Gaming.UndoStack;
+const Vector = Gaming.Vector;
 
-var GameContent = CitySimContent.GameContent;
-var GameDialog = CitySim.GameDialog;
-var GameMap = CitySim.GameMap;
-var GameScriptEngine = CitySimContent.GameScriptEngine;
-var GameStorage = CitySim.GameStorage;
-var InputView = CitySim.InputView;
-var MapRenderer = CitySim.MapRenderer;
-var ScriptPainterStore = CitySim.ScriptPainterStore;
-var SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
-var Strings = CitySim.Strings;
-var Terrain = CitySim.Terrain;
-var TerrainRenderer = CitySim.TerrainRenderer;
-var TextInputView = CitySim.TextInputView;
-var ToolButton = CitySim.ToolButton;
+const GameContent = CitySimContent.GameContent;
+const GameDialog = CitySim.GameDialog;
+const GameMap = CitySim.GameMap;
+const GameScriptEngine = CitySimContent.GameScriptEngine;
+const GameStorage = CitySim.GameStorage;
+const InputView = CitySim.InputView;
+const MapRenderer = CitySim.MapRenderer;
+const ScriptPainterStore = CitySim.ScriptPainterStore;
+const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
+const Strings = CitySim.Strings;
+const Terrain = CitySim.Terrain;
+const TerrainRenderer = CitySim.TerrainRenderer;
+const TerrainTile = CitySim.TerrainTile;
+const TextInputView = CitySim.TextInputView;
+const ToolButton = CitySim.ToolButton;
 
 Point.tilesBetween = function(a, b, log) {
     var v = Vector.betweenPoints(a, b);
@@ -231,7 +232,7 @@ class OceanTileGenerator extends TileGenerator {
         edgeTiles.forEach(edgeTile => {
             var shoreDistance = this.lineGenerator.nextValue();
             var line = this.edge.lineOfTiles(edgeTile, shoreDistance);
-            this.fill(tiles, "O", line, generator);
+            this.fill(tiles, TerrainTile.ocean, line, generator);
         });
     }
 }
@@ -286,13 +287,13 @@ class RiverTileGenerator extends TileGenerator {
             sliceWidth = Math.round(sliceWidth);
             for (var i = 0; i < sliceWidth; i += 1) {
                 if (generator.bounds.containsTile(point)
-                    && !TerrainGenerator.isWater(tiles[point.y][point.x])) {
+                    && tiles[point.y][point.x].isLand) {
                     water.push(point);
                 }
                 point = point.adding(axis);
             }
         });
-        this.fill(tiles, "R", water, generator);
+        this.fill(tiles, TerrainTile.water, water, generator);
     }
 }
 
@@ -352,12 +353,11 @@ class ForestTileGenerator extends BlobFillTileGenerator {
     }
 
     currentCoverageRatio(tiles) {
-        var treeCount = 0;
-        var landCount = 0;
+        var treeCount = 0, landCount = 0;
         tiles.forEach(row => {
             row.forEach(tile => {
-                if (tile == "F") { treeCount += 1; }
-                if (!TerrainGenerator.isWater(tile)) { landCount += 1; }
+                if (tile.has(TerrainTile.flags.trees)) { treeCount += 1; }
+                if (tile.isLand) { landCount += 1; }
             });
         });
         return (landCount > 0) ? (treeCount / landCount) : 1;
@@ -372,12 +372,11 @@ class FreshWaterTileGenerator extends BlobFillTileGenerator {
     }
 
     currentCoverageRatio(tiles) {
-        var freshCount = 0;
-        var landCount = 0;
+        var freshCount = 0, landCount = 0;
         tiles.forEach(row => {
             row.forEach(tile => {
-                if (tile == "R") { freshCount += 1; }
-                if (tile != "O") { landCount += 1; }
+                if (tile.isFreshwater) { freshCount += 1; }
+                if (tile.isLand) { landCount += 1; }
             });
         });
         return (landCount > 0) ? (freshCount / landCount) : 1;
@@ -426,29 +425,25 @@ class BlobTileGenerator extends TileGenerator {
 
 class LakeTileGenerator extends BlobTileGenerator {
     constructor(config) {
-        super(Object.assign({value: "R"}, config));
+        super(Object.assign({value: TerrainTile.water}, config));
     }
 
     shouldFill(point, tiles, generator) {
-        return !TerrainGenerator.isWater(tiles[point.y][point.x]);
+        return tiles[point.y][point.x].isLand;
     }
 }
 
 class WoodsTileGenerator extends BlobTileGenerator {
     constructor(config) {
-        super(Object.assign({value: "F"}, config));
+        super(Object.assign({value: TerrainTile.forest}, config));
     }
 
     shouldFill(point, tiles, generator) {
-        return !TerrainGenerator.isWater(tiles[point.y][point.x]);
+        return tiles[point.y][point.x].isLand;
     }
 }
 
 class TerrainGenerator {
-    static isWater(tile) {
-        return tile == "R" || tile == "O";
-    }
-
     constructor(config) {
         this.map = new GameMap({
             size: config.size
@@ -486,7 +481,7 @@ class TerrainGenerator {
         for (var rowIndex = 0; rowIndex < this.size.height; rowIndex += 1) {
             var row = [];
             for (var colIndex = 0; colIndex < this.size.width; colIndex += 1) {
-                row.push(" ");
+                row.push(TerrainTile.dirt);
             }
             tiles.push(row);
         }
@@ -621,6 +616,10 @@ class RootView {
         new NewTerrainDialog(this.session).show();
     }
 
+    tryToLoadTerrain(id) {
+
+    }
+
     _configureCommmands() {
         GameScriptEngine.shared.registerCommand("saveCurrentTerrain", () => this.saveCurrentTerrain());
         GameScriptEngine.shared.registerCommand("terrainUndo", () => this.undo());
@@ -653,6 +652,7 @@ class NewTerrainDialog extends GameDialog {
             id: "size",
             parent: formElem,
             title: Strings.str("terrainSettingsSizeLabel"),
+            validationRules: [SingleChoiceInputCollection.selectionRequiredRule],
             choices: Terrain.settings().sizes.map(size => { return {
                 title: `${size.width} x ${size.height} tiles, ${Number.uiInteger(Terrain.kmForTileCount(size.width))} x ${Number.uiInteger(Terrain.kmForTileCount(size.height))} km`,
                 value: size.index,
@@ -663,6 +663,7 @@ class NewTerrainDialog extends GameDialog {
             id: "template",
             parent: formElem,
             title: Strings.str("terrainSettingsTemplateLabel"),
+            validationRules: [SingleChoiceInputCollection.selectionRequiredRule],
             choices: [
                 { title: Strings.str("terrainSettingsBlankTemplateLabel"), value: "blank", selected: false },
                 { title: Strings.str("terrainSettingsLandlockedTemplateLabel"), value: "landlocked", selected: false },
@@ -672,7 +673,7 @@ class NewTerrainDialog extends GameDialog {
         });
 
         this.contentElem.append(formElem);
-        this.allInputs = [this.nameInput];
+        this.allInputs = [this.nameInput, this.sizes, this.templates];
     }
 
     get isModal() { return true; }
@@ -682,9 +683,7 @@ class NewTerrainDialog extends GameDialog {
     get dialogButtons() { return [this.createButton.elem]; }
 
     get isValid() {
-        return this.allInputs.every(input => input.isValid)
-            && this.sizes.value !== null
-            && this.templates.value !== null;
+        return this.allInputs.every(input => input.isValid);
     }
 
     get selectedSize() { return Terrain.sizeOrDefaultForIndex(this.sizes.value); }
@@ -749,16 +748,17 @@ class TerrainView {
 
     processFrame(rl) {
         if (!this.session || this.session.changeToken == this._lastTokenDrawn) { return; }
+        var timer = new PerfTimer("TerrainView.processFrame").start();
         this._lastTokenDrawn = this.session.changeToken;
         var settings = Object.assign({}, this.settings);
         settings.edgePaddingFillStyle = "white";
-        debugLog("DRAWING TERRAIN");
         var ctx = this.drawContext;
-        if (this.session && this.session.map) {
-            this._terrainRenderer.render(ctx, settings, this.session.map.terrain);
+        if (this.session && this.session) {
+            this._terrainRenderer.render(ctx, settings, this.session.terrain);
         } else {
             this._terrainRenderer.render(ctx, settings);
         }
+        debugLog(timer.end().summary);
     }
 }
 

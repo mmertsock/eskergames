@@ -475,6 +475,8 @@ var directions = {
     NW: 7
 };
 directions.opposite = function(id) { return (id + 4) % 8; };
+directions.all = [0, 1, 2, 3, 4, 5, 6, 7];
+directions.isCardinal = function(id) { return id % 2 == 0 };
 
 class XYValue {
     isEqual(p2, tol) {
@@ -680,7 +682,7 @@ class Vector extends XYValue {
 }
 
 var diag = 0.7071;
-Vector.unitsByDirection = {};
+Vector.unitsByDirection = [];
 Vector.unitsByDirection[directions.N]  = new Vector(0, 1);
 Vector.unitsByDirection[directions.NE] = new Vector(diag, diag);
 Vector.unitsByDirection[directions.E]  = new Vector(1, 0);
@@ -689,6 +691,17 @@ Vector.unitsByDirection[directions.S]  = new Vector(0, -1);
 Vector.unitsByDirection[directions.SW] = new Vector(-diag, -diag);
 Vector.unitsByDirection[directions.W]  = new Vector(-1, 0);
 Vector.unitsByDirection[directions.NW] = new Vector(-diag, diag);
+
+Vector.manhattanUnits = [];
+Vector.manhattanUnits[directions.N]  = new Vector(0, 1);
+Vector.manhattanUnits[directions.NE] = new Vector(1, 1);
+Vector.manhattanUnits[directions.E]  = new Vector(1, 0);
+Vector.manhattanUnits[directions.SE] = new Vector(1, -1);
+Vector.manhattanUnits[directions.S]  = new Vector(0, -1);
+Vector.manhattanUnits[directions.SW] = new Vector(-1, -1);
+Vector.manhattanUnits[directions.W]  = new Vector(-1, 0);
+Vector.manhattanUnits[directions.NW] = new Vector(-1, 1);
+Vector.cardinalUnits = [Vector.manhattanUnits[directions.N], Vector.manhattanUnits[directions.E], Vector.manhattanUnits[directions.S], Vector.manhattanUnits[directions.W]];
 
 // possibly for performance:
 // var Vector = {
@@ -1218,13 +1231,13 @@ KeyboardState.prototype.reset = function() {
 // have origin at top left.
 //
 // left axis: model Y. right axis: screen Y
-//  0123456
-// 4       0
-// 3       1
-// 2       2
-// 1       3
-// 0       4
-// -1      5   (and model 5 == screen -1)
+//  012345
+// 4      -1
+// 3      0
+// 2      1
+// 1      2
+// 0      3
+// -1     4
 class TilePlane {
     constructor(size) {
         this.width = size.width;
@@ -1321,28 +1334,16 @@ class FlexCanvasGrid {
         return { width: this.canvas.clientWidth * this.deviceScale, height: this.canvas.clientHeight * this.deviceScale };
     }
     // Device independent size
-    get canvasCSSSize() {
-        return { width: this.canvas.clientWidth, height: this.canvas.clientHeight };
-    }
+    get canvasCSSSize() { return { width: this.canvas.clientWidth, height: this.canvas.clientHeight }; }
 
     // num visible tiles
-    get isEmpty() {
-        return this._tilesWide < 1 || this._tilesHigh < 1;
-    }
-    get tilesWide() {
-        return this._tilesWide;
-    }
-    get tilesHigh() {
-        return this._tilesHigh;
-    }
-    get tileSize() {
-        return { width: this._tilesWide, height: this._tilesHigh };
-    }
-    // Canvas model coords covering all visible tiles, minus any unused edge 
-    // padding.
-    get rectForAllTiles() {
-        return this._allTilesRect;
-    }
+    get isEmpty() { return this._tilesWide < 1 || this._tilesHigh < 1; }
+    get tilesWide() { return this._tilesWide; }
+    get tilesHigh() { return this._tilesHigh; }
+    get tileSize() { return { width: this._tilesWide, height: this._tilesHigh }; }
+
+    // Canvas model coords covering all visible tiles, minus any unused edge padding.
+    get rectForAllTiles() { return this._allTilesRect; }
     get rectForFullCanvas() {
         return new Rect(0, 0, this.canvas.width, this.canvas.height);
     }
@@ -1379,15 +1380,6 @@ class FlexCanvasGrid {
             Math.floor((y - this._allTilesRect.y) / (this.tileWidth + this.tileSpacing))
         );
         return this.isTileVisible(location) ? location : null;
-    }
-
-    visitEachLocation(visitor) {
-        for (var rowIndex = 0; rowIndex < this.rows; rowIndex++) {
-            for (var colIndex = 0; colIndex < this.columns; colIndex++) {
-                let location = {x: colIndex, y: rowIndex};
-                visitor(location, this.rectForTile(location));
-            }
-        }
     }
 }
 

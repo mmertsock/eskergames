@@ -10,6 +10,7 @@ var FlexCanvasGrid = Gaming.FlexCanvasGrid;
 var GameContent = CitySimContent.GameContent;
 var ScriptPainterCollection = CitySim.ScriptPainterCollection;
 var ScriptPainter = CitySim.ScriptPainter;
+var ScriptPainterSession = CitySim.ScriptPainterSession;
 var ScriptPainterStore = CitySim.ScriptPainterStore;
 
 function showMessage(msg, elem) {
@@ -126,16 +127,18 @@ class SectionView {
             showMessage("Failed to find script " + id);
             return;
         }
+        this.scriptEntry.collectionID = collection.id;
         this.scriptEntry.scriptSource = collection.rawSource;
     }
 
     renderInput() {
         try {
-            var collection = ScriptPainterCollection.fromYaml(this.scriptEntry.scriptSource, CanvasView.deviceScale());
+            var collection = ScriptPainterCollection.fromYaml(this.scriptEntry.collectionID, this.scriptEntry.scriptSource, CanvasView.deviceScale());
             var metadata = this.metadataEntry.value;
             this.canvasViews.forEach(view => view.render(collection, metadata));
         } catch (e) {
             showMessage(`Invalid script: ${e.message}`, this.root.querySelector(".scriptEntry"));
+            debugLog(e);
             this.scriptEntry.markInvalid();
         }
     }
@@ -196,7 +199,7 @@ class CanvasView {
         var columns = 3;
         var offset = new Point(1, 1);
         var spacing = this._spacingForCollection(collection);
-        collection.variants.forEach((variant, i) => this._renderVariant(ctx, variant, metadata, i, columns, offset, spacing));
+        collection.variants.forEach((variant, i) => this._renderVariant(ctx, collection.id, variant, metadata, i, columns, offset, spacing));
     }
 
     renderAll(allCollections, metadata) {
@@ -208,7 +211,7 @@ class CanvasView {
             var offset = new Point(0, nextY);
             var spacing = this._spacingForCollection(collection) - 1;
             nextY = nextY + spacing + 1;
-            collection.variants.forEach((variant, i) => this._renderVariant(ctx, variant, metadata, i, columns, offset, spacing));
+            collection.variants.forEach((variant, i) => this._renderVariant(ctx, collection.id, variant, metadata, i, columns, offset, spacing));
         });
     }
 
@@ -217,7 +220,7 @@ class CanvasView {
     }
 
     _renderBackground(ctx) {
-        ctx.fillStyle = GameContent.shared.mainMapView.emptyFillStyle;
+        ctx.fillStyle = "white"; //GameContent.shared.mainMapView.emptyFillStyle;
         ctx.rectFill(this.canvasGrid.rectForFullCanvas);
 
         // add 1 tile padding in each direction to fill the edges
@@ -225,16 +228,17 @@ class CanvasView {
             for (var x = -1; x <= this.canvasGrid.tilesWide; x += 1) {
                 var isDark = (x + y) % 2;
                 if (isDark) {
-                    ctx.fillStyle = "hsla(0, 0%, 0%, 0.03)";
+                    ctx.fillStyle = "hsla(0, 0%, 0%, 0.05)";
                     ctx.rectFill(this.canvasGrid.rectForTile(new Point(x, y)));
                 }
             }
         }
     }
 
-    _renderVariant(ctx, variant, metadata, i, columns, offset, spacing) {
+    _renderVariant(ctx, painterID, variant, metadata, i, columns, offset, spacing) {
         var origin = new Point((1 + spacing) * (i % columns), (1 + spacing) * Math.floor(i / columns)).adding(offset);
         var rect = this.canvasGrid.rectForTileRect(new Rect(origin, variant.expectedSize));
+        var session = new ScriptPainterSession(painterID, i, variant);
         variant.render(ctx, rect, this.canvasGrid, metadata);
     }
 }
@@ -265,6 +269,7 @@ class ScriptSelectorView {
 class ScriptEntryView {
     constructor(elem) {
         this.elem = elem;
+        this.collectionID = "(unknown)";
         this.reset();
         this.elem.captureEventListener("input", () => this.clearInvalid());
     }
@@ -313,6 +318,7 @@ class MetadataEntryView {
             return JSON.parse(this.elem.value);
         } catch (e) {
             showMessage("Invalid metadata: " + e.message, this.elem);
+            debugLog(e);
             return {};
         }
     }
