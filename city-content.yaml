@@ -351,7 +351,7 @@ strings:
   saveAndQuitButton: Save and Quit
   saveButton: Save
   systemMenuTitle: System
-  uiFpsLabel: "<value> fps"
+  uiFpsLabel: "<value> fps / <load> load"
   windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
   zoomInButtonGlyph: ➕
   zoomOutButtonGlyph: ➖

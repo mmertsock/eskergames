@@ -365,6 +365,12 @@ class CircularArray {
         return this.isEmpty ? null : this.items[this._oldestIndex];
     }
 
+    getValue(index) {
+        let size = this.size;
+        if (index < 0 || index >= size) { return undefined; }
+        return this.items[(this._oldestIndex + index) % this.maxLength];
+    }
+
     reset() {
         this._nextIndex = 0;
         this._oldestIndex = -1;
@@ -727,14 +733,23 @@ class PerfTimer {
         performance.mark(`${this.name}.end`);
         return this;
     }
-    get summary() {
-        if (!this.isEnabled) { return "(performance not available)"; }
+    get summaryInfo() {
+        if (!this.isEnabled) { return null; }
         performance.measure(this.name, `${this.name}.start`, `${this.name}.end`);
         var measure = performance.getEntriesByName(this.name)[0];
         performance.clearMarks(this.name);
         performance.clearMeasures(this.name);
         measure = measure ? measure.duration : "?";
-        return `${this.name}: ${measure} ms`;
+        return {
+            name: this.name,
+            ms: measure
+        };
+    }
+
+    get summary() {
+        var info = this.summaryInfo;
+        if (!info) { return "(performance not available)"; }
+        return `${info.name}: ${info.ms} ms`;
     }
 }
 
@@ -762,6 +777,7 @@ var RunLoop = function(config) {
     this.started = false;
     this.nextTimeoutID = undefined;
     this.recentFrameStartDates = new CircularArray(100);
+    this.recentFrameProcessingTimes = new CircularArray(100);
     this.childRunLoops = (config.childRunLoops === undefined) ? [] : config.childRunLoops;
     if (!config.runWhenPageIsInBackground) {
         document.addEventListener("visibilitychange", this.toggleAutopause.bind(this));
@@ -792,6 +808,17 @@ RunLoop.prototype.getRecentFramesPerSecond = function() {
 RunLoop.prototype.getRecentMillisecondsPerFrame = function() {
     var seconds = this._getRecentSecondsElapsed();
     return isNaN(seconds) ? NaN : (seconds / this.recentFrameStartDates.size);
+};
+
+RunLoop.prototype.getProcessingLoad = function() {
+    if (this.recentFrameProcessingTimes.size < 5) { return NaN; }
+    let totalTime = this.recentFrameStartDates.last - this.recentFrameStartDates.first;
+    var processTime = 0;
+    // Don't use the most recent time b/c that's not included in the totalTime calculation above
+    for (var i = 0; i < this.recentFrameProcessingTimes.size - 1; i += 1) {
+        processTime += this.recentFrameProcessingTimes.getValue(i);
+    }
+    return processTime / totalTime;
 };
 
 RunLoop.prototype._getRecentSecondsElapsed = function() {
@@ -831,6 +858,7 @@ RunLoop.prototype.pause = function(autoPause) {
     clearTimeout(this.nextTimeoutID);
     this.nextTimeoutID = undefined;
     this.recentFrameStartDates.reset();
+    this.recentFrameProcessingTimes.reset();
     this.forEachDelegate(function (d) {
         if (d.runLoopDidPause) {
             d.runLoopDidPause(this);
@@ -881,12 +909,14 @@ RunLoop.prototype.processFrame = function() {
     if (!this.isRunning()) {
         return;
     }
-    this.recentFrameStartDates.push(new Date());
+    var start = new Date();
+    this.recentFrameStartDates.push(start);
     this.forEachDelegate(function (d) {
         if (d.processFrame) {
             d.processFrame(this);
         }
     }.bind(this));
+    this.recentFrameProcessingTimes.push(new Date() - start);
     this.scheduleNextFrame();
 };
 

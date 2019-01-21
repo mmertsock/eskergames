@@ -106,6 +106,10 @@ Number.uiInteger = function(value) {
     return Number(value).toLocaleString();
 };
 
+Number.uiPercent = function(ratio) {
+    return Math.round(ratio * 100).toLocaleString() + "%";
+};
+
 class SimDate {
     constructor(y, m, d) {
         if (typeof m === 'undefined') {
@@ -1997,11 +2001,12 @@ class GameEngineControlsView {
 
         var rates = [];
         var uiFrameRate = uiRunLoop.getRecentFramesPerSecond();
-        if (!isNaN(uiFrameRate)) {
-            rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate) }));
+        var uiLoad = uiRunLoop.getProcessingLoad();
+        if (!isNaN(uiFrameRate) && !isNaN(uiLoad)) {
+            rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate), load: Number.uiPercent(uiLoad) }));
         }
         var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
-        if (!isNaN(engineFrameRate)) {
+        if (!isNaN(engineFrameRate) && !isNaN(engineLoad)) {
             rates.push(Strings.template("engineMsPerDayLabel", { value: Math.round(engineFrameRate) }));
         }
 

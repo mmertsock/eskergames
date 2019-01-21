@@ -2,16 +2,18 @@
 
 window.Painter = (function() {
 
-var debugLog = Gaming.debugLog;
-var once = Gaming.once;
-var Point = Gaming.Point;
-var Rect = Gaming.Rect;
-var FlexCanvasGrid = Gaming.FlexCanvasGrid;
-var GameContent = CitySimContent.GameContent;
-var ScriptPainterCollection = CitySim.ScriptPainterCollection;
-var ScriptPainter = CitySim.ScriptPainter;
-var ScriptPainterSession = CitySim.ScriptPainterSession;
-var ScriptPainterStore = CitySim.ScriptPainterStore;
+const debugLog = Gaming.debugLog;
+const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const once = Gaming.once;
+const PerfTimer = Gaming.PerfTimer;
+const Point = Gaming.Point;
+const Rect = Gaming.Rect;
+
+const GameContent = CitySimContent.GameContent;
+const ScriptPainter = CitySim.ScriptPainter;
+const ScriptPainterCollection = CitySim.ScriptPainterCollection;
+const ScriptPainterSession = CitySim.ScriptPainterSession;
+const ScriptPainterStore = CitySim.ScriptPainterStore;
 
 function showMessage(msg, elem) {
     debugLog(msg);
@@ -119,6 +121,10 @@ class SectionView {
         root.querySelector("button.reset").captureEventListener("click", () => this.reset());
     }
 
+    get isPerfTest() {
+        return this.root.querySelector(".perfTest input").checked;
+    }
+
     loadScriptFromStore() {
         var id = this.scriptSelection.selectedID;
         if (!id) { return; }
@@ -135,7 +141,9 @@ class SectionView {
         try {
             var collection = ScriptPainterCollection.fromYaml(this.scriptEntry.collectionID, this.scriptEntry.scriptSource, CanvasView.deviceScale());
             var metadata = this.metadataEntry.value;
-            this.canvasViews.forEach(view => view.render(collection, metadata));
+            this._perfTestIfNeeded(() => {
+                this.canvasViews.forEach(view => view.render(collection, metadata));
+            });
         } catch (e) {
             showMessage(`Invalid script: ${e.message}`, this.root.querySelector(".scriptEntry"));
             debugLog(e);
@@ -148,11 +156,27 @@ class SectionView {
         var allCollections = ScriptSelectorView.allPainterIDs()
             .map(id => ScriptPainterStore.shared.getPainterCollection(id))
             .filter(collection => collection != null);
-        this.canvasViews.forEach(view => view.renderAll(allCollections, metadata));
+        this._perfTestIfNeeded(() => {
+            this.canvasViews.forEach(view => view.renderAll(allCollections, metadata));
+        });
     }
 
     reset() {
         this.views.forEach((view) => { if (view.reset) { view.reset(); } });
+    }
+
+    _perfTestIfNeeded(block) {
+        if (!this.isPerfTest) {
+            block();
+            return;
+        }
+        let iterations = 100;
+        let overall = new PerfTimer("TotalRenderTime").start();
+        for (let i = 0; i < iterations; i +=1 ) { block(); }
+        let info = overall.end().summaryInfo;
+        if (info) {
+            showMessage(`Render time (${iterations} iterations): ${info.ms} ms total, ${info.ms / iterations} ms average`);
+        }
     }
 }
 
@@ -204,6 +228,7 @@ class CanvasView {
 
     renderAll(allCollections, metadata) {
         var ctx = this.canvas.getContext("2d");
+        this._renderBackground(ctx);
         var sorted = allCollections.sort((a, b) => this._spacingForCollection(a) - this._spacingForCollection(b));
         var nextY = 0;
         sorted.forEach((collection) => {

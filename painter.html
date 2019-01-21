@@ -43,15 +43,26 @@ section {
     margin: 0 auto;
 }
 
+.buttons {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+}
+
 button.render {
     display: block;
-    float: right;
     font-weight: 600;
     color: #000099;
 }
 button.renderAll {
     display: block;
-    float: right;
+}
+label.perfTest {
+    display: block;
+    flex-grow: 1;
+    text-align: right;
+    margin-right: 1em;
+    font-size: 8pt;
 }
 button.reset {
     color: #990000;
@@ -136,10 +147,11 @@ Reset button also reloads all YAML.
             <select><option>painter ID</option></select>
         </div>
         <div class="buttons">
-            <button class="render">Render</button>
-            <button class="renderAll">Render All</button>
             <button class="selectScript">Load Script</button>
             <button class="reset">Reset</button>
+            <label class="perfTest"><input type="checkbox" value="1"> Perf Test</label>
+            <button class="renderAll">Render All</button>
+            <button class="render">Render</button>
         </div>
         <div class="scriptEntry"><textarea placeholder="Enter script"></textarea></div>
         <div class="metadata"><textarea placeholder="Model metadata"></textarea></div>
@@ -158,10 +170,11 @@ Reset button also reloads all YAML.
             <select><option>painter ID</option></select>
         </div>
         <div class="buttons">
-            <button class="render">Render</button>
-            <button class="renderAll">Render All</button>
             <button class="selectScript">Load Script</button>
             <button class="reset">Reset</button>
+            <label class="perfTest"><input type="checkbox" value="1"> Perf Test</label>
+            <button class="renderAll">Render All</button>
+            <button class="render">Render</button>
         </div>
         <div class="scriptEntry"><textarea placeholder="Enter script"></textarea></div>
         <div class="metadata"><textarea placeholder="Model metadata"></textarea></div>
@@ -178,10 +191,11 @@ Reset button also reloads all YAML.
             <select><option>painter ID</option></select>
         </div>
         <div class="buttons">
-            <button class="render">Render</button>
-            <button class="renderAll">Render All</button>
             <button class="selectScript">Load Script</button>
             <button class="reset">Reset</button>
+            <label class="perfTest"><input type="checkbox" value="1"> Perf Test</label>
+            <button class="renderAll">Render All</button>
+            <button class="render">Render</button>
         </div>
         <div class="scriptEntry"><textarea placeholder="Enter script"></textarea></div>
         <div class="metadata"><textarea placeholder="Model metadata"></textarea></div>
