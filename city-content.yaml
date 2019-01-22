@@ -333,13 +333,15 @@ strings:
   cityStatusDateLabel: Date
   cityStatusNameLabel: Name
   cityStatusPopulationLabel: Population
-  deleteGameConfirmPrompt: "Are you sure you want to delete this file?"
+  deleteFileConfirmPrompt: "Are you sure you want to delete this file?"
   dialogDismissButton: ✖️
   difficultyChoiceLabelTemplate: "<name> (<formattedCash>)"
   engineMsPerDayLabel: "<value> ms/day"
-  failedToFindGameMessage: Unable to locate the specified game file.
+  failedToFindFileMessage: Unable to locate the specified file.
   failedToLoadGameMessage: There was a problem loading the game data.
+  failedToLoadTerrainMessage: There was a problem loading the terrain data.
   failedToLoadGameTitle: Failed to load game
+  failedToLoadTerrainTitle: Failed to load game
   frameRateTokenSeparator: ". "
   gameProductTitle: CitySim
   genericCancelButton: Cancel

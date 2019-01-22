@@ -106,6 +106,11 @@ Array.prototype.forEachFlat = function(block) {
         }
     }
 };
+Array.prototype.map2D = function(block) {
+    return this.map((row, y) => {
+        return row.map((item, x) => block(item, y, x));
+    });
+};
 
 var _primes = [3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71];
 function hashArrayOfInts(values) {

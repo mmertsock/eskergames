@@ -202,6 +202,9 @@ content p {
     margin: 0.3em 0;
 }
 
+#loadFileMenu.game .newTerrain { display: none; }
+#loadFileMenu.terrain .newGame { display: none; }
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -241,10 +244,10 @@ table .size {
     text-align: right;
 }
 
-#gameInfo .valid { display: none; }
-#gameInfo .invalid { display: block; }
-#gameInfo.valid .valid { display: block; }
-#gameInfo.valid .invalid { display: none; }
+.fileInfo .valid { display: none; }
+.fileInfo .invalid { display: block; }
+.fileInfo.valid .valid { display: block; }
+.fileInfo.valid .invalid { display: none; }
 
 .focusable { transition: filter 0.5s; }
 
@@ -318,10 +321,10 @@ section#background {
                     <a id="newGame" class="odd" href="city.html?new=1">Start New Game</a>
                     <a id="painter" href="painter.html">Painter</a>
                     <!-- a id="unitTests" class="odd" href="tests.html">Unit Tests</a -->
-                    <a id="terrain" class="odd" href="terrain.html?new=1">Terrains</a>
+                    <a class="showTerrainList" class="odd" href="terrain.html">Terrains</a>
                 </nav>
             </section>
-            <section id="loadGameMenu" class="hidden">
+            <section id="loadFileMenu" class="hidden">
                 <content>
                     <table>
                         <thead>
@@ -336,9 +339,11 @@ section#background {
                 </content>
                 <nav>
                     <a class="showMainMenu" href="#">Cancel</a>
+                    <a class="newTerrain" href="terrain.html?new=1">New Terrain</a>
+                    <a class="newGame" href="city.html?new=1">New Game</a>
                 </nav>
             </section>
-            <section id="gameInfo" class="hidden">
+            <section id="gameInfo" class="fileInfo hidden">
                 <content>
                     <h2>title</h2>
                     <p class="invalid">This save file is obsolete and cannot be loaded.</p>
@@ -354,10 +359,25 @@ section#background {
                     <a class="showGameList" href="#">Go Back</a>
                 </nav>
             </section>
-            <section id="noGamesToLoad" class="hidden">
+            <section id="terrainInfo" class="fileInfo hidden">
+                <content>
+                    <h2>title</h2>
+                    <p class="invalid">This save file is obsolete and cannot be loaded.</p>
+                    <p class="valid"><em>Terrain name:</em> <span class="name"></span></p>
+                    <p class="valid"><em>Size:</em> <span class="size"></span></p>
+                    <p class="valid"><em>Landform:</em> <span class="landform"></span></p>
+                    <!-- minimap -->
+                </content>
+                <nav>
+                    <a class="open" href="#">Open</a>
+                    <a class="delete" href="#">Delete</a>
+                    <a class="showTerrainList" href="#">Go Back</a>
+                </nav>
+            </section>
+            <section id="noFilesToLoad" class="hidden">
                 <header><h1>CitySim</h1></header>
                 <content>
-                    <p>There are no saved games.</p>
+                    <p>There are no saved files.</p>
                 </content>
                 <nav>
                     <a class="showMainMenu" href="#">Cancel</a>

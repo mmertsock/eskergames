@@ -5,10 +5,30 @@ TODOs
 - Think about tile coordinates. Bottom left = (0,0) may be more sane for stuff like directions, edges, etc., and also it makes more sense to the end user
 - Smoothing property for RandomLineGenerator: number of previous generations to average
 - Smoother riverbanks
-- Figure out actual model representation for terrain features in GameMaps
-- Replace hacked TerrainRenderer with Painters for terrain features
 - Whenever regenerating, encode the raw parameters + RNG seed into a hex value, store that 
   with the terrain, so you can use that key to recreate the random map.
+
+
+Preserving salt water after edits:
+When generating an ocean we pick a
+max distance from edge for the water. Save that value at the top level
+in the terrain. So, four such values in each terrain that default to
+zero. All tiles in those areas, including land, get a “salt” flag. So
+the ocean/river generators just set tiles to water and use the
+existing salt flag. Manual edits that toggle land/water preserve the
+salt flag. The Terrain Options dialogue (setting name and stuff) has
+four switches to toggle the salt flag for each edge (when off, could
+set the depth value to negative to preserve it for future use but
+indicate it’s disabled).
+
+Trees as a layer on top of other terrain elements and plots. When a
+tree tile is not an edge in a given direction, could paint a few trees
+right next to the tile border. Keep these trees if you build a road or
+plop an empty zone or something. Certain buildings could preserve the
+trees. Hm maybe best way do do this is to implement the trees as
+individual props above the base forest tile. Delete the forest tile
+when building anything but preserve any tree props that don’t collide.
+
 */
 
 window.CitySimTerrain = (function() {
@@ -574,13 +594,13 @@ class RootView {
         this.views = [new TerrainView(), new ControlsView()];
         this._configureCommmands();
         
-        var storage = GameStorage.shared;
-        var url = new URL(window.location.href);
-        var id = url.searchParams.get("id");
+        let storage = GameStorage.shared;
+        let url = new URL(window.location.href);
+        let id = url.searchParams.get("id");
         if (id) { this.tryToLoadTerrain(id); return; }
 
-        var createNewTerrain = !!url.searchParams.get("new");
-        var id = storage.latestSavedTerrainID;
+        let createNewTerrain = !!url.searchParams.get("new");
+        id = storage.latestSavedTerrainID;
         if (!createNewTerrain && !!id) { this.tryToLoadTerrain(id); return; }
 
         new NewTerrainDialog(null).show();
@@ -616,7 +636,30 @@ class RootView {
     }
 
     tryToLoadTerrain(id) {
+        let storage = GameStorage.shared;
+        let data = storage.terrainCollection.getItem(id);
+        if (!data) {
+            this.failedToLoad(Strings.str("failedToFindFileMessage"));
+        } else if (!storage.isSaveStateItemSupported(data)) {
+            this.failedToLoad(Strings.str("failedToLoadTerrainMessage"));
+        } else {
+            try {
+                let terrain = Terrain.fromDeserializedWrapper(data);
+                this.setUp(new EditSession({ terrain: terrain }));
+            } catch(e) {
+                this.failedToLoad(`${Strings.str("failedToLoadTerrainMessage")}\n\n${e.message}`);
+                debugLog(e);
+            }
+        }
+    }
 
+    failedToLoad(message) {
+        new Gaming.Prompt({
+            title: Strings.str("failedToLoadTerrainTitle"),
+            message: message,
+            buttons: [{ label: Strings.str("quitButton"), action: () => EditSession.quit(false) }],
+            requireSelection: true
+        }).show();
     }
 
     _configureCommmands() {

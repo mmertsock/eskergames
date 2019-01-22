@@ -362,10 +362,16 @@ class Plot {
 // ########################### MAP/GAME #######################
 
 class TerrainType {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        let existing = TerrainType.all[data];
+        return existing || new TerrainType(data);
+    }
+
     constructor(value) {
         this.value = value; // byte
     }
     get debugDescription() { return this.value.toString(16); }
+    get objectForSerialization() { return this.value; }
     get isLand() { return (this.value & TerrainType.flags.water) == 0; }
     get isWater() { return (this.value & TerrainType.flags.water) != 0; }
     get isSaltwater() { return this.isWater && (this.value & TerrainType.flags.large); }
@@ -395,8 +401,15 @@ TerrainType.sea   = new TerrainType(TerrainType.flags.water | TerrainType.flags.
 TerrainType.ocean = new TerrainType(TerrainType.flags.water | TerrainType.flags.large | TerrainType.flags.deep);
 // trees variants
 TerrainType.forest     = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large);
-TerrainType.forestEdge = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large);
+TerrainType.forestEdge = new TerrainType(TerrainType.flags.trees | TerrainType.flags.larg | TerrainType.flags.edge);
 TerrainType.wilderness = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large | TerrainType.flags.deep);
+TerrainType.all = new Array(256);
+[
+    TerrainType.dirt, TerrainType.water, TerrainType.trees,
+    TerrainType.riverbank,
+    TerrainType.shore, TerrainType.sea, TerrainType.ocean,
+    TerrainType.forest, TerrainType.forestEdge, TerrainType.wilderness
+].forEach(item => { TerrainType.all[item.value] = item; });
 
 // An editable terrain file and a source for initializing a CityMap. 
 // Same ownership level and responsibilities as the City object.
@@ -420,6 +433,15 @@ class Terrain {
 
     static kmForTileCount(tiles) {
         return (Terrain.settings().metersPerTile * tiles) / 1000;
+    }
+
+    static fromDeserializedWrapper(item) {
+        deserializeAssert(item.data);
+        return new Terrain({ dz: {
+            saveStateInfo: { id: item.id, lastTimestamp: Date.now() },
+            name: item.data.name,
+            map: CityMap.fromDeserializedWrapper(item.data.map, item.data.schemaVersion)
+        } });
     }
 
     constructor(config) {
@@ -483,10 +505,20 @@ class MapTile {
 }
 
 class TerrainTile extends MapTile {
+    static fromDeserializedWrapper(data, schemaVersion, point, layer) {
+        let tile = new TerrainTile(point, layer)
+        tile._type = TerrainType.fromDeserializedWrapper(data, schemaVersion);
+        return tile;
+    }
+
     constructor(point, layer) {
         super(point, layer);
         this._type = TerrainType.dirt;
         this._painterInfoList = null;
+    }
+
+    get objectForSerialization() {
+        return this.type.objectForSerialization;
     }
 
     get debugDescription() { return `<${this.constructor.name}#${this.type.debugDescription} @(${x},${y})>`; }
@@ -543,26 +575,52 @@ class TerrainTile extends MapTile {
 }
 
 class PlotTile extends MapTile {
+    static fromDeserializedWrapper(data, schemaVersion, point, layer) {
+        return new PlotTile(point, layer);
+    }
+
     constructor(point, layer) {
         super(point, layer);
     }
+
+    get objectForSerialization() { return 0; }
 }
 
 // Closely managed by CityMap
 class MapLayer {
-    constructor(config) {
+    static fromDeserializedWrapper(data, schemaVersion, config) {
+        deserializeAssert(Array.isArray(data.tiles));
+        return new MapLayer(config, {
+            schemaVersion: schemaVersion,
+            tiles: data.tiles
+        });
+        let tile = new TerrainTile(point, layer)
+        tile._type = TerrainType.fromValue(data);
+        return tile;
+    }
+
+    constructor(config, dz) {
         this.map = config.map;
         this.id = config.id;
-        this.size = config.size;
+        this.size = config.map.size;
         this._tiles = new Array(this.size.height);
         for (let y = 0; y < this.size.height; y += 1) {
             let row = new Array(this.size.width);
             for (let x = 0; x < this.size.width; x += 1) {
-                row[x] = new config.tileClass(new Point(x, y), this);
+                if (dz) {
+                    row[x] = config.tileClass.fromDeserializedWrapper(dz.tiles[y][x], dz.schemaVersion, new Point(x, y), this);
+                } else {
+                    row[x] = new config.tileClass(new Point(x, y), this);
+                }
             }
             this._tiles[y] = row;
         }
     }
+
+    get objectForSerialization() {
+        return { tiles: this._tiles.map2D(tile => tile.objectForSerialization) };
+    }
+
     getTileAtPoint(point) { return this._tiles[point.y][point.x]; }
 
     // visits in draw order
@@ -592,24 +650,36 @@ MapLayer.id = { terrain: "terrain", plots: "plots" };
 
 class CityMap {
     static fromDeserializedWrapper(data, schemaVersion) {
-        throw new TypeError("not implemented");
+        deserializeAssert(data != null);
+        deserializeAssert(data.size != null || data.terrainLayer != null);
+        return new CityMap({dz: {
+            size: data.size,
+            schemaVersion: schemaVersion,
+            terrainLayer: data.terrainLayer
+        }});
     }
 
     constructor(config) {
+        let size = config.dz ? config.dz.size : config.size;
+        this.size = size;
+        this.bounds = new Rect(new Point(0, 0), this.size);
+        this.tilePlane = new TilePlane(this.size);
+        this.plotLayer = new MapLayer({ map: this, id: MapLayer.id.plots, tileClass: PlotTile });
+
+        let terrainConfig = { map: this, id: MapLayer.id.terrain, tileClass: TerrainTile };
         if (config.dz) {
-            throw new TypeError("not implemented");
+            this.terrainLayer = MapLayer.fromDeserializedWrapper(config.dz.terrainLayer, config.dz.schemaVersion, terrainConfig);
         } else {
-            this.size = { width: config.size.width, height: config.size.height };
-            this.bounds = new Rect(new Point(0, 0), this.size);
-            this.tilePlane = new TilePlane(this.size);
-            this.terrainLayer = new MapLayer({ map: this, id: MapLayer.id.terrain, size: this.size, tileClass: TerrainTile });
-            this.plotLayer = new MapLayer({ map: this, id: MapLayer.id.plots, size: this.size, tileClass: PlotTile });
+            this.terrainLayer = new MapLayer(terrainConfig);
         }
         this._updateTerrainInfo();
     }
 
     get objectForSerialization() {
-        throw new TypeError("not implemented");
+        return {
+            size: this.size,
+            terrainLayer: this.terrainLayer.objectForSerialization
+        };
     }
 
     get debugDescription() {
@@ -1865,7 +1935,7 @@ class RootView {
         var storage = GameStorage.shared;
         var data = storage.gameCollection.getItem(id);
         if (!data) {
-            this.failedToStartGame(Strings.str("failedToFindGameMessage"));
+            this.failedToStartGame(Strings.str("failedToFindFileMessage"));
         } else if (!storage.isSaveStateItemSupported(data)) {
             this.failedToStartGame(Strings.str("failedToLoadGameMessage"));
         } else {
@@ -2897,16 +2967,24 @@ class NewGameDialog extends GameDialog {
 class LoadGameMenu {
     constructor() {
         this.mainMenuSection = document.querySelector("#mainMenu");
-        this.loadGameSection = document.querySelector("#loadGameMenu");
-        this.noGamesToLoadSection = document.querySelector("#noGamesToLoad");
+        this.loadFilesSection = document.querySelector("#loadFileMenu");
+        this.noFilesToLoadSection = document.querySelector("#noFilesToLoad");
         this.gameInfoSection = document.querySelector("#gameInfo");
-        this.allSections = [this.mainMenuSection, this.loadGameSection, this.noGamesToLoadSection, this.gameInfoSection];
+        this.terrainInfoSection = document.querySelector("#terrainInfo");
+        this.allSections = [this.mainMenuSection, this.loadFilesSection, this.noFilesToLoadSection, this.gameInfoSection, this.terrainInfoSection];
         this.selectedGame = null;
+        this.selectedTerrain = null;
 
         document.querySelectorAll("#root .showGameList").forEach(elem => {
             elem.addEventListener("click", evt => {
                 evt.preventDefault();
                 this.showGameList();
+            });
+        });
+        document.querySelectorAll("#root .showTerrainList").forEach(elem => {
+            elem.addEventListener("click", evt => {
+                evt.preventDefault();
+                this.showTerrainList();
             });
         });
         document.querySelectorAll("#root .showMainMenu").forEach(elem => {
@@ -2919,9 +2997,17 @@ class LoadGameMenu {
             evt.preventDefault();
             this._openSelectedGame();
         });
+        document.querySelector("#terrainInfo .open").addEventListener("click", evt => {
+            evt.preventDefault();
+            this._openSelectedTerrain();
+        });
         document.querySelector("#gameInfo .delete").addEventListener("click", evt => {
             evt.preventDefault();
             this._promptDeleteSelectedGame();
+        });
+        document.querySelector("#terrainInfo .delete").addEventListener("click", evt => {
+            evt.preventDefault();
+            this._promptDeleteSelectedTerrain();
         });
 
         // change to "post div" to do the multiple-gradients-within-the-post effect
@@ -2954,31 +3040,41 @@ class LoadGameMenu {
     }
 
     showGameList() {
-        var games = this.storage.allSavedGames;
-        if (games.length == 0) {
-            this._showSection(this.noGamesToLoadSection);
+        this.loadFilesSection.addRemClass("game", true);
+        this.loadFilesSection.addRemClass("terrain", false);
+        this.showFileList(this.storage.allSavedGames, file => this._showGameDetails(file));
+    }
+
+    showTerrainList() {
+        this.loadFilesSection.addRemClass("game", false);
+        this.loadFilesSection.addRemClass("terrain", true);
+        this.showFileList(this.storage.allSavedTerrains, file => this._showTerrainDetails(file));
+    }
+
+    showFileList(files, selectFileClick) {
+        if (files.length == 0) {
+            this._showSection(this.noFilesToLoadSection);
         } else {
-            var containerElem = this.loadGameSection.querySelector("tbody");
+            let containerElem = this.loadFilesSection.querySelector("tbody");
             containerElem.removeAllChildren();
-            games.forEach(game => {
-                var row = document.createElement("tr");
-                row.addRemClass("invalid", !this.storage.isSaveStateSummarySupported(game));
-                row.append(this._td(game.title, "name"));
-                row.append(this._td(this._formatTimestamp(game.timestamp), "date"));
-                row.append(this._td(this._formatFileSize(game.sizeBytes), "size"));
+            files.forEach(file => {
+                let row = document.createElement("tr");
+                row.addRemClass("invalid", !this.storage.isSaveStateSummarySupported(file));
+                row.append(this._td(file.title, "name"));
+                row.append(this._td(this._formatTimestamp(file.timestamp), "date"));
+                row.append(this._td(this._formatFileSize(file.sizeBytes), "size"));
                 containerElem.append(row);
                 row.addEventListener("click", evt => {
-                    evt.preventDefault();
-                    this._showDetails(game);
+                    evt.preventDefault(); selectFileClick(file);
                 });
                 // TODO an <input> to type the file name directly to simulate an old computer. with a Load button.
                 // TODO import button to paste in JSON. Export button is within city.html in the File menu.
             });
-            this._showSection(this.loadGameSection);
+            this._showSection(this.loadFilesSection);
         }
     }
 
-    _showDetails(game) {
+    _showGameDetails(game) {
         this.selectedGame = game;
         var isValid = this.storage.isSaveStateSummarySupported(game);
         this.gameInfoSection.addRemClass("valid", isValid);
@@ -2992,6 +3088,19 @@ class LoadGameMenu {
         this._showSection(this.gameInfoSection);
     }
 
+    _showTerrainDetails(file) {
+        this.selectedTerrain = file;
+        var isValid = this.storage.isSaveStateSummarySupported(file);
+        this.terrainInfoSection.addRemClass("valid", isValid);
+        this.terrainInfoSection.querySelector("h2").innerText = `${file.title}, ${this._formatTimestamp(file.timestamp)}`;
+        this.terrainInfoSection.querySelector(".name").innerText = file.metadata ? file.metadata.name : "";
+        this.terrainInfoSection.querySelector(".size").innerText = file.metadata ? file.metadata.size : "";
+        this.terrainInfoSection.querySelector(".landform").innerText = file.metadata ? file.metadata.landform : "";
+        this.terrainInfoSection.querySelector(".open").addRemClass("disabled", !isValid);
+        // TODO show a minimap
+        this._showSection(this.terrainInfoSection);
+    }
+
     _openSelectedGame() {
         if (!this.storage.isSaveStateSummarySupported(this.selectedGame)) { return; }
         var url = this.storage.urlForGameID(this.selectedGame.id);
@@ -2999,12 +3108,27 @@ class LoadGameMenu {
         debugLog("go to " + url);
     }
 
+    _openSelectedTerrain() {
+        if (!this.storage.isSaveStateSummarySupported(this.selectedTerrain)) { return; }
+        var url = this.storage.urlForTerrainID(this.selectedTerrain.id);
+        window.location.assign(url);
+        debugLog("go to " + url);
+    }
+
     _promptDeleteSelectedGame() {
         if (!this.selectedGame) { return; }
-        if (!confirm(Strings.str("deleteGameConfirmPrompt"))) { return; }
+        if (!confirm(Strings.str("deleteFileConfirmPrompt"))) { return; }
         debugLog(this.storage);
         this.storage.gameCollection.deleteItem(this.selectedGame.id);
         this.showGameList();
+    }
+
+    _promptDeleteSelectedTerrain() {
+        if (!this.selectedTerrain) { return; }
+        if (!confirm(Strings.str("deleteFileConfirmPrompt"))) { return; }
+        debugLog(this.storage);
+        this.storage.terrainCollection.deleteItem(this.selectedTerrain.id);
+        this.showTerrainList();
     }
 
     _showSection(elem) {
@@ -3137,7 +3261,6 @@ return {
     CityMap: CityMap,
     Game: Game,
     GameDialog: GameDialog,
-    GameMap: GameMap,
     GameStorage: GameStorage,
     GridPainter: GridPainter,
     InputView: InputView,
