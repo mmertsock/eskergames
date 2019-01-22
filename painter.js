@@ -141,8 +141,8 @@ class SectionView {
         try {
             var collection = ScriptPainterCollection.fromYaml(this.scriptEntry.collectionID, this.scriptEntry.scriptSource, CanvasView.deviceScale());
             var metadata = this.metadataEntry.value;
-            this._perfTestIfNeeded(() => {
-                this.canvasViews.forEach(view => view.render(collection, metadata));
+            this._perfTestIfNeeded((views, isPerfTest) => {
+                views.forEach(view => view.render(collection, metadata, isPerfTest));
             });
         } catch (e) {
             showMessage(`Invalid script: ${e.message}`, this.root.querySelector(".scriptEntry"));
@@ -156,8 +156,8 @@ class SectionView {
         var allCollections = ScriptSelectorView.allPainterIDs()
             .map(id => ScriptPainterStore.shared.getPainterCollection(id))
             .filter(collection => collection != null);
-        this._perfTestIfNeeded(() => {
-            this.canvasViews.forEach(view => view.renderAll(allCollections, metadata));
+        this._perfTestIfNeeded((views, isPerfTest) => {
+            views.forEach(view => view.renderAll(allCollections, metadata, isPerfTest));
         });
     }
 
@@ -167,12 +167,13 @@ class SectionView {
 
     _perfTestIfNeeded(block) {
         if (!this.isPerfTest) {
-            block();
+            block(this.canvasViews, false);
             return;
         }
-        let iterations = 100;
+        let iterations = 1000;
         let overall = new PerfTimer("TotalRenderTime").start();
-        for (let i = 0; i < iterations; i +=1 ) { block(); }
+        let views = [this.canvasViews[0]];
+        for (let i = 0; i < iterations; i +=1 ) { block(views, true); }
         let info = overall.end().summaryInfo;
         if (info) {
             showMessage(`Render time (${iterations} iterations): ${info.ms} ms total, ${info.ms / iterations} ms average`);
@@ -207,6 +208,10 @@ class CanvasView {
         this.render(null);
     }
 
+    get drawContext() {
+        return this.canvas.getContext("2d", { alpha: false });
+    }
+
     get debugLoggingEnabled() {
         return this.sectionIndex == 0 && this.canvas.className == "large";
     }
@@ -215,10 +220,15 @@ class CanvasView {
         this.render(null);
     }
 
-    render(collection, metadata) {
-        var ctx = this.canvas.getContext("2d");
+    render(collection, metadata, isPerfTest) {
+        var ctx = this.drawContext;
+        if (isPerfTest) {
+            collection.variants.forEach((variant, i) => this._perfRenderVariant(ctx, collection.id, variant, metadata, i));
+            return;
+        }
         this._renderBackground(ctx);
         if (!collection) { return; }
+
 
         var columns = 3;
         var offset = new Point(1, 1);
@@ -226,8 +236,14 @@ class CanvasView {
         collection.variants.forEach((variant, i) => this._renderVariant(ctx, collection.id, variant, metadata, i, columns, offset, spacing));
     }
 
-    renderAll(allCollections, metadata) {
-        var ctx = this.canvas.getContext("2d");
+    renderAll(allCollections, metadata, isPerfTest) {
+        var ctx = this.drawContext;
+        if (isPerfTest) {
+            allCollections.forEach(collection => {
+                collection.variants.forEach((variant, i) => this._perfRenderVariant(ctx, collection.id, variant, metadata, i));
+            });
+            return;
+        }
         this._renderBackground(ctx);
         var sorted = allCollections.sort((a, b) => this._spacingForCollection(a) - this._spacingForCollection(b));
         var nextY = 0;
@@ -263,6 +279,12 @@ class CanvasView {
     _renderVariant(ctx, painterID, variant, metadata, i, columns, offset, spacing) {
         var origin = new Point((1 + spacing) * (i % columns), (1 + spacing) * Math.floor(i / columns)).adding(offset);
         var rect = this.canvasGrid.rectForTileRect(new Rect(origin, variant.expectedSize));
+        var session = new ScriptPainterSession(painterID, i, variant);
+        variant.render(ctx, rect, this.canvasGrid, metadata);
+    }
+
+    _perfRenderVariant(ctx, painterID, variant, metadata, i) {
+        var rect = this.canvasGrid.rectForTileRect(new Rect(new Point(0, 0), variant.expectedSize));
         var session = new ScriptPainterSession(painterID, i, variant);
         variant.render(ctx, rect, this.canvasGrid, metadata);
     }

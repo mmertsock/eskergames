@@ -99,6 +99,13 @@ if (Array.prototype.removeItemAtIndex) {
         return this;
     }
 }
+Array.prototype.forEachFlat = function(block) {
+    for (var i = 0; i < this.length; i += 1) {
+        for (var j = 0; j < this[i].length; j += 1) {
+            block(this[i][j], i, j);
+        }
+    }
+};
 
 var _primes = [3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71];
 function hashArrayOfInts(values) {
@@ -630,6 +637,15 @@ class Rect {
             max: Point.max(e1.max, e2.max)
         });
     }
+    intersection(other) {
+        if (!other || this.isEmpty() || other.isEmpty()) { return new Rect(0, 0, 0, 0); }
+        let e1 = this.extremes, e2 = other.extremes;
+        return Rect.fromExtremes({
+            min: Point.max(e1.min, e2.min),
+            max: Point.min(e1.max, e2.max)
+        });
+    }
+
     // new Rect(7, 10, 40, 30).intersects(new Rect(0, 40, 90, 10)) produces "true",
     // but expected is false. Why?
     // the top edge of r1 is adjacent to the bottom edge of r2
@@ -1275,6 +1291,7 @@ class TilePlane {
         this._yMinuend = this.height - 1;
     }
     get size() { return { width: this.width, height: this.height }; }
+    get bounds() { return new Rect({x: 0, y: 0}, this.size); }
     screenTileForModel(tile) {
         return new Point(tile.x, this._flippedY(tile.y));
     }
@@ -1373,6 +1390,7 @@ class FlexCanvasGrid {
     get tileSize() { return { width: this._tilesWide, height: this._tilesHigh }; }
 
     // Canvas model coords covering all visible tiles, minus any unused edge padding.
+    get rectForVisibleTiles() { return this._allTilesRect; }
     get rectForAllTiles() { return this._allTilesRect; }
     get rectForFullCanvas() {
         return new Rect(0, 0, this.canvas.width, this.canvas.height);

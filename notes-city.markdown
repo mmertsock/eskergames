@@ -202,3 +202,7 @@ http://bucephalus.org/text/CanvasHandbook/CanvasHandbook.html
 https://developer.mozilla.org/en-US/docs/Games/Anatomy
 
 https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API/Using_web_workers
+
+https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas
+
+https://developer.mozilla.org/en-US/docs/Games/Techniques/Tilemaps

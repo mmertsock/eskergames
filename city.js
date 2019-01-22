@@ -361,65 +361,18 @@ class Plot {
 
 // ########################### MAP/GAME #######################
 
-class TerrainTile {
+class TerrainType {
     constructor(value) {
         this.value = value; // byte
     }
-    get isLand() { return (this.value & TerrainTile.flags.water) == 0; }
-    get isWater() { return (this.value & TerrainTile.flags.water) != 0; }
-    get isSaltwater() { return this.isWater && (this.value & TerrainTile.flags.large); }
-    get isFreshwater() { return this.isWater && !(this.value & TerrainTile.flags.large); }
+    get debugDescription() { return this.value.toString(16); }
+    get isLand() { return (this.value & TerrainType.flags.water) == 0; }
+    get isWater() { return (this.value & TerrainType.flags.water) != 0; }
+    get isSaltwater() { return this.isWater && (this.value & TerrainType.flags.large); }
+    get isFreshwater() { return this.isWater && !(this.value & TerrainType.flags.large); }
     has(flag) { return (this.value & flag) != 0; }
-
-    painterInfoList(point, terrain) {
-        if (this.isSaltwater) {
-            return this._edgeVariants(point, terrain, "saltwater", i => i.tile.isLand);
-        } else if (this.isFreshwater) {
-            return this._edgeVariants(point, terrain, "freshwater", i => i.tile.isLand);
-        } else if (this.has(TerrainTile.flags.trees)) {
-            return this._edgeVariants(point, terrain, "trees", i => !i.tile.has(TerrainTile.flags.trees));
-        } else {
-            return [{ id: "terrain_dirt", variantKey: hashArrayOfInts([point.x, point.y]) }];
-        }
-    }
-
-    _edgeVariants(point, terrain, id, filter) {
-        // HMM inside corners
-        // i think the rule is that diagonals should only be used if:
-        // BOTH of the adjacent cardinal edges are found (eg inside corner)
-        // or NEITHER of the adjacent cardinal edges are found (eg outside corner)
-        // if we do that, this should clean up some things
-        id = "terrain_" + id;
-        let surrounding = this.getSurroundingTiles(point, terrain, true).filter(filter);
-        let firstBatch = [], secondBatch = [];
-        for (let i = 0; i < surrounding.length; i += 1) {
-            if (surrounding[i].direction % 2 == 1) { // diagonal
-                firstBatch.push(surrounding[i].direction + 1);
-            } else {
-                secondBatch.push(surrounding[i].direction + 1);
-            }
-        }
-        return [0].concat(firstBatch).concat(secondBatch)
-            .map(i => { return { id: id, variantKey: i } });
-    }
-
-    getSurroundingTiles(point, terrain) {
-        return Vector.manhattanUnits.map((v, direction) => {
-            var p = point.adding(v);
-            if (!terrain.map.isValidCoordinate(p)) {
-                return null;
-            } else {
-                // debugLog(p, terrain, direction);
-                return { direction: direction, point: p, tile: terrain.map.terrain[p.y][p.x] };
-            }
-        }).filter(i => i != null);
-    }
-
-    encodeNeighbors(surrounding) {
-        return surrounding.reduce((v, i) => (v | 1 << i.direction), 0)
-    }
 }
-TerrainTile.flags = {
+TerrainType.flags = {
     dirt:      0x0,
     water:     0x1 << 0,
     trees:     0x1 << 1,
@@ -431,25 +384,39 @@ TerrainTile.flags = {
     reserved3: 0x1 << 7
 };
 
-TerrainTile.dirt  = new TerrainTile(TerrainTile.flags.dirt);
-TerrainTile.water = new TerrainTile(TerrainTile.flags.water);
-TerrainTile.trees = new TerrainTile(TerrainTile.flags.trees);
+TerrainType.dirt  = new TerrainType(TerrainType.flags.dirt);
+TerrainType.water = new TerrainType(TerrainType.flags.water);
+TerrainType.trees = new TerrainType(TerrainType.flags.trees);
 // freshwater variants
-TerrainTile.riverbank = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.edge);
+TerrainType.riverbank = new TerrainType(TerrainType.flags.water | TerrainType.flags.edge);
 // saltwater variants
-TerrainTile.shore = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.large | TerrainTile.flags.edge);
-TerrainTile.sea   = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.large);
-TerrainTile.ocean = new TerrainTile(TerrainTile.flags.water | TerrainTile.flags.large | TerrainTile.flags.deep);
+TerrainType.shore = new TerrainType(TerrainType.flags.water | TerrainType.flags.large | TerrainType.flags.edge);
+TerrainType.sea   = new TerrainType(TerrainType.flags.water | TerrainType.flags.large);
+TerrainType.ocean = new TerrainType(TerrainType.flags.water | TerrainType.flags.large | TerrainType.flags.deep);
 // trees variants
-TerrainTile.forest     = new TerrainTile(TerrainTile.flags.trees | TerrainTile.flags.large);
-TerrainTile.forestEdge = new TerrainTile(TerrainTile.flags.trees | TerrainTile.flags.large);
-TerrainTile.wilderness = new TerrainTile(TerrainTile.flags.trees | TerrainTile.flags.large | TerrainTile.flags.deep);
+TerrainType.forest     = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large);
+TerrainType.forestEdge = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large);
+TerrainType.wilderness = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large | TerrainType.flags.deep);
 
+// An editable terrain file and a source for initializing a CityMap. 
+// Same ownership level and responsibilities as the City object.
 class Terrain {
 
     static settings() { return GameContent.shared.terrain; }
     static sizeOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Terrain.settings().sizes, index); }
     static defaultSize() { return GameContent.defaultItemFromArray(Terrain.settings().sizes); }
+
+    static indexForTerrainSize(terrain) {
+        let defaultIndex = 0;
+        let size = terrain ? terrain.size : null;
+        let sizes = Terrain.settings().sizes;
+        for (let i = 0; i < sizes.length; i += 1) {
+            let item = sizes[i];
+            if (size != null && item.width == size.width && item.height == size.height) { return item.index; }
+            if (item.isDefault) { defaultIndex = item.index; }
+        };
+        return defaultIndex;
+    }
 
     static kmForTileCount(tiles) {
         return (Terrain.settings().metersPerTile * tiles) / 1000;
@@ -463,7 +430,7 @@ class Terrain {
         } else {
             this.name = config.name;
             this.saveStateInfo = { id: null, lastTimestamp: 0 };
-            this.map = config.map;
+            this.map = config.map; // CityMap
         }
     }
 
@@ -482,6 +449,8 @@ class Terrain {
             return false;
         }
     }
+
+    get size() { return this.map.size; }
 
     get metadataForSerialization() {
         return {
@@ -503,12 +472,175 @@ class Terrain {
     }
 }
 
-// NB this doesn't properly handle overlapping plots.
-// Either implement full support for that, or refuse to addPlot when
-// the plot would overlap another (thus, need to remove the old plot
-// first). Should also refuse to addPlot if its bounds goes outside
-// the bounds of the map. Return null from addPlot/removePlot upon
-// failure, and return the plot object upon success.
+class MapTile {
+    constructor(point, layer) {
+        this.point = point;
+        this.layer = layer;
+    }
+
+    get debugDescription() { return `<${this.constructor.name} @(${x},${y})>`; }
+    get textTemplateInfo() { return {}; }
+}
+
+class TerrainTile extends MapTile {
+    constructor(point, layer) {
+        super(point, layer);
+        this._type = TerrainType.dirt;
+        this._painterInfoList = null;
+    }
+
+    get debugDescription() { return `<${this.constructor.name}#${this.type.debugDescription} @(${x},${y})>`; }
+
+    get type() { return this._type; }
+    set type(value) {
+        this._type = value;
+        this.reset();
+    }
+
+    get painterInfoList() {
+        if (this._painterInfoList) { return this._painterInfoList; }
+        this._painterInfoList = this._makePainterInfoList();
+        return this._painterInfoList;
+    }
+
+    reset() { this._painterInfoList = null; }
+
+    _makePainterInfoList() {
+        if (this._type.isSaltwater) {
+            // return [{ id: "terrain_saltwater", variantKey: 0 }];
+            return this._edgeVariants("saltwater", i => i.tile.type.isLand);
+        } else if (this._type.isFreshwater) {
+            // return [{ id: "terrain_freshwater", variantKey: 0 }];
+            return this._edgeVariants("freshwater", i => i.tile.type.isLand);
+        } else if (this._type.has(TerrainType.flags.trees)) {
+            // return [{ id: "terrain_trees", variantKey: 0 }];
+            return this._edgeVariants("trees", i => !i.tile.type.has(TerrainType.flags.trees));
+        } else {
+            return [{ id: "terrain_dirt", variantKey: hashArrayOfInts([this.point.x, this.point.y]) }];
+        }
+    }
+
+    _edgeVariants(id, filter) {
+        // i think the rule is that diagonals should only be used if:
+        // BOTH of the adjacent cardinal edges are found (eg inside corner)
+        // or NEITHER of the adjacent cardinal edges are found (eg outside corner)
+        // if we do that, this should clean up some things
+        id = "terrain_" + id;
+        let surrounding = this.layer.getSurroundingTiles(this.point).filter(filter);
+        let firstBatch = [], secondBatch = [];
+        for (let i = 0; i < surrounding.length; i += 1) {
+            if (surrounding[i].direction % 2 == 1) { // diagonal
+                firstBatch.push(surrounding[i].direction + 1);
+            } else {
+                secondBatch.push(surrounding[i].direction + 1);
+            }
+        }
+        var variants = [0].concat(firstBatch).concat(secondBatch)
+            .map(i => { return { id: id, variantKey: i } });
+        // return [{ id: id, variantKey: 0 }, { id: id, variantKey: 1 }];
+        return variants;
+    }
+}
+
+class PlotTile extends MapTile {
+    constructor(point, layer) {
+        super(point, layer);
+    }
+}
+
+// Closely managed by CityMap
+class MapLayer {
+    constructor(config) {
+        this.map = config.map;
+        this.id = config.id;
+        this.size = config.size;
+        this._tiles = new Array(this.size.height);
+        for (let y = 0; y < this.size.height; y += 1) {
+            let row = new Array(this.size.width);
+            for (let x = 0; x < this.size.width; x += 1) {
+                row[x] = new config.tileClass(new Point(x, y), this);
+            }
+            this._tiles[y] = row;
+        }
+    }
+    getTileAtPoint(point) { return this._tiles[point.y][point.x]; }
+
+    // visits in draw order
+    // rect is optional. only visits tiles in the given rect
+    visitTiles(rect, block) {
+        let bounds = new Rect(0, 0, this.size.width, this.size.height);
+        rect = rect ? rect.intersection(bounds) : bounds;
+        for (let y = rect.y + rect.height - 1; y >= rect.y; y -= 1) {
+            for (let x = rect.x; x < rect.x + rect.width; x += 1) {
+                block(this._tiles[y][x]);
+            }
+        }
+    }
+
+    getSurroundingTiles(point) {
+        return Vector.manhattanUnits.map((v, direction) => {
+            var p = point.adding(v);
+            if (!this.map.isValidCoordinate(p)) {
+                return null;
+            } else {
+                return { direction: direction, point: p, tile: this._tiles[p.y][p.x] };
+            }
+        }).filter(i => i != null);
+    }
+}
+MapLayer.id = { terrain: "terrain", plots: "plots" };
+
+class CityMap {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        throw new TypeError("not implemented");
+    }
+
+    constructor(config) {
+        if (config.dz) {
+            throw new TypeError("not implemented");
+        } else {
+            this.size = { width: config.size.width, height: config.size.height };
+            this.bounds = new Rect(new Point(0, 0), this.size);
+            this.tilePlane = new TilePlane(this.size);
+            this.terrainLayer = new MapLayer({ map: this, id: MapLayer.id.terrain, size: this.size, tileClass: TerrainTile });
+            this.plotLayer = new MapLayer({ map: this, id: MapLayer.id.plots, size: this.size, tileClass: PlotTile });
+        }
+        this._updateTerrainInfo();
+    }
+
+    get objectForSerialization() {
+        throw new TypeError("not implemented");
+    }
+
+    get debugDescription() {
+        return `<CityMap ${this.size.width}x${this.size.height} with 0 plots>`;
+    }
+
+    isValidCoordinate(x, y) { return this.bounds.containsTile(x, y); }
+    isTileRectWithinBounds(rect) { return this.bounds.contains(rect); }
+
+    modifyTerrain(tiles) {
+        tiles.forEachFlat(tile => {
+            this.terrainLayer.getTileAtPoint(tile.point).type = tile.type;
+        });
+        this._updateTerrainInfo();
+    }
+
+    // TODO
+    // addPlot, removePlot
+
+    addPlot(plot) {
+        throw new TypeError("not implemented");
+    }
+
+    removePlot(plot) {
+    }
+
+    _updateTerrainInfo() {
+        debugLog("TODO recalculate stuff in the terrain layer")
+    }
+}
+
 class GameMap {
     static fromDeserializedWrapper(data, schemaVersion) {
         deserializeAssert(data != null);
@@ -2183,38 +2315,28 @@ class TerrainRenderer {
         this.canvasGrid = config.canvasGrid;
         this.game = config.game;
     }
-    render(ctx, settings, terrain) {
-        // HACK
-        if (terrain && terrain.map && terrain.map.terrain && terrain.map.terrain.length > 0) {
-            ctx.fillStyle = settings.edgePaddingFillStyle;
-            ctx.rectFill(this.canvasGrid.rectForFullCanvas);
-            ctx.fillStyle = settings.emptyFillStyle;
-            var size = terrain.map.tilePlane.size;
-            ctx.rectFill(this.canvasGrid.rectForTileRect(terrain.map.tilePlane.screenRectForModel(new Rect(0, 0, size.width, size.height))));
 
-            var tileSize = { width: 1, height: 1 };
-            for (var y = size.height - 1; y >= 0; y -= 1) {
-                for (var x = 0; x < size.width; x += 1) {
-                    var origin = new Point(x, y);
-                    var tile = terrain.map.terrain[y][x];
-                    var rect = this.canvasGrid.rectForTileRect(terrain.map.tilePlane.screenRectForModel(new Rect(origin, tileSize)));
-                    if (rect) {
-                        var painters = this._getPainterSessions(tile, origin, terrain, ScriptPainterStore.shared);
-                        painters.forEach(painter => painter.render(ctx, rect, this.canvasGrid, {}));
-                    }
-                }
-            }
-        } else {
-            ctx.fillStyle = settings.edgePaddingFillStyle;
-            ctx.rectFill(this.canvasGrid.rectForFullCanvas);
-            ctx.fillStyle = settings.emptyFillStyle;
-            ctx.rectFill(this.canvasGrid.rectForAllTiles);
-        }
+    render(ctx, settings) {
+        ctx.fillStyle = settings.edgePaddingFillStyle;
+        ctx.rectFill(this.canvasGrid.rectForFullCanvas);
+        if (!this.game) { return; }
+        let map = this.game.map;
+        ctx.fillStyle = settings.emptyFillStyle;
+        let size = this.game.map.tilePlane.size;
+        ctx.rectFill(this.canvasGrid.rectForTileRect(map.tilePlane.screenRectForModel(new Rect(0, 0, size.width, size.height))));
+
+        let visibleRect = map.tilePlane.modelRectForScreen(new Rect(0, 0, this.canvasGrid.tileSize.width, this.canvasGrid.tileSize.height));
+        map.terrainLayer.visitTiles(visibleRect, tile => {
+            let rect = this.canvasGrid.rectForTile(map.tilePlane.screenTileForModel(tile.point));
+            if (!rect) { return; }
+            this._getPainterSessions(tile).forEach(painter => {
+                painter.render(ctx, rect, this.canvasGrid, tile.textTemplateInfo);
+            })
+        });
     }
 
-    _getPainterSessions(tile, point, terrain, store) {
-        var info = tile.painterInfoList(point, terrain);
-        return info.map(item => store.getPainterSession(item.id, item.variantKey));
+    _getPainterSessions(tile) {
+        return tile.painterInfoList.map(item => ScriptPainterStore.shared.getPainterSession(item.id, item.variantKey));
     }
 }
 
@@ -2995,6 +3117,7 @@ return {
     uiRunLoop: uiRunLoop,
     Budget: Budget,
     City: City,
+    CityMap: CityMap,
     Game: Game,
     GameDialog: GameDialog,
     GameMap: GameMap,
@@ -3002,6 +3125,7 @@ return {
     InputView: InputView,
     KeyInputController: KeyInputController,
     LoadGameMenu: LoadGameMenu,
+    MapLayer: MapLayer,
     MapRenderer: MapRenderer,
     Plot: Plot,
     RCIValue: RCIValue,
@@ -3016,6 +3140,7 @@ return {
     Terrain: Terrain,
     TerrainRenderer: TerrainRenderer,
     TerrainTile: TerrainTile,
+    TerrainType: TerrainType,
     TextInputView: TextInputView,
     ToolButton: ToolButton,
     Z: Z,

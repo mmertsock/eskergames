@@ -30,9 +30,10 @@ const SelectableList = Gaming.SelectableList;
 const UndoStack = Gaming.UndoStack;
 const Vector = Gaming.Vector;
 
+const CityMap = CitySim.CityMap;
+const MapLayer = CitySim.MapLayer;
 const GameContent = CitySimContent.GameContent;
 const GameDialog = CitySim.GameDialog;
-const GameMap = CitySim.GameMap;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
 const InputView = CitySim.InputView;
@@ -43,6 +44,7 @@ const Strings = CitySim.Strings;
 const Terrain = CitySim.Terrain;
 const TerrainRenderer = CitySim.TerrainRenderer;
 const TerrainTile = CitySim.TerrainTile;
+const TerrainType = CitySim.TerrainType;
 const TextInputView = CitySim.TextInputView;
 const ToolButton = CitySim.ToolButton;
 
@@ -181,7 +183,7 @@ class TileGenerator {
     fill(tiles, value, locations, generator) {
         locations.forEach(tile => {
             if (generator.bounds.containsTile(tile)) {
-                tiles[tile.y][tile.x] = value;
+                tiles[tile.y][tile.x].type = value;
             }
         });
     }
@@ -232,7 +234,7 @@ class OceanTileGenerator extends TileGenerator {
         edgeTiles.forEach(edgeTile => {
             var shoreDistance = this.lineGenerator.nextValue();
             var line = this.edge.lineOfTiles(edgeTile, shoreDistance);
-            this.fill(tiles, TerrainTile.ocean, line, generator);
+            this.fill(tiles, TerrainType.ocean, line, generator);
         });
     }
 }
@@ -287,13 +289,13 @@ class RiverTileGenerator extends TileGenerator {
             sliceWidth = Math.round(sliceWidth);
             for (var i = 0; i < sliceWidth; i += 1) {
                 if (generator.bounds.containsTile(point)
-                    && tiles[point.y][point.x].isLand) {
+                    && tiles[point.y][point.x].type.isLand) {
                     water.push(point);
                 }
                 point = point.adding(axis);
             }
         });
-        this.fill(tiles, TerrainTile.water, water, generator);
+        this.fill(tiles, TerrainType.water, water, generator);
     }
 }
 
@@ -356,8 +358,8 @@ class ForestTileGenerator extends BlobFillTileGenerator {
         var treeCount = 0, landCount = 0;
         tiles.forEach(row => {
             row.forEach(tile => {
-                if (tile.has(TerrainTile.flags.trees)) { treeCount += 1; }
-                if (tile.isLand) { landCount += 1; }
+                if (tile.type.has(TerrainType.flags.trees)) { treeCount += 1; }
+                if (tile.type.isLand) { landCount += 1; }
             });
         });
         return (landCount > 0) ? (treeCount / landCount) : 1;
@@ -375,8 +377,8 @@ class FreshWaterTileGenerator extends BlobFillTileGenerator {
         var freshCount = 0, landCount = 0;
         tiles.forEach(row => {
             row.forEach(tile => {
-                if (tile.isFreshwater) { freshCount += 1; }
-                if (tile.isLand) { landCount += 1; }
+                if (tile.type.isFreshwater) { freshCount += 1; }
+                if (tile.type.isLand) { landCount += 1; }
             });
         });
         return (landCount > 0) ? (freshCount / landCount) : 1;
@@ -425,27 +427,27 @@ class BlobTileGenerator extends TileGenerator {
 
 class LakeTileGenerator extends BlobTileGenerator {
     constructor(config) {
-        super(Object.assign({value: TerrainTile.water}, config));
+        super(Object.assign({value: TerrainType.water}, config));
     }
 
     shouldFill(point, tiles, generator) {
-        return tiles[point.y][point.x].isLand;
+        return tiles[point.y][point.x].type.isLand;
     }
 }
 
 class WoodsTileGenerator extends BlobTileGenerator {
     constructor(config) {
-        super(Object.assign({value: TerrainTile.forest}, config));
+        super(Object.assign({value: TerrainType.forest}, config));
     }
 
     shouldFill(point, tiles, generator) {
-        return tiles[point.y][point.x].isLand;
+        return tiles[point.y][point.x].type.isLand;
     }
 }
 
 class TerrainGenerator {
     constructor(config) {
-        this.map = new GameMap({
+        this.map = new CityMap({
             size: config.size
         });
 
@@ -476,18 +478,20 @@ class TerrainGenerator {
     get bounds() { return this.map.bounds; }
 
     generateMap() {
-        var timer = new PerfTimer("TerrainGenerator.generateMap").start();
-        var tiles = [];
-        for (var rowIndex = 0; rowIndex < this.size.height; rowIndex += 1) {
-            var row = [];
-            for (var colIndex = 0; colIndex < this.size.width; colIndex += 1) {
-                row.push(TerrainTile.dirt);
+        let timer = new PerfTimer("TerrainGenerator.generateMap").start();
+        let tiles = [];
+        for (let rowIndex = 0; rowIndex < this.size.height; rowIndex += 1) {
+            let row = [];
+            for (let colIndex = 0; colIndex < this.size.width; colIndex += 1) {
+                row.push(new TerrainTile(new Point(colIndex, rowIndex), this.map.terrainLayer));
             }
             tiles.push(row);
         }
 
         this.builders.forEach(builder => builder.generateInto(tiles, this));
-        this.map.terrain = tiles;
+        debugLog(timer.end().summary);
+        timer = new PerfTimer("TerrainGenerator.modifyTerrain").start();
+        this.map.modifyTerrain(tiles);
         debugLog(timer.end().summary);
 
         return this.map;
@@ -517,19 +521,13 @@ class EditTilesAction {
 class ReplaceMapAction {
     constructor(config) {
         this.session = config.session;
-        this.size = config.size;
-        this.tiles = config.tiles;
+        this.newMap = new CityMap({ size: config.newMap.size });
+        this.newMap.modifyTerrain(config.newMap.terrainLayer._tiles);
         this.oldMap = config.oldMap;
     }
     get title() { return "Reset Map"; }
-    undo() {
-        this.session.replaceMap(this.oldMap, true);
-    }
-    redo() {
-        var map = new GameMap({ size: this.size });
-        map.terrain = this.tiles;
-        this.session.replaceMap(map, true);
-    }
+    undo() { this.session.replaceMap(this.oldMap, true); }
+    redo() { this.session.replaceMap(this.newMap, true); }
 }
 
 class EditSession {
@@ -553,8 +551,7 @@ class EditSession {
         if (!skipUndo) {
             this.undoStack.push(new ReplaceMapAction({
                 session: this,
-                size: newMap.size,
-                tiles: newMap.terrain,
+                newMap: newMap,
                 oldMap: this.terrain.map
             }));
         }
@@ -648,6 +645,7 @@ class NewTerrainDialog extends GameDialog {
             transform: InputView.trimTransform,
             validationRules: [InputView.notEmptyOrWhitespaceRule]
         }).configure(input => input.value = initialName);
+        let defaultIndex = Terrain.indexForTerrainSize(session ? session.terrain : null);
         this.sizes = new SingleChoiceInputCollection({
             id: "size",
             parent: formElem,
@@ -656,7 +654,7 @@ class NewTerrainDialog extends GameDialog {
             choices: Terrain.settings().sizes.map(size => { return {
                 title: `${size.width} x ${size.height} tiles, ${Number.uiInteger(Terrain.kmForTileCount(size.width))} x ${Number.uiInteger(Terrain.kmForTileCount(size.height))} km`,
                 value: size.index,
-                selected: !!size.isDefault
+                selected: size.index == defaultIndex
             }; })
         });
         this.templates = new SingleChoiceInputCollection({
@@ -699,11 +697,12 @@ class NewTerrainDialog extends GameDialog {
         if (this.session) {
             this.session.replaceMap(map);
         } else {
+            var terrain =  new Terrain({
+                name: this.nameInput.value,
+                map: map
+            });
             CitySimTerrain.view.setUp(new EditSession({
-                terrain: new Terrain({
-                    name: this.nameInput.value,
-                    map: map
-                })
+                terrain: terrain
             }));
         }
 
@@ -723,14 +722,13 @@ class TerrainView {
     constructor() {
         this.session = null;
         this.canvas = document.querySelector("canvas.mainMap");
-        this.zoomLevel = GameContent.shared.mainMapView.zoomLevels[1]; // MapRenderer.defaultZoomLevel();
+        this.zoomLevel = GameContent.shared.mainMapView.zoomLevels[1];
         this._terrainRenderer = null;
-        this._lastTokenDrawn = null;
+        this._dirty = true;
         CitySimTerrain.uiRunLoop.addDelegate(this);
     }
 
     setUp(session) {
-        this._lastTokenDrawn = null;
         this.session = session;
         this.canvasGrid = new FlexCanvasGrid({
             canvas: this.canvas,
@@ -739,25 +737,27 @@ class TerrainView {
             tileSpacing: 0
         });
 
-        var subRendererConfig = { canvasGrid: this.canvasGrid, game: null };
+        let subRendererConfig = { canvasGrid: this.canvasGrid, game: session ? session.terrain : null };
         this._terrainRenderer = new TerrainRenderer(subRendererConfig);
+
+        this.session.kvo.changeToken.addObserver(this, () => this.setDirty());
+        GameScriptEngine.shared.registerCommand("rerender", () => this.setDirty());
+        this._dirty = true;
     }
+
+    setDirty() { this._dirty = true; }
 
     get drawContext() { return this.canvas.getContext("2d", { alpha: false }); }
     get settings() { return GameContent.shared.mainMapView; }
 
     processFrame(rl) {
-        if (!this.session || this.session.changeToken == this._lastTokenDrawn) { return; }
-        var timer = new PerfTimer("TerrainView.processFrame").start();
-        this._lastTokenDrawn = this.session.changeToken;
-        var settings = Object.assign({}, this.settings);
+        if (!this.session || !this._dirty) { return; }
+        this._dirty = false;
+        this._terrainRenderer.game = this.session.terrain;
+        let timer = new PerfTimer("TerrainView.processFrame").start();
+        let settings = Object.assign({}, this.settings);
         settings.edgePaddingFillStyle = "white";
-        var ctx = this.drawContext;
-        if (this.session && this.session) {
-            this._terrainRenderer.render(ctx, settings, this.session.terrain);
-        } else {
-            this._terrainRenderer.render(ctx, settings);
-        }
+        this._terrainRenderer.render(this.drawContext, settings);
         debugLog(timer.end().summary);
     }
 }
@@ -773,6 +773,7 @@ class ControlsView {
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("optionsButtonLabel"), clickScript: "showFileMenu"}));
         this.undoButton = new ToolButton({parent: globalBlock, title: Strings.str("undoButtonLabel"), clickScript: "terrainUndo"});
         this.redoButton = new ToolButton({parent: globalBlock, title: Strings.str("redoButtonLabel"), clickScript: "terrainRedo"});
+        this.buttons.push(new ToolButton({parent: globalBlock, title: "Render", clickScript: "rerender" }));
         this.buttons.push(this.undoButton);
         this.buttons.push(this.redoButton);
         this.buttons.push(new ToolButton({parent: globalBlock, title: "Help", clickScript: "showGameHelp"}));
