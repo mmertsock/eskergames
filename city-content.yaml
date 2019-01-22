@@ -177,12 +177,19 @@ mapTools:
 mainMapView:
   edgePaddingFillStyle: &DIRTBASECOLOR "hsl(33, 33%, 80%)" # or try *PANELFILL  # was "hsl(33, 37%, 80%)""
   emptyFillStyle: *DIRTBASECOLOR
+  gridColor: "hsla(0, 0%, 0%, 0.1)"
   zoomLevels:
+  - tileWidth: 1
+    allowGrid: false
   - tileWidth: 3
+    allowGrid: false
   - tileWidth: 6
+    allowGrid: true
   - tileWidth: 12
     isDefault: true
+    allowGrid: true
   - tileWidth: 24
+    allowGrid: true
 
 controlPanelView:
   fillStyle: *PANELFILL
@@ -339,6 +346,7 @@ strings:
   helpButtonLabel: Help
   undoButtonLabel: Undo
   redoButtonLabel: Redo
+  regenTerrainButtonLabel: Restart
   helpDismiss: Thanks!
   newGameDialogStartButton: Start Game
   newGameDialogTitle: New Game

@@ -36,6 +36,7 @@ const GameContent = CitySimContent.GameContent;
 const GameDialog = CitySim.GameDialog;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
+const GridPainter = CitySim.GridPainter;
 const InputView = CitySim.InputView;
 const MapRenderer = CitySim.MapRenderer;
 const ScriptPainterStore = CitySim.ScriptPainterStore;
@@ -47,6 +48,7 @@ const TerrainTile = CitySim.TerrainTile;
 const TerrainType = CitySim.TerrainType;
 const TextInputView = CitySim.TextInputView;
 const ToolButton = CitySim.ToolButton;
+const ZoomSelector = CitySim.ZoomSelector;
 
 Point.tilesBetween = function(a, b, log) {
     var v = Vector.betweenPoints(a, b);
@@ -722,9 +724,16 @@ class TerrainView {
     constructor() {
         this.session = null;
         this.canvas = document.querySelector("canvas.mainMap");
-        this.zoomLevel = GameContent.shared.mainMapView.zoomLevels[1];
+        this.canvasGrid = null;
         this._terrainRenderer = null;
         this._dirty = true;
+
+        let zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
+        this.zoomSelection = new SelectableList(zoomers);
+        this.zoomSelection.setSelectedIndex(2);
+
+        this._configureCommmands();
+        this.setDirty();
         CitySimTerrain.uiRunLoop.addDelegate(this);
     }
 
@@ -736,19 +745,26 @@ class TerrainView {
             tileWidth: this.zoomLevel.tileWidth,
             tileSpacing: 0
         });
+        this.gridPainter = new GridPainter(this.settings);
 
         let subRendererConfig = { canvasGrid: this.canvasGrid, game: session ? session.terrain : null };
         this._terrainRenderer = new TerrainRenderer(subRendererConfig);
 
         this.session.kvo.changeToken.addObserver(this, () => this.setDirty());
-        GameScriptEngine.shared.registerCommand("rerender", () => this.setDirty());
-        this._dirty = true;
+        this.setDirty();
     }
 
     setDirty() { this._dirty = true; }
 
-    get drawContext() { return this.canvas.getContext("2d", { alpha: false }); }
     get settings() { return GameContent.shared.mainMapView; }
+    get drawContext() { return this.canvas.getContext("2d", { alpha: false }); }
+    get zoomLevel() { return this.zoomSelection.selectedItem.value; }
+
+    zoomLevelActivated(value) {
+        if (!this.canvasGrid) { return; }
+        this.canvasGrid.setSize({ tileWidth: value.tileWidth, tileSpacing: 0 });
+        this.setDirty();
+    }
 
     processFrame(rl) {
         if (!this.session || !this._dirty) { return; }
@@ -757,8 +773,17 @@ class TerrainView {
         let timer = new PerfTimer("TerrainView.processFrame").start();
         let settings = Object.assign({}, this.settings);
         settings.edgePaddingFillStyle = "white";
-        this._terrainRenderer.render(this.drawContext, settings);
+        let ctx = this.drawContext;
+        this._terrainRenderer.render(ctx, settings);
+        this.gridPainter.render(ctx, this.session.terrain.map, this.canvasGrid, this.zoomLevel);
         debugLog(timer.end().summary);
+    }
+
+    _configureCommmands() {
+        let gse = GameScriptEngine.shared;
+        gse.registerCommand("rerender", () => this.setDirty());
+        gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
+        gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
     }
 }
 
@@ -768,17 +793,29 @@ class ControlsView {
         this.root = document.querySelector("controls");
         this.buttons = [];
 
-        var globalBlock = this.root.querySelector("#global-controls");
-        this.buttons.push(new ToolButton({parent: globalBlock, title: "Restart", clickScript: "regenerate"}));
+        let globalBlock = this.root.querySelector("#global-controls");
+        this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("regenTerrainButtonLabel"), clickScript: "regenerate"}));
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("optionsButtonLabel"), clickScript: "showFileMenu"}));
         this.undoButton = new ToolButton({parent: globalBlock, title: Strings.str("undoButtonLabel"), clickScript: "terrainUndo"});
         this.redoButton = new ToolButton({parent: globalBlock, title: Strings.str("redoButtonLabel"), clickScript: "terrainRedo"});
         this.buttons.push(new ToolButton({parent: globalBlock, title: "Render", clickScript: "rerender" }));
         this.buttons.push(this.undoButton);
         this.buttons.push(this.redoButton);
-        this.buttons.push(new ToolButton({parent: globalBlock, title: "Help", clickScript: "showGameHelp"}));
-        this._configureCommmands();
+        this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("helpButtonLabel"), clickScript: "showGameHelp"}));
 
+        let zoomElem = this.root.querySelector("zoom");
+        this.buttons.push(new ToolButton({
+            parent: zoomElem,
+            title: Strings.str("zoomOutButtonGlyph"),
+            clickScript: "zoomOut"
+        }));
+        this.buttons.push(new ToolButton({
+            parent: zoomElem,
+            title: Strings.str("zoomInButtonGlyph"),
+            clickScript: "zoomIn"
+        }));
+
+        this._configureCommmands();
         this._dirty = true;
         CitySimTerrain.uiRunLoop.addDelegate(this);
     }
@@ -828,9 +865,9 @@ function dataIsReady(content) {
     debugLog("Ready.");
 }
 
-var initialize = async function() {
+let initialize = async function() {
     debugLog("Initializing...");
-    var content = await GameContent.loadYamlFromLocalFile("city-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
+    let content = await GameContent.loadYamlFromLocalFile("city-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
     dataIsReady(content);
 };
 

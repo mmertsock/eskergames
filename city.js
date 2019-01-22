@@ -2297,16 +2297,33 @@ class MapRenderer {
         var r = this._plotRenderer;
         this.game.city.map.visitEachPlot((plot) => r.render(plot, ctx));
         this._toolRenderer.render(ctx);
-        /*
-    FlexCanvasGrid improvements:
-    allow drawing partial tiles at the edges, instead of having blank edge padding:
-    - rename rectForAllTiles to rectForFullTiles or something
-    - configurable alignment for FlexCanvasGrid. So rectForFullTiles is top left, or centered, etc.
-    - or start to think about Viewport integration right into FCG. So the Viewport determines 
-      the xy offset of tiles. Use FCG's isTileVisible to determine, based on the xy offset,
-      whether a tile needs drawing (including partial tiles). Have two variants: 
-      isTileVisible and isTileFullyVisible. Also isTileRectVisible and isTileRectFullyVisible.
-        */
+    }
+}
+
+class GridPainter {
+    constructor(config) {
+        this.gridColor = config.gridColor;
+    }
+
+    render(ctx, map, canvasGrid, zoomLevel) {
+        if (!zoomLevel.allowGrid) { return; }
+        let ext = map.bounds.intersection(new Rect(0, 0, canvasGrid.tileSize.width + 1, canvasGrid.tileSize.height + 1)).extremes;
+        for (let y = ext.min.y; y <= ext.max.y; y += 1) {
+            this._renderGridLine(ctx, canvasGrid, new Point(ext.min.x, y), new Point(ext.max.x, y));
+        }
+        for (let x = ext.min.x; x <= ext.max.x; x += 1) {
+            this._renderGridLine(ctx, canvasGrid, new Point(x, ext.min.y), new Point(x, ext.max.y));
+        }
+    }
+
+    _renderGridLine(ctx, canvasGrid, start, end) {
+        start = canvasGrid.rectForTile(start);
+        end = canvasGrid.rectForTile(end);
+        ctx.strokeStyle = this.gridColor;
+        ctx.beginPath();
+        ctx.moveTo(start.x, start.y);
+        ctx.lineTo(end.x, end.y);
+        ctx.stroke();
     }
 }
 
@@ -3122,6 +3139,7 @@ return {
     GameDialog: GameDialog,
     GameMap: GameMap,
     GameStorage: GameStorage,
+    GridPainter: GridPainter,
     InputView: InputView,
     KeyInputController: KeyInputController,
     LoadGameMenu: LoadGameMenu,
@@ -3145,6 +3163,7 @@ return {
     ToolButton: ToolButton,
     Z: Z,
     Zone: Zone,
+    ZoomSelector: ZoomSelector
 };
 
 })(); // end CitySim namespace
