@@ -238,9 +238,10 @@ class CanvasView {
             let spacing = 0;
             for (let y = 0; y < rect.height; y += 1) {
                 for (let x = 0; x < rect.width; x += 1) {
-                    let i = variantToTile >= 0 ? variantToTile : Rng.shared.nextIntOpenRange(0, collection.variants.length);
-                    let variant = collection.variants[i];
-                    this._renderVariant(ctx, collection.id, variant, metadata, x + y * rect.width, rect.width, rect.origin, spacing);
+                    this._tileVariantIndexes(collection, variantToTile, x, y).forEach(i => {
+                        let variant = collection.variants[i];
+                        this._renderVariant(ctx, collection.id, variant, metadata, x + y * rect.width, rect.width, rect.origin, spacing);
+                    });
                 }
             }
         } else {
@@ -303,6 +304,18 @@ class CanvasView {
         var session = new ScriptPainterSession(painterID, i, variant);
         variant.render(ctx, rect, this.canvasGrid, metadata);
     }
+
+    _tileVariantIndexes(collection, selectedIndex, x, y) {
+        if (selectedIndex >= 0) return [selectedIndex];
+        if (selectedIndex == -1) {
+            return [Rng.shared.nextIntOpenRange(0, collection.variants.length)];
+        }
+        let grid = GameContent.shared.painterTool.edgeSimulationGrid;
+        let row = grid[y % grid.length].split(",");
+        let value = row[x % row.length];
+        if (value == "X") { return []; }
+        return value.split("").map(i => parseInt(i));
+    }
 }
 
 class ScriptSelectorView {
@@ -339,7 +352,8 @@ class VariantSelectorView {
             this.elem.remove(1);
         }
         if (!collection) { return; }
-        this.elem.add(new Option("Randomize", -1));
+        if (collection.variants.length > 1) this.elem.add(new Option("Randomize", -1));
+        if (collection.variants.length == 9) this.elem.add(new Option("Edge Patterns", -2));
         collection.variants.forEach((variant, i) => {
             this.elem.add(new Option(i, i));
         });
