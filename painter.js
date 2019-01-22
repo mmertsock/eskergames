@@ -8,6 +8,7 @@ const once = Gaming.once;
 const PerfTimer = Gaming.PerfTimer;
 const Point = Gaming.Point;
 const Rect = Gaming.Rect;
+const Rng = Gaming.Rng;
 
 const GameContent = CitySimContent.GameContent;
 const ScriptPainter = CitySim.ScriptPainter;
@@ -110,10 +111,11 @@ class SectionView {
     constructor(root, sectionIndex) {
         this.root = root;
         this.scriptSelection = new ScriptSelectorView(root.querySelector(".scriptSelection select"));
+        this.tileVariantSelection = new VariantSelectorView(root.querySelector("select.tile"));
         this.scriptEntry = new ScriptEntryView(root.querySelector(".scriptEntry textarea"));
         this.metadataEntry = new MetadataEntryView(root.querySelector(".metadata textarea"));
         this.canvasViews = Array.from(root.querySelectorAll("canvas")).map(canvas => new CanvasView(canvas, sectionIndex));
-        this.views = [this.scriptSelection, this.scriptEntry, this.metadataEntry];
+        this.views = [this.scriptSelection, this.tileVariantSelection, this.scriptEntry, this.metadataEntry];
         this.views.concat(this.canvasViews);
         root.querySelector("button.selectScript").captureEventListener("click", () => this.loadScriptFromStore());
         root.querySelector("button.render").captureEventListener("click", () => this.renderInput());
@@ -126,15 +128,16 @@ class SectionView {
     }
 
     loadScriptFromStore() {
-        var id = this.scriptSelection.selectedID;
+        let id = this.scriptSelection.selectedID;
         if (!id) { return; }
-        var collection = ScriptPainterStore.shared.getPainterCollection(id);
+        let collection = ScriptPainterStore.shared.getPainterCollection(id);
         if (!collection) {
             showMessage("Failed to find script " + id);
             return;
         }
         this.scriptEntry.collectionID = collection.id;
         this.scriptEntry.scriptSource = collection.rawSource;
+        this.tileVariantSelection.setCollection(collection);
     }
 
     renderInput() {
@@ -142,7 +145,7 @@ class SectionView {
             var collection = ScriptPainterCollection.fromYaml(this.scriptEntry.collectionID, this.scriptEntry.scriptSource, CanvasView.deviceScale());
             var metadata = this.metadataEntry.value;
             this._perfTestIfNeeded((views, isPerfTest) => {
-                views.forEach(view => view.render(collection, metadata, isPerfTest));
+                views.forEach(view => view.render(collection, metadata, isPerfTest, this.tileVariantSelection.selectedVariant));
             });
         } catch (e) {
             showMessage(`Invalid script: ${e.message}`, this.root.querySelector(".scriptEntry"));
@@ -220,7 +223,7 @@ class CanvasView {
         this.render(null);
     }
 
-    render(collection, metadata, isPerfTest) {
+    render(collection, metadata, isPerfTest, variantToTile) {
         var ctx = this.drawContext;
         if (isPerfTest) {
             collection.variants.forEach((variant, i) => this._perfRenderVariant(ctx, collection.id, variant, metadata, i));
@@ -229,11 +232,23 @@ class CanvasView {
         this._renderBackground(ctx);
         if (!collection) { return; }
 
-
-        var columns = 3;
-        var offset = new Point(1, 1);
-        var spacing = this._spacingForCollection(collection);
-        collection.variants.forEach((variant, i) => this._renderVariant(ctx, collection.id, variant, metadata, i, columns, offset, spacing));
+        if (!isNaN(variantToTile)) {
+            let rect = new Rect(0, 0, this.canvasGrid.tilesWide, this.canvasGrid.tilesHigh);
+            let columns = this.canvasGrid.tilesWide;
+            let spacing = 0;
+            for (let y = 0; y < rect.height; y += 1) {
+                for (let x = 0; x < rect.width; x += 1) {
+                    let i = variantToTile >= 0 ? variantToTile : Rng.shared.nextIntOpenRange(0, collection.variants.length);
+                    let variant = collection.variants[i];
+                    this._renderVariant(ctx, collection.id, variant, metadata, x + y * rect.width, rect.width, rect.origin, spacing);
+                }
+            }
+        } else {
+            let columns = 3;
+            let offset = new Point(1, 1);
+            let spacing = this._spacingForCollection(collection);
+            collection.variants.forEach((variant, i) => this._renderVariant(ctx, collection.id, variant, metadata, i, columns, offset, spacing));
+        }
     }
 
     renderAll(allCollections, metadata, isPerfTest) {
@@ -310,6 +325,30 @@ class ScriptSelectorView {
 
     get selectedID() {
         return this.elem.selectedOptions.length > 0 ? this.elem.selectedOptions[0].value : null;
+    }
+}
+
+class VariantSelectorView {
+    constructor(elem) {
+        this.elem = elem;
+        this.setCollection(null);
+    }
+
+    setCollection(collection) {
+        while (this.elem.options.length > 1) { // keep first choice
+            this.elem.remove(1);
+        }
+        if (!collection) { return; }
+        this.elem.add(new Option("Randomize", -1));
+        collection.variants.forEach((variant, i) => {
+            this.elem.add(new Option(i, i));
+        });
+    }
+
+    reset() { this.setCollection(null); }
+
+    get selectedVariant() {
+        return this.elem.selectedOptions.length > 0 ? parseInt(this.elem.selectedOptions[0].value) : NaN;
     }
 }
 
