@@ -357,9 +357,92 @@ class Plot {
     get bulldozeCost() {
         return this.item.bulldozeCost || 0;
     }
+
+    isPaintOrigin(point) {
+        return (point.x = this.bounds.x)
+            && (point.y == this.bounds.y + this.bounds.height - 1);
+    }
+
+    canAddToMap(map) {
+        if (map.plotsIntersectingRect(this.bounds).length > 0) return false;
+        let anyBadTerrain = map.terrainLayer.filterTiles(this.bounds, tile => {
+            return tile.type.isWater;
+        }).length > 0;
+        return !anyBadTerrain;
+    }
 }
 
 // ########################### MAP/GAME #######################
+
+    /*
+performance for 128x128 map:
+full edgeVariants array: 350 ms
+disabling _edgeVariants and just returning a single hard-coded terrain_x painter with random variantKey: 213 ms
+...with zero variantKey (disabling the more complex edge painters): 227 ms.
+So, doing 128x128 painters in general seems to be the slow thing. Even using the "blank" landform is 212 ms.
+Blank landform, change dirt painter to a single fillrect: 93 ms.
+So, I think we need to compile the painters.
+
+
+TODO try this:
+replace ScriptPainter with a hard-coded class that has hard-coded lines of JS for the four rects that the dirt painter paints.
+if that performs faster, then the perf bottleneck could be the line parsing that compiled scripts would improve.
+if it doesn't, then the perf bottleneck might be the sheer number of canvasrenderingcontext2d commands,
+or it could be related to scriptpainterstore stuff, or?
+painter.html, the real terrain_dirt: 100 iterations: 61 ms total, 0.61 ms average
+
+hm stubbed ScriptPainter and commented out *all* stuff in render(), and still got 64 ms total for 100 iterations.
+So the perf test in painter.html seems to show a *lot* of overhead that is completely outside of ScriptPainter.render.
+ok the checker background was most of the time.
+
+properly optimized perf test (no checkered background stuff):
+1-3 ms total, 0.01-0.03 ms avg for a fully stubbed out empty ScriptPainter.
+6-8 ms total, 0.06-0.08 ms avg for a fully hard-coded terrain_dirt painter
+10-13 ms total, 0.10-0.13 ms avg for the current dynamic line-parsing terrain_dirt painter.
+...which could easily add up to a couple of seconds for a 128x128 map.
+Goal is < 16 ms to render an entire 128x128 map, which means 
+1600 ms for 16384 iterations or 0.1 ms for 100 iteration perf test.
+or 1 ms for 1000 iteration perf test for more precision.
+softer goal: maybe render 64x64 at 60 fps, which means 4 ms for 1000 iterations.
+
+oh also the iterations was inaccurate bc it was rendering to 3 canvases. fixing that.
+
+Getting 30 ms for 1000 iterations of full dynamic terrain_dirt ScriptPainter. OOOOF
+Need to get it to 13% that time, aka 87% reduction, aka 8x faster, for minimum goal.
+20 ms for hard-coded terrain_dirt: so compiling may give 67% time, 33% reduction, 1.5x faster.
+
+back to terrain and edgeVariants and stuff. hard-coded stub ScriptPainter:
+- 230 ms with full _edgeVariants calculation and painting
+- 215 ms with _edgeVariants calculation but then hard-code 2 variants
+- 120 ms with 2 hard-coded variants
+- 150 ms with single hard-coded variant0 (_edgeVariants call avoided entirely).
+So, the number of painters isn't a big difference at this point.
+
+The edgeVariants calculation itself is definitely a big thing. So pre-calculating should make a big difference.
+Could calculate and cache once per tile on the fly. No need to store it in the save state.
+Caching edgeVariants value in TerrainTile: 257 ms -> 206 ms.
+
+Main bottleneck still seems to be the painting itself.
+Which means, need to focus on:
+- more efficient painting primitives
+- painting only the tiles needed, when needed
+
+Note that if it weren't for animation, could render the entire terrain to a static image.
+With animation, if total unique number of frames is small, could cache each possible frame on the fly 
+to a static image.
+Caching an entire 128x128 canvas offscreen: 2ms render time for the whole thing.
+So yeah that's a nice way to avoid the performance problem for now.
+
+Next steps:
+map/terrain thing is getting hacky and messy.
+Start over with a new map class and just throw out the old one.
+
+
+TRY: following the optimization strategies here https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas
+
+TODO read https://developer.mozilla.org/en-US/docs/Games/Techniques/Tilemaps
+
+    */
 
 class TerrainType {
     static fromDeserializedWrapper(data, schemaVersion) {
@@ -435,6 +518,17 @@ class Terrain {
         return (Terrain.settings().metersPerTile * tiles) / 1000;
     }
 
+    static loadFromStorage(storage, id) {
+        let data = storage.terrainCollection.getItem(id);
+        if (!data) {
+            throw new Error(Strings.str("failedToFindFileMessage"));
+        } else if (!storage.isSaveStateItemSupported(data)) {
+            throw new Error(Strings.str("failedToLoadTerrainMessage"));
+        } else {
+            return Terrain.fromDeserializedWrapper(data);
+        }
+    }
+
     static fromDeserializedWrapper(item) {
         deserializeAssert(item.data);
         return new Terrain({ dz: {
@@ -475,22 +569,35 @@ class Terrain {
     get size() { return this.map.size; }
 
     get metadataForSerialization() {
+        let metrics = this.metrics;
+        let landform = Strings.template("terrainMetricsTemplate", { water: Number.uiPercent(metrics.water), trees: Number.uiPercent(metrics.trees) });
         return {
             schemaVersion: GameStorage.currentSchemaVersion,
             name: this.name,
-            size: `${this.map.size.width}x${this.map.size.height}`
+            size: `${this.map.size.width}x${this.map.size.height}`,
+            landform: landform
         };
     }
 
     get objectForSerialization() {
         return {
             schemaVersion: GameStorage.currentSchemaVersion,
+            name: this.name,
             map: this.map.objectForSerialization
         };
     }
 
     get debugDescription() {
         return `<Terrain ${this.map.debugDescription}>`;
+    }
+
+    get metrics() {
+        let total = this.size.width * this.size.height, water = 0, trees = 0;
+        this.map.terrainLayer.visitTiles(null, tile => {
+            if (tile.type.isWater) { water += 1; }
+            if (tile.type.has(TerrainType.flags.trees)) { trees += 1; }
+        });
+        return { water: water / total, trees: trees / total };
     }
 }
 
@@ -581,6 +688,14 @@ class PlotTile extends MapTile {
 
     constructor(point, layer) {
         super(point, layer);
+        this._plot = null;
+        this.isPaintOrigin = false;
+    }
+
+    get plot() { return this._plot; }
+    set plot(value) {
+        this._plot = value;
+        this.isPaintOrigin = value ? value.isPaintOrigin(this.point) : false;
     }
 
     get objectForSerialization() { return 0; }
@@ -635,6 +750,12 @@ class MapLayer {
         }
     }
 
+    filterTiles(rect, filter) {
+        let tiles = [];
+        this.visitTiles(rect, tile => { if (filter(tile)) { tiles.push(tile); } });
+        return tiles;
+    }
+
     getSurroundingTiles(point) {
         return Vector.manhattanUnits.map((v, direction) => {
             var p = point.adding(v);
@@ -672,6 +793,7 @@ class CityMap {
         } else {
             this.terrainLayer = new MapLayer(terrainConfig);
         }
+        this.plotLayer = new MapLayer({ map: this, id: MapLayer.id.plots, tileClass: PlotTile });
         this._updateTerrainInfo();
     }
 
@@ -696,69 +818,17 @@ class CityMap {
         this._updateTerrainInfo();
     }
 
-    // TODO
-    // addPlot, removePlot
-
-    addPlot(plot) {
-        throw new TypeError("not implemented");
+    plotAtTile(point) {
+        let tile = this.plotLayer.getTileAtPoint(point);
+        return tile ? tile.plot : null;
     }
 
-    removePlot(plot) {
-    }
-
-    _updateTerrainInfo() {
-        debugLog("TODO recalculate stuff in the terrain layer")
-    }
-}
-
-class GameMap {
-    static fromDeserializedWrapper(data, schemaVersion) {
-        deserializeAssert(data != null);
-        deserializeAssert(data.size != null || data.terrain != null);
-        deserializeAssert(Array.isArray(data.plots));
-        return new GameMap({ dz: {
-            size: data.terrain ? data.terrain.size : data.size,
-            plots: data.plots.map(plot => Plot.fromDeserializedWrapper(plot, schemaVersion))
-        } });
-    }
-
-    constructor(config) {
-        // flat sparse arrays in drawing order. See _tileIndex for addressing
-        this._plots = [];
-        this._tiles = [];
-        var plotsToAdd = [];
-        if (config.dz) {
-            this.size = config.dz.size;
-            plotsToAdd = config.dz.plots;
-        } else {
-            this.size = { width: config.size.width, height: config.size.height };
-        }
-        this.bounds = new Rect(new Point(0, 0), this.size);
-        this.tilePlane = new TilePlane(this.size);
-        plotsToAdd.forEach(plot => {
-            this.addPlot(plot, true);
+    plotsIntersectingRect(rect) {
+        let plots = [];
+        this.plotLayer.visitTiles(rect, tile => {
+            if (tile.plot && !plots.contains(tile)) { plots.push(tile.plot); }
         });
-    }
-
-    get objectForSerialization() {
-        var plots = [];
-        this.visitEachPlot(plot => plots.push(plot.objectForSerialization));
-        return {
-            size: this.size,
-            plots: plots
-        };
-    }
-
-    get debugDescription() {
-        return `<GameMap ${this.size.width}x${this.size.height} with ${this._plots.length} plots>`;
-    }
-
-    isValidCoordinate(x, y) {
-        return this.bounds.containsTile(x, y);
-    }
-
-    isTileRectWithinBounds(rect) {
-        return this.bounds.contains(rect);
+        return plots;
     }
 
     addPlot(plot, fromFile) {
@@ -766,57 +836,28 @@ class GameMap {
             debugLog(`Plot is outside of map bounds: ${plot.bounds.debugDescription}`);
             return null;
         }
-        var index = this._tileIndex(plot.bounds.origin);
-        if (isNaN(index)) { return null; }
-        if (this.plotsInRect(plot.bounds).length > 0) {
-            debugLog(`Cannot add plot at ${plot.bounds.debugDescription}: overlaps other plots.`);
+        if (!plot.canAddToMap(this)) {
+            debugLog(`Cannot add plot at ${plot.bounds.debugDescription}`);
             return null;
         }
-        this._plots[index] = plot;
-        plot.bounds.allTileCoordinates()
-            .map((t) => this._tileIndex(t))
-            .forEach((i) => { if (!isNaN(i)) { this._tiles[i] = plot; } });
+        // let index = this._plots.push(plot) - 1;
+        this.plotLayer.visitTiles(plot.bounds, tile => { tile.plot = plot; });
         if (!fromFile) { debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription}`); }
         return plot;
     }
 
     removePlot(plot) {
-        var index = this._tileIndex(plot.bounds.origin);
-        if (!isNaN(index) && this._plots[index] === plot) {
-            this._plots[index] = null;
-            plot.bounds.allTileCoordinates()
-                .map((t) => this._tileIndex(t))
-                .forEach((i) => { if (!isNaN(i) && this._tiles[i] === plot) { this._tiles[i] = null; } });
-            debugLog(`Removed plot ${plot.title} at ${plot.bounds.debugDescription}`);
-            return plot;
-        }
-        return null;
+        this.plotLayer.visitTiles(plot.bounds, tile => { tile.plot = null; });
     }
 
-    visitEachPlot(block) {
-        for (var i = 0; i < this._plots.length; i += 1) {
-            if (this._plots[i]) { block(this._plots[i]); }
-        }
+    visitEachPlotTile(block) {
+        this.plotLayer.visitTiles(null, tile => {
+            if (tile.isPaintOrigin) block(tile.plot);
+        });
     }
 
-    plotAtTile(x, y) {
-        var index = this._tileIndex(x, y);
-        return isNaN(index) ? null : this._tiles[index];
-    }
-
-    plotsInRect(rect) {
-        return Array.from(new Set(rect.allTileCoordinates()
-                .map((t) => this.plotAtTile(t))
-                .filter((p) => !!p)));
-    }
-
-    _tileIndex(x, y) {
-        var px = x; var py = y;
-        if (typeof y === 'undefined') {
-            px = x.x; py = x.y;
-        }
-        if (!this.isValidCoordinate(px, py)) { return NaN; }
-        return py * this.size.height + px;
+    _updateTerrainInfo() {
+        debugLog("TODO recalculate stuff in the terrain layer")
     }
 }
 
@@ -862,7 +903,7 @@ class City {
             mayorName: data.mayorName,
             time: CityTime.fromDeserializedWrapper(data.time, schemaVersion),
             budget: Budget.fromDeserializedWrapper(data.budget, schemaVersion),
-            map: GameMap.fromDeserializedWrapper(data.map, schemaVersion)
+            map: CityMap.fromDeserializedWrapper(data.map, schemaVersion)
         } });
     }
 
@@ -880,7 +921,7 @@ class City {
             this.mayorName = config.mayorName;
             this.time = new CityTime();
             this.budget = new Budget({ startingCash: config.difficulty.startingCash });
-            this.map = new GameMap({ size: Terrain.defaultSize() });
+            this.map = config.terrain.map;
         }
 
         this.kvo = new Kvo(this);
@@ -924,9 +965,9 @@ class City {
     }
 
     _updatePopulation() {
-        var pop = new RCIValue(0, 0, 0);
-        this.map.visitEachPlot((plot) => {
-            var plotPop = plot.item.population;
+        let pop = new RCIValue(0, 0, 0);
+        this.map.visitEachPlot(plot => {
+            let plotPop = plot.item.population;
             if (plotPop) {
                 pop = pop.adding(plotPop);
             }
@@ -999,6 +1040,12 @@ class GameStorage {
         return new URL(path, base).href;
     }
 
+    urlForNewGameWithTerrainID(id) {
+        let base = window.location.href.replace("index.html", "");
+        let path = `city.html?new=1&terrain=${id}`;
+        return new URL(path, base).href;
+    }
+
     urlForTerrainID(id) {
         var base = window.location.href.replace("index.html", "");
         var path = `terrain.html?id=${id}`;
@@ -1016,6 +1063,7 @@ class Game {
         }
     }
 
+    static autoSaveEnabled() { return false; }
     static rules() { return GameContent.shared.gameRules; }
     static speedOrDefaultForIndex(index) { return GameContent.itemOrDefaultFromArray(Game.rules().speeds, index); }
     static defaultSpeed() { return GameContent.defaultItemFromArray(Game.rules().speeds); }
@@ -1147,7 +1195,7 @@ class Game {
         }
         if (rl == uiRunLoop) {
             var now = rl.latestFrameStartTimestamp();
-            if ((now - this.saveStateInfo.lastTimestamp) > (1000 * Game.rules().autoSaveIntervalSeconds)) {
+            if (Game.autoSaveEnabled() && (now - this.saveStateInfo.lastTimestamp) > (1000 * Game.rules().autoSaveIntervalSeconds)) {
                 this.saveToStorage();
             }
         }
@@ -1928,7 +1976,19 @@ class RootView {
         var id = storage.latestSavedGameID;
         if (!startNewGame && !!id) { this.tryToLoadGame(id); return; }
 
-        new NewGameDialog().show();
+        try {
+            let terrainID = url.searchParams.get("terrain");
+            let terrain = null;
+            if (terrainID) {
+                terrain = Terrain.loadFromStorage(storage, url.searchParams.get("terrain"));
+            } else {
+                terrain = new Terrain({ name: "", map: new CityMap({ size: Terrain.defaultSize() }) });
+            }
+            new NewGameDialog(terrain).show();
+        } catch (e) {
+            this.failedToStartGame(e.message);
+            debugLog(e);
+        }
     }
 
     tryToLoadGame(id) {
@@ -2208,7 +2268,7 @@ class GameEngineControlsView {
             rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate), load: Number.uiPercent(uiLoad) }));
         }
         var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
-        if (!isNaN(engineFrameRate) && !isNaN(engineLoad)) {
+        if (!isNaN(engineFrameRate)) {
             rates.push(Strings.template("engineMsPerDayLabel", { value: Math.round(engineFrameRate) }));
         }
 
@@ -2330,10 +2390,9 @@ class MapRenderer {
             canvasGrid: this.canvasGrid
         });
 
-        var subRendererConfig = { canvasGrid: this.canvasGrid, game: this.game };
-        this._terrainRenderer = new TerrainRenderer(subRendererConfig);
-        this._plotRenderer = new PlotRenderer(subRendererConfig);
-        this._toolRenderer = new MapToolSessionRenderer(subRendererConfig);
+        this._terrainRenderer = new TerrainRenderer({ canvasGrid: this.canvasGrid, mapSource: this.game.city });
+        this._plotRenderer = new PlotRenderer({ canvasGrid: this.canvasGrid, game: this.game });
+        this._toolRenderer = new MapToolSessionRenderer({ canvasGrid: this.canvasGrid, game: this.game });
         debugLog(`MapRenderer: init canvasGrid tw=${this.canvasGrid.tileWidth} sz=${this.canvasGrid.tilesWide}x${this.canvasGrid.tilesHigh}`);
 
         var ctx = this.drawContext;
@@ -2365,7 +2424,7 @@ class MapRenderer {
         var ctx = this.drawContext;
         this._terrainRenderer.render(ctx, this.settings);
         var r = this._plotRenderer;
-        this.game.city.map.visitEachPlot((plot) => r.render(plot, ctx));
+        this.game.city.map.visitEachPlot(plot => r.render(plot, ctx));
         this._toolRenderer.render(ctx);
     }
 }
@@ -2400,16 +2459,16 @@ class GridPainter {
 class TerrainRenderer {
     constructor(config) {
         this.canvasGrid = config.canvasGrid;
-        this.game = config.game;
+        this.mapSource = config.mapSource;
     }
 
     render(ctx, settings) {
         ctx.fillStyle = settings.edgePaddingFillStyle;
         ctx.rectFill(this.canvasGrid.rectForFullCanvas);
-        if (!this.game) { return; }
-        let map = this.game.map;
+        if (!this.mapSource) { return; }
+        let map = this.mapSource.map;
         ctx.fillStyle = settings.emptyFillStyle;
-        let size = this.game.map.tilePlane.size;
+        let size = map.tilePlane.size;
         ctx.rectFill(this.canvasGrid.rectForTileRect(map.tilePlane.screenRectForModel(new Rect(0, 0, size.width, size.height))));
 
         let visibleRect = map.tilePlane.modelRectForScreen(new Rect(0, 0, this.canvasGrid.tileSize.width, this.canvasGrid.tileSize.height));
@@ -2879,8 +2938,9 @@ class GameDialog {
 }
 
 class NewGameDialog extends GameDialog {
-    constructor() {
+    constructor(terrain) {
         super();
+        this.terrain = terrain;
         this.startButton = new ToolButton({
             title: Strings.str("newGameDialogStartButton"),
             click: () => this.validateAndStart()
@@ -2948,7 +3008,8 @@ class NewGameDialog extends GameDialog {
         var city = new City({
             name: this.cityNameInput.value,
             mayorName: this.mayorNameInput.value,
-            difficulty: this.difficulty
+            difficulty: this.difficulty,
+            terrain: this.terrain
         });
         CitySim.game = new Game({
             city: city,
@@ -2977,38 +3038,34 @@ class LoadGameMenu {
 
         document.querySelectorAll("#root .showGameList").forEach(elem => {
             elem.addEventListener("click", evt => {
-                evt.preventDefault();
-                this.showGameList();
+                evt.preventDefault(); this.showGameList();
             });
         });
         document.querySelectorAll("#root .showTerrainList").forEach(elem => {
             elem.addEventListener("click", evt => {
-                evt.preventDefault();
-                this.showTerrainList();
+                evt.preventDefault(); this.showTerrainList();
             });
         });
         document.querySelectorAll("#root .showMainMenu").forEach(elem => {
             elem.addEventListener("click", evt => {
-                evt.preventDefault();
-                this._showSection(this.mainMenuSection);
+                evt.preventDefault(); this._showSection(this.mainMenuSection);
             });
         });
         document.querySelector("#gameInfo .open").addEventListener("click", evt => {
-            evt.preventDefault();
-            this._openSelectedGame();
+            evt.preventDefault(); this._openSelectedGame();
         });
         document.querySelector("#terrainInfo .open").addEventListener("click", evt => {
-            evt.preventDefault();
-            this._openSelectedTerrain();
+            evt.preventDefault(); this._openSelectedTerrain();
         });
         document.querySelector("#gameInfo .delete").addEventListener("click", evt => {
-            evt.preventDefault();
-            this._promptDeleteSelectedGame();
+            evt.preventDefault(); this._promptDeleteSelectedGame();
         });
         document.querySelector("#terrainInfo .delete").addEventListener("click", evt => {
-            evt.preventDefault();
-            this._promptDeleteSelectedTerrain();
+            evt.preventDefault(); this._promptDeleteSelectedTerrain();
         });
+        document.querySelector("#terrainInfo .newGame").addEventListener("click", evt => {
+            evt.preventDefault(); this._newGameFromSelectedTerrain();
+        })
 
         // change to "post div" to do the multiple-gradients-within-the-post effect
         var stopper = i => `hsl(${i.h},${i.s}%,${i.l}%) ${i.x}px`
@@ -3040,14 +3097,12 @@ class LoadGameMenu {
     }
 
     showGameList() {
-        this.loadFilesSection.addRemClass("game", true);
-        this.loadFilesSection.addRemClass("terrain", false);
+        this._setFileTypeClass("game");
         this.showFileList(this.storage.allSavedGames, file => this._showGameDetails(file));
     }
 
     showTerrainList() {
-        this.loadFilesSection.addRemClass("game", false);
-        this.loadFilesSection.addRemClass("terrain", true);
+        this._setFileTypeClass("terrain");
         this.showFileList(this.storage.allSavedTerrains, file => this._showTerrainDetails(file));
     }
 
@@ -3074,6 +3129,13 @@ class LoadGameMenu {
         }
     }
 
+    _setFileTypeClass(name) {
+        this.loadFilesSection.addRemClass("game", name == "game");
+        this.loadFilesSection.addRemClass("terrain", name == "game");
+        this.noFilesToLoadSection.addRemClass("game", name == "game");
+        this.noFilesToLoadSection.addRemClass("terrain", name == "game");
+    }
+
     _showGameDetails(game) {
         this.selectedGame = game;
         var isValid = this.storage.isSaveStateSummarySupported(game);
@@ -3097,6 +3159,7 @@ class LoadGameMenu {
         this.terrainInfoSection.querySelector(".size").innerText = file.metadata ? file.metadata.size : "";
         this.terrainInfoSection.querySelector(".landform").innerText = file.metadata ? file.metadata.landform : "";
         this.terrainInfoSection.querySelector(".open").addRemClass("disabled", !isValid);
+        this.terrainInfoSection.querySelector(".newGame").addRemClass("disabled", !isValid);
         // TODO show a minimap
         this._showSection(this.terrainInfoSection);
     }
@@ -3111,6 +3174,13 @@ class LoadGameMenu {
     _openSelectedTerrain() {
         if (!this.storage.isSaveStateSummarySupported(this.selectedTerrain)) { return; }
         var url = this.storage.urlForTerrainID(this.selectedTerrain.id);
+        window.location.assign(url);
+        debugLog("go to " + url);
+    }
+
+    _newGameFromSelectedTerrain() {
+        if (!this.storage.isSaveStateSummarySupported(this.selectedTerrain)) { return; }
+        let url = this.storage.urlForNewGameWithTerrainID(this.selectedTerrain.id);
         window.location.assign(url);
         debugLog("go to " + url);
     }

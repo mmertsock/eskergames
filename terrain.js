@@ -636,20 +636,12 @@ class RootView {
     }
 
     tryToLoadTerrain(id) {
-        let storage = GameStorage.shared;
-        let data = storage.terrainCollection.getItem(id);
-        if (!data) {
-            this.failedToLoad(Strings.str("failedToFindFileMessage"));
-        } else if (!storage.isSaveStateItemSupported(data)) {
-            this.failedToLoad(Strings.str("failedToLoadTerrainMessage"));
-        } else {
-            try {
-                let terrain = Terrain.fromDeserializedWrapper(data);
-                this.setUp(new EditSession({ terrain: terrain }));
-            } catch(e) {
-                this.failedToLoad(`${Strings.str("failedToLoadTerrainMessage")}\n\n${e.message}`);
-                debugLog(e);
-            }
+        try {
+            let terrain = Terrain.loadFromStorage(GameStorage.shared, id);
+            this.setUp(new EditSession({ terrain: terrain }));
+        } catch (e) {
+            this.failedToLoad(e.message);
+            debugLog(e);
         }
     }
 
@@ -790,8 +782,7 @@ class TerrainView {
         });
         this.gridPainter = new GridPainter(this.settings);
 
-        let subRendererConfig = { canvasGrid: this.canvasGrid, game: session ? session.terrain : null };
-        this._terrainRenderer = new TerrainRenderer(subRendererConfig);
+        this._terrainRenderer = new TerrainRenderer({ canvasGrid: this.canvasGrid, mapSource: session });
 
         this.session.kvo.changeToken.addObserver(this, () => this.setDirty());
         this.setDirty();
@@ -812,7 +803,6 @@ class TerrainView {
     processFrame(rl) {
         if (!this.session || !this._dirty) { return; }
         this._dirty = false;
-        this._terrainRenderer.game = this.session.terrain;
         let timer = new PerfTimer("TerrainView.processFrame").start();
         let settings = Object.assign({}, this.settings);
         settings.edgePaddingFillStyle = "white";

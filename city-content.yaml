@@ -372,6 +372,7 @@ strings:
   saveAndQuitButton: Save and Quit
   saveButton: Save
   systemMenuTitle: System
+  terrainMetricsTemplate: "<water> water, <trees> forest"
   uiFpsLabel: "<value> fps / <load> load"
   windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
   zoomInButtonGlyph: ➕

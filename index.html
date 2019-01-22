@@ -205,6 +205,8 @@ content p {
 #loadFileMenu.game .newTerrain { display: none; }
 #loadFileMenu.terrain .newGame { display: none; }
 
+#noFilesToLoad.game .newTerrain { display: none; }
+
 table {
     width: 100%;
     border-collapse: collapse;
@@ -370,6 +372,7 @@ section#background {
                 </content>
                 <nav>
                     <a class="open" href="#">Open</a>
+                    <a class="newGame" class="odd" href="#">New Game</a>
                     <a class="delete" href="#">Delete</a>
                     <a class="showTerrainList" href="#">Go Back</a>
                 </nav>
@@ -381,6 +384,7 @@ section#background {
                 </content>
                 <nav>
                     <a class="showMainMenu" href="#">Cancel</a>
+                    <a class="newTerrain" href="terrain.html?new=1">New Terrain</a>
                 </nav>
             </section>
             <screw></screw>
