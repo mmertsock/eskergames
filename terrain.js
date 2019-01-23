@@ -807,9 +807,10 @@ class TerrainView {
         let settings = Object.assign({}, this.settings);
         settings.edgePaddingFillStyle = "white";
         let ctx = this.drawContext;
-        this._terrainRenderer.render(ctx, settings);
+        let count = this._terrainRenderer.render(ctx, settings);
         this.gridPainter.render(ctx, this.session.terrain.map, this.canvasGrid, this.zoomLevel);
-        debugLog(timer.end().summary);
+        debugLog(`${timer.end().summary}, ${count} tiles rendered`);
+        // debugLog(this._terrainRenderer.offscreenRenderer.frameInfo);
     }
 
     _configureCommmands() {

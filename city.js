@@ -5,6 +5,7 @@ window.CitySim = (function() {
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
 const Binding = Gaming.Binding;
+const CircularArray = Gaming.CircularArray;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const Kvo = Gaming.Kvo;
 const Point = Gaming.Point;
@@ -655,7 +656,7 @@ class TerrainTile extends MapTile {
             // return [{ id: "terrain_trees", variantKey: 0 }];
             return this._edgeVariants("trees", i => !i.tile.type.has(TerrainType.flags.trees));
         } else {
-            return [{ id: "terrain_dirt", variantKey: hashArrayOfInts([this.point.x, this.point.y]) }];
+            return [new PainterInfo("terrain_dirt", PainterInfo.pseudoRandomVariantKey("terrain_dirt", this.point))];
         }
     }
 
@@ -675,7 +676,7 @@ class TerrainTile extends MapTile {
             }
         }
         var variants = [0].concat(firstBatch).concat(secondBatch)
-            .map(i => { return { id: id, variantKey: i } });
+            .map(i => new PainterInfo(id, i));
         // return [{ id: id, variantKey: 0 }, { id: id, variantKey: 1 }];
         return variants;
     }
@@ -850,7 +851,7 @@ class CityMap {
         this.plotLayer.visitTiles(plot.bounds, tile => { tile.plot = null; });
     }
 
-    visitEachPlotTile(block) {
+    visitEachPlot(block) {
         this.plotLayer.visitTiles(null, tile => {
             if (tile.isPaintOrigin) block(tile.plot);
         });
@@ -1964,6 +1965,10 @@ class RootView {
         this.views = [];
     }
 
+    get recentCachePerformance() {
+        return this.mapRenderer._terrainRenderer ? this.mapRenderer._terrainRenderer.offscreenRenderer.recentCachePerformance : null;
+    }
+
     setUp() {
         this._configureCommmands();
         var storage = GameStorage.shared;
@@ -2013,7 +2018,8 @@ class RootView {
         this.game = game;
         if (!game) { return; }
         this.views.push(new PaletteView({ game: game, root: this.root.querySelector("palette") }));
-        this.views.push(new MapRenderer({ game: game, canvas: this.root.querySelector("canvas.mainMap") }));
+        this.mapRenderer = new MapRenderer({ game: game, canvas: this.root.querySelector("canvas.mainMap") });
+        this.views.push(this.mapRenderer);
         this.views.push(new ControlsView({ game: game, root: this.root.querySelector("controls") }));
     }
 
@@ -2255,8 +2261,6 @@ class GameEngineControlsView {
     }
 
     _updateFrameRateLabel() {
-        // TODO can probably calculate if a run loop is "pegged", meaning that the execution time for a 
-        // single frame is >= the time allowed for a single full-speed frame.
         var now = Date.now();
         if (Math.abs(now - this._lastFrameRateUpdateTime) < 1000) { return; }
         this._lastFrameRateUpdateTime = now;
@@ -2267,6 +2271,12 @@ class GameEngineControlsView {
         if (!isNaN(uiFrameRate) && !isNaN(uiLoad)) {
             rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate), load: Number.uiPercent(uiLoad) }));
         }
+
+        let recentCachePerformance = CitySim.rootView.recentCachePerformance;
+        if (recentCachePerformance) {
+            rates.push(Strings.template("tileCachePerfLabel", { ratio: Number.uiPercent(recentCachePerformance.ratio), cacheSize: recentCachePerformance.cacheSize }));
+        }
+
         var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
         if (!isNaN(engineFrameRate)) {
             rates.push(Strings.template("engineMsPerDayLabel", { value: Math.round(engineFrameRate) }));
@@ -2456,13 +2466,111 @@ class GridPainter {
     }
 }
 
+class OffscreenRenderer {
+    constructor(config) {
+        this.canvasGrid = config.canvasGrid;
+        this.store = ScriptPainterStore.shared;
+        this.metrics = null;
+        this.offscreenCanvas = document.createElement("canvas");
+        this.cache = {};
+        this.cachePerformance = new CircularArray(100);
+    }
+
+    get recentCachePerformance() {
+        if (this.cachePerformance.size < 5) return null;
+        let total = 0;
+        let cached = 0;
+        let cacheSize = 0;
+        for (var i = 0; i < this.cachePerformance.size; i += 1) {
+            let item = this.cachePerformance.getValue(i);
+            total += item.total;
+            cached += item.cached;
+            cacheSize = item.cacheSize;
+        }
+        if (total == 0) return null;
+        let info = { ratio: cached / total, cacheSize: cacheSize };
+        return info;
+    }
+
+    beginFrame() {
+        this.frameInfo = { total: 0, cached: 0, cacheSize: 0 };
+        this._updateMetrics();
+    }
+
+    render(ctx, rect, info) {
+        let cached = this.cache[info.uniqueID];
+        this.frameInfo.total += 1;
+        if (cached) {
+            this.frameInfo.cached += 1;
+            this._copyImageToRect(ctx, rect, cached);
+            return;
+        }
+
+        let item = this._makeItem(info, rect);
+        info.getPainterSession(this.store).render(this.offscreenCtx, new Rect(item.origin, rect.size), this.canvasGrid, {});
+        this.cache[info.uniqueID] = item;
+        this._copyImageToRect(ctx, rect, item);
+    }
+
+    endFrame() {
+        this.frameInfo.cacheSize = Object.getOwnPropertyNames(this.cache).length;
+        this.cachePerformance.push(this.frameInfo);
+    }
+
+    clear() {
+        this.offscreenCtx.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
+        this.nextOrigin = new Point(0, 0);
+        this.rowHeight = 0;
+        this.size = { width: 0, height: 0 };
+        this.cache = {};
+        this.cachePerformance.reset();
+    }
+
+    get offscreenCtx() { return this.offscreenCanvas.getContext("2d", { alpha: true }); }
+
+    _makeItem(info, rect) {
+        if (this.nextOrigin.x + rect.width >= this.offscreenCanvas.width) {
+            this.nextOrigin = new Point(0, this.nextOrigin.y + this.rowHeight);
+            this.rowHeight = 0;
+        }
+        let item = { info: info, origin: new Point(this.nextOrigin) };
+        this.nextOrigin.x += rect.width;
+        this.rowHeight = Math.max(this.rowHeight, rect.height);
+        this.size.width = Math.max(this.size.width, this.nextOrigin.x);
+        this.size.height = Math.max(this.size.height, this.nextOrigin.y + this.rowHeight);
+        // debugLog(`Reserved item ${info.uniqueID} at ${item.origin.debugDescription} for ${rect.debugDescription}; new size ${this.size.width}x${this.size.height}`);
+        return item;
+    }
+
+    _copyImageToRect(ctx, rect, item) {
+        ctx.drawImage(this.offscreenCanvas,
+            item.origin.x, item.origin.y, rect.width, rect.height,
+            rect.x, rect.y, rect.width, rect.height);
+    }
+
+    _updateMetrics() {
+        let newValue = `${this.canvasGrid.tileWidth}|${this.canvasGrid.canvas.width}|${this.canvasGrid.canvas.height}`;
+        if (newValue == this.metrics) return;
+        // debugLog(`OffscreenRenderer: resetting metrics to ${newValue}`);
+        this.metrics = newValue;
+        this.offscreenCanvas.width = this.canvasGrid.canvas.width;
+        this.offscreenCanvas.height = this.canvasGrid.canvas.height;
+        this.clear();
+    }
+}
+
 class TerrainRenderer {
     constructor(config) {
         this.canvasGrid = config.canvasGrid;
         this.mapSource = config.mapSource;
+        this.offscreenRenderer = new OffscreenRenderer({ canvasGrid: config.canvasGrid });
+        debugLog(this.offscreenRenderer);
     }
 
     render(ctx, settings) {
+        let count = 0;
+        this.offscreenRenderer.beginFrame();
+
         ctx.fillStyle = settings.edgePaddingFillStyle;
         ctx.rectFill(this.canvasGrid.rectForFullCanvas);
         if (!this.mapSource) { return; }
@@ -2475,14 +2583,14 @@ class TerrainRenderer {
         map.terrainLayer.visitTiles(visibleRect, tile => {
             let rect = this.canvasGrid.rectForTile(map.tilePlane.screenTileForModel(tile.point));
             if (!rect) { return; }
-            this._getPainterSessions(tile).forEach(painter => {
-                painter.render(ctx, rect, this.canvasGrid, tile.textTemplateInfo);
-            })
+            count += 1;
+            tile.painterInfoList.forEach(item => {
+                this.offscreenRenderer.render(ctx, rect, item);
+            });
         });
-    }
 
-    _getPainterSessions(tile) {
-        return tile.painterInfoList.map(item => ScriptPainterStore.shared.getPainterSession(item.id, item.variantKey));
+        this.offscreenRenderer.endFrame();
+        return count;
     }
 }
 
@@ -2568,6 +2676,11 @@ class ScriptPainterCollection {
         return { width: 1, height: 1 };
     }
 
+    static getVariantCount(config) {
+        if (config instanceof Array) { return 1; }
+        return Array.isArray(config.variants) ? config.variants.length : 0;
+    }
+
     static fromYaml(id, source, deviceScale) {
         var config = jsyaml.safeLoad(source);
         if (!config) { return null; }
@@ -2626,6 +2739,25 @@ class ScriptPainterSession {
     render(ctx, rect, canvasGrid, modelMetadata) {
         if (!this.painter) { return; }
         this.painter.render(ctx, rect, canvasGrid, modelMetadata, this);
+    }
+}
+
+class PainterInfo {
+    static pseudoRandomVariantKey(painterID, point) {
+        let count = ScriptPainterStore.shared.getVariantCount(painterID);
+        return hashArrayOfInts([point.x, point.y]) % count;
+    }
+
+    constructor(painterID, variantKey) {
+        this.painterID = painterID;
+        this.variantKey = variantKey;
+        this.uniqueID = `${painterID}.${variantKey}`;
+    }
+    isEqual(other) {
+        return other && this.uniqueID == other.uniqueID;
+    }
+    getPainterSession(store) {
+        return store.getPainterSession(this.painterID, this.variantKey);
     }
 }
 
@@ -2799,6 +2931,13 @@ class ScriptPainterStore {
         this.deviceScale = FlexCanvasGrid.getDevicePixelScale();
         this.cache = {};
         this.collectionCache = {};
+    }
+
+    getVariantCount(id) {
+        let found = this.collectionCache[id];
+        if (found) { return found.variants.length; }
+        let data = GameContent.shared.painters[id];
+        return ScriptPainterCollection.getVariantCount(data);
     }
 
     getPainterCollection(id) {
