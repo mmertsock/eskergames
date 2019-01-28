@@ -15,6 +15,10 @@ def fail(msg)
     exit
 end
 
+# a single raw input PNG file
+# multiple files per sprite ID (one per tile width)
+# may be multiple animated frames for one variant,
+# or mulitple non-animated frames
 class InputFile
     attr_reader :path, :is_animated, :img_filename, :tile_size_component, :tile_size, :theme_id, :pixel_size, :pixels_per_tile, :pixel_width, :pixel_height, :variant_key, :sprite_id, :img
 
@@ -67,24 +71,21 @@ class InputFile
     end
 end
 
-class SpritesheetCollection
-    attr_reader :sheets
-
+# the primary transformer of all input files to output files
+class Processor
     def initialize(files)
         @sheets = {}
         @sprite_groups = {}
-
         # sort to ensure sprite id/variant key ordering is identical in each Spritesheet
-        files.sort { |a, b| a.path <=> b.path }.each { |file| add_file(file) }
-    end
-
-    def add_file(file) # InputFile
-        sheet = sheet_or_new_for(file)
-        sheet.add_file(file)
+        files.sort { |a, b| a.path <=> b.path }.each { |file| add_input_file(file) }
     end
 
     def has_spritesheet_for?(file)
         @sheets.has_key?(Spritesheet.uid_for_input_file(file))
+    end
+
+    def all_sheets
+        @sheets.values
     end
 
     def sheet_or_new_for(file)
@@ -95,15 +96,16 @@ class SpritesheetCollection
         @sheets[Spritesheet.uid_for_input_file(file)]
     end
 
-    def all_sheets
-        @sheets.values
+    def add_input_file(file) # InputFile
+        sheet = sheet_or_new_for(file)
+        sheet.add_input_file(file)
     end
 
     def compose(destdir)
         theme_id = all_sheets.first.theme_id
 
         all_sheets.each do |sheet|
-            fail("Failure composing sheet " + sheet.file_name) if !sheet.compose_image(destdir)
+            fail("Failure composing sheet " + sheet.file_name) if !sheet.compose(destdir)
             sheet.collect_sprites(@sprite_groups)
         end
         size_counts = @sprite_groups.values.map { |group| group.num_sizes }.uniq()
@@ -119,9 +121,10 @@ class SpritesheetCollection
         IO.write(yaml_file_name, yaml_root.to_yaml)
         puts "Saved config " + yaml_file_name
     end
-
 end
 
+# Corresponds to exactly one output PNG file.
+# Each instance is a sheet ID + tile width
 class Spritesheet
     attr_reader :theme_id, :tile_size_component, :pixel_size, :pixel_width, :pixel_height, :file_name, :path, :files, :sprites
 
@@ -146,6 +149,7 @@ class Spritesheet
         @pixel_height = 0
         @pixel_width = 0
         @sprites = []
+        @sprite_rows = []
     end
 
     def to_s
@@ -156,15 +160,15 @@ class Spritesheet
         { "id" => @sheet_id, "path" => @path, "tileSize" => { "width" => @tile_size, "height" => @tile_size }, "tileWidth" => @pixels_per_tile, "imageSize" => { "width" => @pixel_width, "height" => @pixel_height } }
     end
 
-    def add_file(file)
+    def add_input_file(file)
         @files.push(file)
     end
 
-    def compose_image(destdir)
+    def compose(destdir)
         row = 0
         @files.each do |file|
             file.load_img!
-            make_sprite(file, row)
+            make_sprites(file, row)
             row += 1
         end
 
@@ -172,8 +176,8 @@ class Spritesheet
         fail("Zero-height spritesheet: " + @path) if @pixel_height < 1
         @img = ChunkyPNG::Image.new(@pixel_width, @pixel_height)
 
-        @sprites.each do |sprite|
-            compose_sprite(sprite)
+        @sprite_rows.each do |sprite|
+            compose_sprite_row(sprite)
             sprite.unload_img!
         end
 
@@ -183,16 +187,16 @@ class Spritesheet
         true
     end
 
-    def make_sprite(file, row)
-        sprite = Sprite.new(file, row, @pixel_height)
-        fail("Invalid sprite frame count: " + file.path) if sprite.frames < 1
-        @sprites.push(sprite)
-        @pixel_height += sprite.pixel_height
-        @pixel_width = [@pixel_width, sprite.pixel_width].max
+    def make_sprites(file, row)
+        sprite_row = SpriteRow.new(file, row, @pixel_height)
+        @sprite_rows.push(sprite_row)
+        @sprites = @sprites + sprite_row.variants
+        @pixel_height += sprite_row.pixel_height
+        @pixel_width = [@pixel_width, sprite_row.pixel_width].max
     end
 
-    def compose_sprite(sprite)
-        @img.compose!(sprite.file.img, sprite.x, sprite.y)
+    def compose_sprite_row(sprite_row)
+        @img.compose!(sprite_row.file.img, sprite_row.x, sprite_row.y)
     end
 
     def collect_sprites(sprite_groups)
@@ -212,7 +216,7 @@ class SpriteGroup
     attr_reader :sprites, :variants
 
     def initialize(sample_sprite, sheet_id)
-        @sprite_id = sample_sprite.file.sprite_id
+        @sprite_id = sample_sprite.sprite_id
         @sheet_id = sheet_id
         @tile_size = sample_sprite.file.tile_size
         @sprites = []
@@ -228,10 +232,10 @@ class SpriteGroup
     end
 
     def add_sprite(sprite)
-        if @variants.has_key?(sprite.file.variant_key)
-            @variants[sprite.file.variant_key].push(sprite)
+        if @variants.has_key?(sprite.variant_key)
+            @variants[sprite.variant_key].push(sprite)
         else
-            @variants[sprite.file.variant_key] = [sprite]
+            @variants[sprite.variant_key] = [sprite]
         end
         @sprites.push(sprite)
     end
@@ -254,6 +258,7 @@ class SpriteGroup
             fail("Sprite " + @sprite_id + " has mismatched row numbers for some variants: " + urows.join(", ")) if urows.size > 1
             fail("Sprite " + @sprite_id + " has mismatched frame counts for some variants: " + uframes.join(", ")) if uframes.size > 1
             variant["row"] = v.first.row
+            variant["column"] = v.first.column
             variant["frames"] = v.first.frames
             variants.push(variant)
         end
@@ -263,10 +268,35 @@ class SpriteGroup
 end
 
 class Sprite
+    attr_reader :file, :sprite_id, :pixel_size, :pixel_height, :row, :column, :x, :y, :is_animated, :frames, :variant_key
+
+    def initialize(sprite_row, column)
+        @file = sprite_row.file
+        @sprite_id = sprite_row.sprite_id
+        @pixel_size = sprite_row.pixel_height
+        @pixel_height = sprite_row.pixel_height
+        @row = sprite_row.row
+        @column = column
+        @x = sprite_row.x + (column * @pixel_size)
+        @y = sprite_row.y
+        @is_animated = sprite_row.file.is_animated
+        if @is_animated
+            @frames = sprite_row.frames
+            @variant_key = sprite_row.file.variant_key
+        else
+            @frames = 1
+            @variant_key = column
+        end
+
+        puts "Sprite #{file.img_filename} ID#{sprite_id} SZ#{pixel_size} PH#{pixel_height} R#{row} C#{column} X#{x} Y#{y} A#{is_animated} F#{frames} V#{variant_key}"
+    end
+end
+
+class SpriteRow
 
     @@gutter_width = 0
 
-    attr_reader :pixel_width, :content_width, :pixel_height, :file, :x, :y, :frames, :row
+    attr_reader :pixel_width, :content_width, :pixel_height, :file, :x, :y, :frames, :row, :group_id, :sprite_id
 
     def initialize(file, row, y)
         @file = file
@@ -277,6 +307,20 @@ class Sprite
         @x = @@gutter_width
         @y = y
         @frames = @content_width / @file.pixel_size
+        @sprite_id = file.sprite_id
+        if file.is_animated
+            @group_id = file.sprite_id + "!a"
+        else
+            @group_id = file.sprite_id
+        end
+    end
+
+    def variants
+        if @file.is_animated
+            [Sprite.new(self, 0)]
+        else
+            Array.new(@frames) { |column| Sprite.new(self, column) }
+        end
     end
 
     def unload_img!
@@ -300,5 +344,5 @@ if input_files.empty?
     fail("No input files.")
 end
 
-spritesheets = SpritesheetCollection.new(input_files)
-spritesheets.compose(destdir)
+processor = Processor.new(input_files)
+processor.compose(destdir)

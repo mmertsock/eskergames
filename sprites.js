@@ -124,7 +124,7 @@ class Spritesheet {
     renderSprite(ctx, rect, sprite, tileWidth, frameCounter) {
         let src = this.sourceRect(sprite, frameCounter);
         if (!this.imageBounds.contains(src)) {
-            once("oob" + sprite.uniqueID, () => debugWarn(`Sprite ${sprite.uniqueID} f${frameCounter} out of bounds in ${this.debugDescription}`));
+            once("oob" + sprite.uniqueID, () => debugWarn(`Sprite ${sprite.uniqueID} f${frameCounter} out of bounds in ${this.debugDescription}: ${src.debugDescription}`));
             return;
         }
         // debugLog(`draw ${sprite.uniqueID} src ${src.debugDescription} -> dest ${rect.debugDescription}`);
@@ -134,7 +134,7 @@ class Spritesheet {
     sourceRect(sprite, frameCounter) {
         let width = sprite.tileSize.width * this.tileWidth;
         let height = sprite.tileSize.height * this.tileWidth;
-        let col = sprite.isAnimated ? frameCounter % sprite.frames : 0;
+        let col = sprite.isAnimated ? (frameCounter % sprite.frames) : sprite.column;
         return new Rect(col * width, sprite.row * height, width, height);
     }
 
@@ -150,10 +150,11 @@ class Sprite {
         this.variantKey = config.variantKey;
         this.uniqueID = `${this.id}|${this.variantKey}`;
         this.row = config.row;
+        this.column = config.column;
         this.frames = config.frames;
         this.tileSize = config.tileSize;
     }
-    get isAnimated() { return this.frames >= 1; }
+    get isAnimated() { return this.frames > 1; }
 
     isEqual(other) {
         return other && other.uniqueID == this.uniqueID;
@@ -205,11 +206,11 @@ class LayerModel {
             map: config.rootModel,
             tileClass: SpriteTileModel
         });
-        // let randomSprites = SpritesheetStore.mainMapStore.allSprites.filter(item => item.tileSize.width == 1);
+        let randomSprites = config.index == 0 ? SpritesheetStore.mainMapStore.allSprites.filter(item => item.id == "terrain-dirt") : [];
         // let randomSprites = [SpritesheetStore.mainMapStore.spriteWithUniqueID("terrain-ocean-open|0")]
         this.layer.visitTiles(null, tile => {
             tile.layerModel = this;
-            // tile._sprite = randomSprites.randomItem()
+            tile._sprite = randomSprites.randomItem()
         });
         this.kvo = new Kvo(this);
     }
@@ -358,11 +359,13 @@ class SpriteRenderModel {
             once("nosheet" + this.sprite.sheetID, () => debugWarn(`No Spritesheet found for ${this.debugDescription}`));
             return;
         }
-        let rect = canvasGrid.rectForTileRect(this.screenTileRect);
-        sheet.renderSprite(ctx, rect, this.sprite, this.tileWidth, frameCounter);
+        sheet.renderSprite(ctx, this.screenRect(canvasGrid), this.sprite, this.tileWidth, frameCounter);
     }
     get debugDescription() {
         return `<@(${this.modelRect.x}, ${this.modelRect.y}) #${this.sprite.uniqueID} w${this.tileWidth} o${this.drawOrder}>`;
+    }
+    screenRect(canvasGrid) {
+        return canvasGrid.rectForTileRect(this.screenTileRect);
     }
 }
 
@@ -374,8 +377,11 @@ class SpriteMapLayerView {
         this.canvas = document.createElement("canvas");
         this.mapView.elem.append(this.canvas);
         this.tiles = [];
+        this.isAnimated = false;
+        this._dirty = false;
+        this._dirtyAnimatedOnly = false;
 
-        this.mapView.kvo.frameCounter.addObserver(this, () => this.setDirty());
+        this.mapView.kvo.frameCounter.addObserver(this, () => this.setDirty(true));
         this.model.kvo.index.addObserver(this, () => this.updateTiles());
         this.model.kvo.layer.addObserver(this, () => this.updateTiles());
 
@@ -398,6 +404,7 @@ class SpriteMapLayerView {
     }
 
     updateTiles() {
+        this.isAnimated = false;
         let tiles = [];
         for (let y = 0; y < this.canvasGrid.tilesHigh; y += 1) {
             for (let x = 0; x < this.canvasGrid.tilesWide; x += 1) {
@@ -405,6 +412,7 @@ class SpriteMapLayerView {
                 if (!!tile && !!tile.sprite) {
                     let rect = new Rect(new Point(x, y), tile.sprite.tileSize);
                     tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
+                    this.isAnimated = this.isAnimated || tile.sprite.isAnimated;
                 }
             }
         }
@@ -413,23 +421,48 @@ class SpriteMapLayerView {
         this.setDirty();
     }
 
-    setDirty() {
+    setDirty(animatedOnly) {
+        if (!!animatedOnly && !this.isAnimated) return;
         this._dirty = true;
+        this._dirtyAnimatedOnly = !!animatedOnly;
     }
 
     render(frameCounter) {
         if (!this._dirty || !this.canvasGrid) { return; }
-        this._dirty = false;
         let ctx = this.canvas.getContext("2d", { alpha: true });
-        if (this.model.index == 0) {
-            ctx.fillStyle = GameContent.shared.mainMapView.emptyFillStyle;
-            ctx.rectFill(this.canvasGrid.rectForFullCanvas);
-        } else {
-            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        }
+        // if (!this._dirtyAnimatedOnly) {
+            this.clear(ctx, this.canvasGrid.rectForFullCanvas);
+        // }
 
         let store = SpritesheetStore.mainMapStore;
-        this.tiles.forEach(tile => tile.render(ctx, this.canvasGrid, store, frameCounter));
+        let count = 0;
+        this.tiles.forEach(tile => {
+            if (this.shouldRender(tile)) {
+                // if (this._dirtyAnimatedOnly) {
+                //     this.clear(ctx, tile.screenRect(this.canvasGrid));
+                // }
+                count += 1;
+                tile.render(ctx, this.canvasGrid, store, frameCounter);
+            }
+        });
+        this._dirty = false;
+        this._dirtyAnimatedOnly = false;
+    }
+
+    shouldRender(tile) {
+        // if (this._dirtyAnimatedOnly && !!tile.sprite) {
+        //     return tile.sprite.isAnimated;
+        // }
+        return true;
+    }
+
+    clear(ctx, rect) {
+        if (this.model.index == 0) {
+            ctx.fillStyle = GameContent.shared.mainMapView.emptyFillStyle;
+            ctx.rectFill(rect);
+        } else {
+            ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
+        }
     }
 }
 
