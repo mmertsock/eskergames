@@ -52,7 +52,7 @@ class SpritesheetStore {
             return;
         }
         let config = state.remaining.shift();
-        debugLog(`Loading Spritesheet image ${config.path}...`);
+        // debugLog(`Loading Spritesheet image ${config.path}...`);
         config.image = new Image();
         config.image.src = config.path;
         config.image.decode()
@@ -205,14 +205,38 @@ class LayerModel {
             map: config.rootModel,
             tileClass: SpriteTileModel
         });
-        this.layer.visitTiles(null, tile => tile.layerModel = this);
+        // let randomSprites = SpritesheetStore.mainMapStore.allSprites.filter(item => item.tileSize.width == 1);
+        let randomSprites = [SpritesheetStore.mainMapStore.spriteWithUniqueID("terrain-ocean-open|0")]
+        this.layer.visitTiles(null, tile => {
+            tile.layerModel = this;
+            tile._sprite = randomSprites.randomItem()
+        });
         this.kvo = new Kvo(this);
     }
 
     get index() { return this._index; }
     set index(value) { this.kvo.index.setValue(value); }
 
-    spriteChanged(tile) {
+    willSetSprite(tile, sprite) {
+        if (!!tile.overlappingTile) {
+            tile.overlappingTile.sprite = null;
+        }
+        let oldRect = tile.spriteRect;
+        if (!!oldRect) {
+            this.layer.visitNeighborsInRect(oldRect, tile, neighbor => {
+                neighbor.overlappingTile = null;
+            });
+        }
+    }
+
+    didSetSprite(tile, sprite) {
+        if (!!sprite) {
+            this.layer.visitNeighborsInRect(tile.spriteRect, tile, neighbor => {
+                neighbor.sprite = null;
+                neighbor.overlappingTile = tile;
+            });
+        }
+
         this.kvo.layer.notifyChanged();
     }
 }
@@ -222,12 +246,20 @@ class SpriteTileModel extends MapTile {
     constructor(point, layer) {
         super(point, layer);
         this._sprite = null;
+        this.overlappingTile = null;
     }
 
     get sprite() { return this._sprite; }
     set sprite(value) {
+        if (this._sprite == value) { return; }
+        this.layerModel.willSetSprite(this, value);
         this._sprite = value;
-        this.layerModel.spriteChanged(this);
+        this.layerModel.didSetSprite(this, value);
+    }
+
+    get spriteRect() {
+        if (!this._sprite) { return null; }
+        return new Rect(this.point, this._sprite.tileSize);
     }
 }
 
@@ -356,6 +388,7 @@ class SpriteMapLayerView {
                 tileWidth: this.mapView.zoomLevel.tileWidth,
                 tileSpacing: 0
             });
+            this.tilePlane = new TilePlane(this.canvasGrid.tileSize);
             this.updateTiles();
         }, 100);
     }
@@ -367,20 +400,23 @@ class SpriteMapLayerView {
     }
 
     updateTiles() {
-        this.tiles = this.model.layer
-            .filterTiles(null, tile => !!tile.sprite)
-            .map(tile => this.makeRenderModel(tile))
-            .sort((a, b) => a.drawOrder - b.drawOrder);
+        let tiles = [];
+        for (let y = 0; y < this.canvasGrid.tilesHigh; y += 1) {
+            for (let x = 0; x < this.canvasGrid.tilesWide; x += 1) {
+                let tile = this.model.layer.getTileAtPoint(new Point(x % this.model.layer.size.width, y % this.model.layer.size.height));
+                if (!!tile && !!tile.sprite) {
+                    let rect = new Rect(new Point(x, y), tile.sprite.tileSize);
+                    tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
+                }
+            }
+        }
+        tiles.sort((a, b) => a.drawOrder - b.drawOrder);
+        this.tiles = tiles;
         this.setDirty();
     }
 
     setDirty() {
         this._dirty = true;
-    }
-
-    makeRenderModel(tile) {
-        let rect = new Rect(tile.point, tile.sprite.tileSize);
-        return new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane);
     }
 
     render(frameCounter) {
@@ -461,6 +497,9 @@ class TileConfigView {
     updateLabels() {
         if (this.model.sprite) {
             this.elem.innerText = `${this.model.sprite.id}/${this.model.sprite.variantKey}`;
+        } else if (this.model.overlappingTile && this.model.overlappingTile.sprite) {
+            let tile = this.model.overlappingTile;
+            this.elem.innerText = `${tile.sprite.id}/${tile.sprite.variantKey}`;
         } else {
             this.elem.innerText = "(Choose)";
         }

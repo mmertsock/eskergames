@@ -752,6 +752,12 @@ class MapLayer {
         }
     }
 
+    visitNeighborsInRect(rect, tile, block) {
+        this.visitTiles(rect, item => {
+            if (item != tile) block(item);
+        });
+    }
+
     filterTiles(rect, filter) {
         let tiles = [];
         this.visitTiles(rect, tile => { if (filter(tile)) { tiles.push(tile); } });
