@@ -2678,9 +2678,133 @@ class MapToolSessionRenderer {
     }
 }
 
+class SpritesheetStore {
+    // completion(SpritesheetStore?, Error?)
+    // Begin process by passing no argument for "state"
+    static load(theme, completion, state) {
+        if (!state) {
+            let remaining = Array.from(theme.sheetConfigs);
+            SpritesheetStore.load(theme, completion, {remaining: remaining, completed: []});
+            return;
+        }
+        if (state.remaining.length == 0) {
+            debugLog(`Finished preloading ${state.completed.length} Spritesheet images`);
+            completion(new SpritesheetStore(theme, state.completed), null);
+            return;
+        }
+        let config = state.remaining.shift();
+        // debugLog(`Loading Spritesheet image ${config.path}...`);
+        config.image = new Image();
+        config.image.src = config.path;
+        config.image.decode()
+            .then(() => {
+                state.completed.push(new Spritesheet(config));
+                SpritesheetStore.load(theme, completion, state);
+            })
+            .catch(error => {
+                debugWarn(`Failed to preload Spritesheet image ${config.path}: ${error.message}`);
+                debugLog(error);
+                completion(null, error);
+            });
+    }
+
+    constructor(theme, sheets) {
+        this.theme = theme;
+        this.sheetTable = {};
+        sheets.forEach(sheet => {
+            if (!this.sheetTable[sheet.id]) this.sheetTable[sheet.id] = {};
+            this.sheetTable[sheet.id][sheet.tileWidth] = sheet;
+        });
+        // to unload, call .close() for each Image object.
+    }
+
+    get allSprites() { return this.theme.sprites; }
+
+    spriteWithUniqueID(uniqueID) {
+        return this.theme.spriteTable[uniqueID];
+    }
+
+    getSpritesheet(sheetID, tileWidth) {
+        let item = this.sheetTable[sheetID];
+        return item ? item[tileWidth] : null;
+    }
+}
+
+class SpritesheetTheme {
+    static defaultTheme() {
+        if (!SpritesheetTheme._default) {
+            SpritesheetTheme._default = new SpritesheetTheme(GameContent.shared.themes[0]);
+        }
+        return SpritesheetTheme._default;
+    }
+
+    constructor(config) {
+        this.id = config.id;
+        this.isDefault = config.isDefault;
+        this.sheetConfigs = config.sheets;
+        this.sprites = [];
+        this.spriteTable = {};
+        config.sprites.forEach(item => {
+            item.variants.forEach((variant, index) => {
+                let sprite = new Sprite(Object.assign({}, item, variant, {"variantKey": index}));
+                this.spriteTable[sprite.uniqueID] = sprite;
+                this.sprites.push(sprite);
+            });
+        });
+    }
+}
+
+class Spritesheet {
+    constructor(config) {
+        this.id = config.id;
+        this.image = config.image;
+        this.tileWidth = config.tileWidth; // in device pixels
+        this.imageBounds = new Rect(new Point(0, 0), config.imageSize) // in device pixels
+    }
+
+    renderSprite(ctx, rect, sprite, tileWidth, frameCounter) {
+        let src = this.sourceRect(sprite, frameCounter);
+        if (!this.imageBounds.contains(src)) {
+            once("oob" + sprite.uniqueID, () => debugWarn(`Sprite ${sprite.uniqueID} f${frameCounter} out of bounds in ${this.debugDescription}: ${src.debugDescription}`));
+            return;
+        }
+        // debugLog(`draw ${sprite.uniqueID} src ${src.debugDescription} -> dest ${rect.debugDescription}`);
+        ctx.drawImage(this.image, src.x, src.y, src.width, src.height, rect.x, rect.y, src.width, src.height);
+    }
+
+    sourceRect(sprite, frameCounter) {
+        let width = sprite.tileSize.width * this.tileWidth;
+        let height = sprite.tileSize.height * this.tileWidth;
+        let col = sprite.isAnimated ? (frameCounter % sprite.frames) : sprite.column;
+        return new Rect(col * width, sprite.row * height, width, height);
+    }
+
+    get debugDescription() {
+        return `<Spritesheet #${this.id} w${this.tileWidth}>`;
+    }
+}
+
+class Sprite {
+    constructor(config) {
+        this.id = config.id;
+        this.sheetID = config.sheetID;
+        this.variantKey = config.variantKey;
+        this.uniqueID = `${this.id}|${this.variantKey}`;
+        this.row = config.row;
+        this.column = config.column;
+        this.frames = config.frames;
+        this.tileSize = config.tileSize;
+    }
+    get isAnimated() { return this.frames > 1; }
+
+    isEqual(other) {
+        return other && other.uniqueID == this.uniqueID;
+    }
+}
+
 class ScriptPainterCollection {
     static defaultExpectedSize() {
-        return { width: 1, height: 1 };
+        return _1x1;
     }
 
     static getVariantCount(config) {
@@ -3173,7 +3297,8 @@ class NewGameDialog extends GameDialog {
 
 // ########################### INIT #######################
 
-if (!window.doNotInitializeGame) {
+let citySimInitOptions = window.citySimInitOptions ? window.citySimInitOptions : { initGame: true };
+if (citySimInitOptions.initGame) {
     var engineRunLoop = new Gaming.RunLoop({
         targetFrameRate: 1,
         id: "engineRunLoop",
@@ -3188,24 +3313,38 @@ if (!window.doNotInitializeGame) {
 }
 
 var initialize = async function() {
-    var content = await GameContent.loadYamlFromLocalFile("city-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
-    dataIsReady(content);
+    let settings = citySimInitOptions;
+    let content = await GameContent.loadYamlFromLocalFile("city-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
+    gameContentIsReady(content, settings);
 };
 
-var dataIsReady = function(content) {
+function gameContentIsReady(content, settings) {
     if (!content) {
-        if (window.doNotInitializeGame) { return; }
+        if (!settings.initGame) { return; }
         rootView.failedToLoadGameMessage(Strings.str("failedToLoadGameMessage"));
         return;
     }
-
     GameContent.shared = GameContent.prepare(content);
-    if (!window.doNotInitializeGame) {
+    ScriptPainterStore.shared = new ScriptPainterStore();
+    SpritesheetStore.load(SpritesheetTheme.defaultTheme(), (store, error) => {
+        if (error) {
+            alert("Failed to load sprites: " + error.message);
+            return;
+        }
+        spritesheetsAreReady(store, settings);
+    });
+}
+
+function spritesheetsAreReady(store, settings) {
+    SpritesheetStore.mainMapStore = store;
+    if (settings.initGame) {
         GameScriptEngine.shared = new GameScriptEngine();
-        ScriptPainterStore.shared = new ScriptPainterStore();
         KeyInputController.shared = new KeyInputController();
         MapToolController.shared = new MapToolController();
         rootView.setUp();
+    }
+    if (settings.onReady) {
+        settings.onReady();
     }
 };
 
@@ -3213,6 +3352,7 @@ return {
     engineRunLoop: engineRunLoop,
     game: null,
     initialize: initialize,
+    citySimInitOptions: citySimInitOptions,
     rootView: rootView,
     uiRunLoop: uiRunLoop,
     Budget: Budget,
@@ -3236,6 +3376,10 @@ return {
     SimDate: SimDate,
     Simoleon: Simoleon,
     SingleChoiceInputCollection: SingleChoiceInputCollection,
+    Sprite: Sprite,
+    Spritesheet: Spritesheet,
+    SpritesheetStore: SpritesheetStore,
+    SpritesheetTheme: SpritesheetTheme,
     Strings: Strings,
     Terrain: Terrain,
     TerrainRenderer: TerrainRenderer,

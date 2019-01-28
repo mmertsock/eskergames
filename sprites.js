@@ -27,6 +27,10 @@ const ScriptPainterCollection = CitySim.ScriptPainterCollection;
 const ScriptPainterSession = CitySim.ScriptPainterSession;
 const ScriptPainterStore = CitySim.ScriptPainterStore;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
+const Sprite = CitySim.Sprite;
+const Spritesheet = CitySim.Spritesheet;
+const SpritesheetStore = CitySim.SpritesheetStore;
+const SpritesheetTheme = CitySim.SpritesheetTheme;
 const Strings = CitySim.Strings;
 const Terrain = CitySim.Terrain;
 const TerrainRenderer = CitySim.TerrainRenderer;
@@ -37,129 +41,6 @@ const ToolButton = CitySim.ToolButton;
 
 // ----------------------------------- stuff that could go in city.js
 
-class SpritesheetStore {
-    // completion(SpritesheetStore?, Error?)
-    // Begin process by passing no argument for "state"
-    static load(theme, completion, state) {
-        if (!state) {
-            let remaining = Array.from(theme.sheetConfigs);
-            SpritesheetStore.load(theme, completion, {remaining: remaining, completed: []});
-            return;
-        }
-        if (state.remaining.length == 0) {
-            debugLog(`Finished preloading ${state.completed.length} Spritesheet images`);
-            completion(new SpritesheetStore(theme, state.completed), null);
-            return;
-        }
-        let config = state.remaining.shift();
-        // debugLog(`Loading Spritesheet image ${config.path}...`);
-        config.image = new Image();
-        config.image.src = config.path;
-        config.image.decode()
-            .then(() => {
-                state.completed.push(new Spritesheet(config));
-                SpritesheetStore.load(theme, completion, state);
-            })
-            .catch(error => {
-                debugWarn(`Failed to preload Spritesheet image ${config.path}: ${error.message}`);
-                debugLog(error);
-                completion(null, error);
-            });
-    }
-
-    constructor(theme, sheets) {
-        this.theme = theme;
-        this.sheetTable = {};
-        sheets.forEach(sheet => {
-            if (!this.sheetTable[sheet.id]) this.sheetTable[sheet.id] = {};
-            this.sheetTable[sheet.id][sheet.tileWidth] = sheet;
-        });
-        // to unload, call .close() for each Image object.
-    }
-
-    get allSprites() { return this.theme.sprites; }
-
-    spriteWithUniqueID(uniqueID) {
-        return this.theme.spriteTable[uniqueID];
-    }
-
-    getSpritesheet(sheetID, tileWidth) {
-        let item = this.sheetTable[sheetID];
-        return item ? item[tileWidth] : null;
-    }
-}
-
-class SpritesheetTheme {
-    static defaultTheme() {
-        if (!SpritesheetTheme._default) {
-            SpritesheetTheme._default = new SpritesheetTheme(GameContent.shared.themes[0]);
-        }
-        return SpritesheetTheme._default;
-    }
-
-    constructor(config) {
-        this.id = config.id;
-        this.isDefault = config.isDefault;
-        this.sheetConfigs = config.sheets;
-        this.sprites = [];
-        this.spriteTable = {};
-        config.sprites.forEach(item => {
-            item.variants.forEach((variant, index) => {
-                let sprite = new Sprite(Object.assign({}, item, variant, {"variantKey": index}));
-                this.spriteTable[sprite.uniqueID] = sprite;
-                this.sprites.push(sprite);
-            });
-        });
-    }
-}
-
-class Spritesheet {
-    constructor(config) {
-        this.id = config.id;
-        this.image = config.image;
-        this.tileWidth = config.tileWidth; // in device pixels
-        this.imageBounds = new Rect(new Point(0, 0), config.imageSize) // in device pixels
-    }
-
-    renderSprite(ctx, rect, sprite, tileWidth, frameCounter) {
-        let src = this.sourceRect(sprite, frameCounter);
-        if (!this.imageBounds.contains(src)) {
-            once("oob" + sprite.uniqueID, () => debugWarn(`Sprite ${sprite.uniqueID} f${frameCounter} out of bounds in ${this.debugDescription}: ${src.debugDescription}`));
-            return;
-        }
-        // debugLog(`draw ${sprite.uniqueID} src ${src.debugDescription} -> dest ${rect.debugDescription}`);
-        ctx.drawImage(this.image, src.x, src.y, src.width, src.height, rect.x, rect.y, src.width, src.height);
-    }
-
-    sourceRect(sprite, frameCounter) {
-        let width = sprite.tileSize.width * this.tileWidth;
-        let height = sprite.tileSize.height * this.tileWidth;
-        let col = sprite.isAnimated ? (frameCounter % sprite.frames) : sprite.column;
-        return new Rect(col * width, sprite.row * height, width, height);
-    }
-
-    get debugDescription() {
-        return `<Spritesheet #${this.id} w${this.tileWidth}>`;
-    }
-}
-
-class Sprite {
-    constructor(config) {
-        this.id = config.id;
-        this.sheetID = config.sheetID;
-        this.variantKey = config.variantKey;
-        this.uniqueID = `${this.id}|${this.variantKey}`;
-        this.row = config.row;
-        this.column = config.column;
-        this.frames = config.frames;
-        this.tileSize = config.tileSize;
-    }
-    get isAnimated() { return this.frames > 1; }
-
-    isEqual(other) {
-        return other && other.uniqueID == this.uniqueID;
-    }
-}
 
 // -----------------------------------
 
@@ -617,36 +498,12 @@ class SpriteSelectorDialog extends GameDialog {
     }
 }
 
-function gameContentIsReady(content) {
-    if (!content) {
-        alert("Failed to initialize CitySim base data.");
-        return;
-    }
-    GameContent.shared = GameContent.prepare(content);
-    SpritesheetStore.load(SpritesheetTheme.defaultTheme(), (store, error) => {
-        if (error) {
-            alert("Failed to load sprites: " + error.message);
-            return;
-        }
-        spritesheetsAreReady(store);
-    });
-}
-
-function spritesheetsAreReady(store) {
-    SpritesheetStore.mainMapStore = store;
+let initialize = function() {
     CitySimSprites.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });
-    GameScriptEngine.shared = new GameScriptEngine();
-    ScriptPainterStore.shared = new ScriptPainterStore();
     CitySimSprites.view = new RootView();
     CitySimSprites.uiRunLoop.resume();
     debugLog("Ready.");
 }
-
-let initialize = async function() {
-    debugLog("Initializing...");
-    let content = await GameContent.loadYamlFromLocalFile("city-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
-    gameContentIsReady(content);
-};
 
 return {
     initialize: initialize
@@ -654,4 +511,4 @@ return {
 
 })(); // end namespace
 
-CitySimSprites.initialize();
+cityReady("sprites.js");

@@ -424,22 +424,10 @@ class MetadataEntryView {
     }
 }
 
-function dataIsReady(content) {
-    if (!content) {
-        showMessage("Failed to initialize CitySim base data.");
-        return;
-    }
-    GameContent.shared = content;
-    ScriptPainterStore.shared = new ScriptPainterStore();
+let initialize = function() {
     RootController.shared = new RootController();
     showMessage("Ready.");
 }
-
-var initialize = async function() {
-    showMessage("Initializing...");
-    var content = await GameContent.loadYamlFromLocalFile("city-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
-    dataIsReady(content);
-};
 
 return {
     initialize: initialize
@@ -447,4 +435,4 @@ return {
 
 })();
 
-Painter.initialize();
+cityReady("painter.js");
