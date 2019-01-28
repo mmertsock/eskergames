@@ -924,7 +924,7 @@ function bindingTest() {
 
 function tilePlaneTest() {
     new UnitTest("TilePlane", function() {
-        var sut = new TilePlane({ width: 7, height: 5 });
+        let sut = new TilePlane({ width: 7, height: 5 });
         this.assertEqual(sut.size.width, 7);
         this.assertEqual(sut.size.height, 5);
         this.assertTrue(sut.screenTileForModel(new Point(0, 0)).isEqual(new Point(0, 4)), "screenTileForModel BL");
@@ -953,6 +953,41 @@ function tilePlaneTest() {
         this.assertTrue(sut.screenRectForModel(new Rect(0, 1, 3, 2)).isEqual(new Rect(0, 2, 3, 2)), "screenRectForModel 0123");
         this.assertTrue(sut.modelRectForScreen(new Rect(1, 1, 1, 1)).isEqual(new Rect(1, 3, 1, 1)), "screenRectForModel 1111");
         this.assertTrue(sut.modelRectForScreen(new Rect(-2, 4, 7, 3)).isEqual(new Rect(-2, -2, 7, 3)), "modelRectForScreen -2473");
+
+        let tiles = [[], [], [], [], []];
+        for (let y = 0; y < sut.size.height; y += 1) {
+            for (let x = 0; x < sut.size.width; x += 1) {
+                tiles[y][x] = sut.drawingOrderIndexForModelTile(new Point(x, y));
+            }
+        }
+        tiles.reverse(); // show how it will look on screen with flipped y
+        let isSorted = true;
+        for (let y = 0; y < sut.size.height; y += 1) {
+            for (let x = 0; x < sut.size.width; x += 1) {
+                if (x < sut.size.width - 1) {
+                    isSorted = isSorted && (tiles[y][x] < tiles[y][x + 1]);
+                }
+                if (y < sut.size.height - 1) {
+                    isSorted = isSorted && (tiles[y][x] < tiles[y + 1][x]);
+                }
+            }
+        }
+        this.assertTrue(isSorted);
+        logTestMsg(tiles.map(row => row.map(item => item.toString().padStart(4, "_")).join("")).join("\n"));
+
+        this.assertTrue(sut.drawingOrderIndexForModelRect(new Rect(0, 2, 1, 1)) < sut.drawingOrderIndexForModelRect(new Rect(1, 2, 1, 1)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(new Rect(0, 2, 1, 1)) < sut.drawingOrderIndexForModelRect(new Rect(0, 1, 1, 1)));
+        // XXXCCC
+        // RRRCCC R draws after X, and before C, and before Y
+        // RRRCCC
+        // RRRYYY
+        let r = new Rect(0, 0, 3, 3), c = new Rect(3, 1, 3, 3);
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) > sut.drawingOrderIndexForModelTile(new Point(0, 3)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) > sut.drawingOrderIndexForModelTile(new Point(1, 3)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) > sut.drawingOrderIndexForModelTile(new Point(2, 3)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) < sut.drawingOrderIndexForModelRect(c));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) < sut.drawingOrderIndexForModelTile(new Point(3, 0)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) < sut.drawingOrderIndexForModelTile(new Point(4, 0)));
     }).buildAndRun();
 };
 

@@ -22,9 +22,10 @@ const GameScriptEngine = CitySimContent.GameScriptEngine;
 
 // ########################### GLOBAL #######################
 
-var radiansPerDegree = Math.PI / 180;
-var _stringTemplateRegexes = {};
-var _zeroToOne = { min: 0, max: 1 };
+const radiansPerDegree = Math.PI / 180;
+const _stringTemplateRegexes = {};
+const _zeroToOne = { min: 0, max: 1 };
+const _1x1 = { width: 1, height: 1 };
 
 var _runLoopPriorities = {
     gameEngine: -100
@@ -360,7 +361,7 @@ class Plot {
     }
 
     isPaintOrigin(point) {
-        return (point.x = this.bounds.x)
+        return (point.x == this.bounds.x)
             && (point.y == this.bounds.y + this.bounds.height - 1);
     }
 
@@ -3219,6 +3220,7 @@ return {
     KeyInputController: KeyInputController,
     MapLayer: MapLayer,
     MapRenderer: MapRenderer,
+    MapTile: MapTile,
     Plot: Plot,
     RCIValue: RCIValue,
     ScriptPainter: ScriptPainter,

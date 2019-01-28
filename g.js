@@ -1293,10 +1293,13 @@ class TilePlane {
     constructor(size) {
         this.width = size.width;
         this.height = size.height;
+        this._drawOrderFactor = Math.min(size.width, size.height);
         this._yMinuend = this.height - 1;
     }
+
     get size() { return { width: this.width, height: this.height }; }
     get bounds() { return new Rect({x: 0, y: 0}, this.size); }
+
     screenTileForModel(tile) {
         return new Point(tile.x, this._flippedY(tile.y));
     }
@@ -1309,6 +1312,18 @@ class TilePlane {
     modelRectForScreen(rect) {
         return new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height);
     }
+
+    drawingOrderIndexForModelTile(tile) {
+        tile = this.screenTileForModel(tile);
+        return (tile.x + tile.y) * this._drawOrderFactor + tile.y;
+    }
+    // assumes rect is non-empty
+    drawingOrderIndexForModelRect(rect) {
+        rect = this.screenRectForModel(rect);
+        let y = rect.y + rect.height - 1;
+        return (rect.origin.x + y) * this._drawOrderFactor + y;
+    }
+    
     _flippedY(y) { return this._yMinuend - y; }
 }
 

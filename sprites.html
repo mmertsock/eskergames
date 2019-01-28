@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>CitySim Sprites</title>
+    <link rel="icon" href="city-icon-192.png">
+    <link rel="apple-touch-icon" href="city-icon-180.png">
+    <script>
+        window.doNotInitializeGame = true;
+    </script>
+    <script defer src="js-yaml.min.js"></script>
+    <script defer src="g.js"></script>
+    <script defer src="city-content.js"></script>
+    <script defer src="city.js"></script>
+    <script defer src="sprites.js"></script>
+    <link rel="stylesheet" href="city.css">
+
+<style type="text/css">
+.maps ol {
+    list-style-type: none;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    width: 100%;
+    margin: 0.5em 0;
+    padding: 0;
+}
+
+.maps li {
+    list-style-type: none;
+    margin: 0.5em;
+    padding: 0;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: black;
+}
+
+.maps li, canvas {
+    width: 144px; /* to accomodate 6 tiles at max zoom level */
+    height: 144px;
+}
+
+h3 {
+    margin: 0.5em 0;
+    padding: 0;
+}
+
+#layerConfig {
+    margin: 0.5em;
+    padding: 0;
+}
+
+#layerConfig ol {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+#layerConfig li.layerConfig:first-child {
+    border-top: 1px solid #ccc;
+}
+
+#layerConfig li.layerConfig {
+    list-style-type: none;
+    border-bottom: 1px solid #ccc;
+    margin: 0.5em 0;
+    padding: 0.5em 0;
+}
+
+#layerConfig table {
+    border-collapse: collapse;
+}
+
+#layerConfig td {
+    vertical-align: baseline;
+    text-align: center;
+    border: 1px solid #ccc;
+}
+</style>
+
+</head>
+
+<body>
+
+    <section class="maps">
+        <ol></ol>
+    </section>
+
+    <section id="layerConfig">
+        pick a map theme for the entire web page
+        <ol></ol>
+    </section>
+
+<li class="layerConfig template hidden">
+    <h3>Layer</h3>
+    <table class="tiles">
+        <tbody></tbody>
+    </table>
+</li>
+
+<div id="dialogs" class="hidden"></div>
+
+<!--
+
+this UI:
+NxN grid of tiles. rendered in a few sizes.
+add/remove layers
+select a sprite for each tile in the layer: choose spritesheet + identifier. use the yaml to determine the choices to present.
+renders the sprites with full animation
+
+compiling this stuff before runtime
+use image filename and directory naming conventions
+script looks at every file in the directory tree and composites them into spritesheets
+generates the corresponding yaml. can even determine # of frames for each sprite, etc.
+so the yaml maps string identifiers to rows in the sheets, along with frame counts, etc.
+top level directory for the theme. so the yaml block generated can be the full configuration for one theme.
+and the game just takes an identifier and asks the yaml for the row to find the sprite in.
+
+
+
+water edges and stuff in the terrain
+how to handle the 30 or so combinations with full animation without having to do 100% of the work for every one of these?
+maybe render various layers as separate images, and the script composites correct combinations of them to make all the permutations as single spritesheets with full animation
+eg the base water and waves are one layer image. 8 directions of wavefront + wet-sand slices. combine these in various fashions, e.g. N side + SW corner.
+
+
+
+
+Compositing options.
+Start with base water + waves, and add opaque breaking waves/beach on top of corners/edges.
+The open-water small waves and the blue full edges get covered by beach stuff.
+Every tile render is fully opaque and assumes a certain dirt color.
+
+Layer 1: Base water color with waves
+##%#
+%###
+###%
+#%##
+
+Layer 2-5: Orthogonal  edges
+xxxxxx
+xxxxxx
+######
+######
+######
+######
+
+Layer 6-9: Deep corners
+##xxxx
+###xxx
+####xx
+#####x
+######
+######
+
+Layer 10-13: Shallow corners
+####xx
+#####x
+######
+######
+######
+######
+
+
+
+Shallow corner example, bottom left:
+xxxxxx xxxxxx  dd
+xxxxxx xxxxxx  wd
+xxxxxx xxxxxx  ww
+xxxxxx xxxxxx
+####xx xxxxxx
+####xx xxxxxx
+####xx xxxxxx
+#####x xxxxxx
+###### ######
+###### ######
+###### ######
+###### ######
+
+-->
+
+</body>
+</html>
