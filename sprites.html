@@ -35,10 +35,14 @@
     background-color: black;
 }
 
-.maps li, canvas {
+.maps li, .maps canvas {
     border-radius: 4px;
     width: 144px; /* to accomodate 6 tiles at max zoom level */
     height: 144px;
+}
+
+.maps canvas {
+    position: absolute;
 }
 
 h3 {

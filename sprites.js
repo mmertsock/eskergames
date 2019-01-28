@@ -206,10 +206,10 @@ class LayerModel {
             tileClass: SpriteTileModel
         });
         // let randomSprites = SpritesheetStore.mainMapStore.allSprites.filter(item => item.tileSize.width == 1);
-        let randomSprites = [SpritesheetStore.mainMapStore.spriteWithUniqueID("terrain-ocean-open|0")]
+        // let randomSprites = [SpritesheetStore.mainMapStore.spriteWithUniqueID("terrain-ocean-open|0")]
         this.layer.visitTiles(null, tile => {
             tile.layerModel = this;
-            tile._sprite = randomSprites.randomItem()
+            // tile._sprite = randomSprites.randomItem()
         });
         this.kvo = new Kvo(this);
     }
@@ -372,8 +372,6 @@ class SpriteMapLayerView {
         this.model = layer;
         this.tilePlane = layer.rootModel.tilePlane;
         this.canvas = document.createElement("canvas");
-        this.canvas.style.width = "144px";
-        this.canvas.style.height = "144px";
         this.mapView.elem.append(this.canvas);
         this.tiles = [];
 
@@ -420,10 +418,15 @@ class SpriteMapLayerView {
     }
 
     render(frameCounter) {
-        if (!this._dirty) { return; }
+        if (!this._dirty || !this.canvasGrid) { return; }
         this._dirty = false;
         let ctx = this.canvas.getContext("2d", { alpha: true });
-        ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (this.model.index == 0) {
+            ctx.fillStyle = GameContent.shared.mainMapView.emptyFillStyle;
+            ctx.rectFill(this.canvasGrid.rectForFullCanvas);
+        } else {
+            ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        }
 
         let store = SpritesheetStore.mainMapStore;
         this.tiles.forEach(tile => tile.render(ctx, this.canvasGrid, store, frameCounter));
@@ -454,6 +457,12 @@ class LayerConfigView {
             this.tileConfig.push(rowConfig);
         }
 
+        this.fillButton = new ToolButton({
+            id: "fill-" + this.model.index,
+            title: "Fill",
+            click: () => this.selectSpriteToFill(),
+            parent: config.elem
+        });
         if (this.model.index > 0) {
             this.removeLayerButton = new ToolButton({
                 id: "remove-" + this.model.index,
@@ -468,6 +477,10 @@ class LayerConfigView {
         this.updateLabels();
     }
 
+    selectSpriteToFill() {
+        new SpriteSelectorDialog(new FillModel(this.model)).show();
+    }
+
     updateLabels() {
         this.elem.querySelector("h3").innerText = `Layer ${this.model.index + 1}`;
         this.tileConfig.forEachFlat(tile => tile.updateLabels());
@@ -478,6 +491,22 @@ class LayerConfigView {
         this.rootView.removeLayer(this);
         this.rootView = null;
         this.tileConfig = null;
+    }
+}
+
+class FillModel {
+    constructor(layerModel) {
+        this.layerModel = layerModel;
+    }
+    get point() { return new Point(0, 0); }
+    get sprite() { return null; }
+    set sprite(value) {
+        let size = value ? value.tileSize : { width: 1, height: 1 };
+        for (let y = 0; y < this.layerModel.layer.size.height; y += size.height) {
+            for (let x = 0; x < this.layerModel.layer.size.width; x += size.width) {
+                this.layerModel.layer.getTileAtPoint(new Point(x, y)).sprite = value;
+            }
+        }
     }
 }
 
