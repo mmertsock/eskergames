@@ -67,9 +67,16 @@ class EdgeGenerator
         fail("Invalid pixel size: " + base_file_path) if @pixel_size < 1
         @sprite_id = name_parts.first.chomp("-base")
 
+        edge_source_map = {
+            "terrain-ocean" => "terrain-water",
+            "terrain-freshwater" => "terrain-water",
+            "terrain-forest" => "terrain-forest"
+        }
+        @edge_source_id = edge_source_map[@sprite_id]
+
         # not supporting animation yet
         @base_img = SpriteRow.new(@pixel_size, nil, base_file_path)
-        @deep_img = SpriteRow.new(@pixel_size, nil, File.join(dirpath, "#{@sprite_id}-deep_#{@pixel_size}.png"))
+        @deep_img = SpriteRow.new(@pixel_size, nil, File.join(dirpath, "#{@edge_source_id}-deep_#{@pixel_size}.png"))
         @edge_imgs = {}
         load_edge_rotations(dirpath, "N", ["straight-n", "straight-e", "straight-s", "straight-w"])
         load_edge_rotations(dirpath, "NE", ["angle-ne", "angle-se", "angle-sw", "angle-nw"])
@@ -93,7 +100,7 @@ class EdgeGenerator
     end
 
     def load_edge_rotations(dirpath, type, keys)
-        path = File.join(dirpath, "#{@sprite_id}-edge-#{type}_#{@pixel_size}.png")
+        path = File.join(dirpath, "#{@edge_source_id}-edge-#{type}_#{@pixel_size}.png")
         row = SpriteRow.new(@pixel_size, nil, path)
         @edge_imgs[keys[0]] = row
         @edge_imgs[keys[1]] = row.map { |img| img.rotate_right }

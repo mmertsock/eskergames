@@ -457,7 +457,7 @@ themes:
     tileWidth: 1
     imageSize:
       width: 4
-      height: 49
+      height: 142
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_2.png
     tileSize:
@@ -466,7 +466,7 @@ themes:
     tileWidth: 2
     imageSize:
       width: 8
-      height: 98
+      height: 284
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_3.png
     tileSize:
@@ -475,7 +475,7 @@ themes:
     tileWidth: 3
     imageSize:
       width: 12
-      height: 147
+      height: 426
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_6.png
     tileSize:
@@ -484,7 +484,7 @@ themes:
     tileWidth: 6
     imageSize:
       width: 24
-      height: 294
+      height: 852
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_12.png
     tileSize:
@@ -493,7 +493,7 @@ themes:
     tileWidth: 12
     imageSize:
       width: 48
-      height: 588
+      height: 1704
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_24.png
     tileSize:
@@ -502,7 +502,7 @@ themes:
     tileWidth: 24
     imageSize:
       width: 96
-      height: 1176
+      height: 3408
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_48.png
     tileSize:
@@ -511,7 +511,7 @@ themes:
     tileWidth: 48
     imageSize:
       width: 192
-      height: 2352
+      height: 6816
   - id: default-map_3x3
     path: spritesheets/default-map_3x3_3.png
     tileSize:
@@ -591,7 +591,7 @@ themes:
     - row: 0
       column: 2
       frames: 1
-  - id: terrain-ocean
+  - id: terrain-forest
     sheetID: default-map_1x1
     tileSize:
       width: 1
@@ -738,7 +738,7 @@ themes:
     - row: 47
       column: 0
       frames: 4
-  - id: terrain-trees
+  - id: terrain-freshwater
     sheetID: default-map_1x1
     tileSize:
       width: 1
@@ -746,13 +746,292 @@ themes:
     variants:
     - row: 48
       column: 0
-      frames: 1
-    - row: 48
-      column: 1
-      frames: 1
-    - row: 48
-      column: 2
-      frames: 1
+      frames: 4
+    - row: 49
+      column: 0
+      frames: 4
+    - row: 50
+      column: 0
+      frames: 4
+    - row: 51
+      column: 0
+      frames: 4
+    - row: 52
+      column: 0
+      frames: 4
+    - row: 53
+      column: 0
+      frames: 4
+    - row: 54
+      column: 0
+      frames: 4
+    - row: 55
+      column: 0
+      frames: 4
+    - row: 56
+      column: 0
+      frames: 4
+    - row: 57
+      column: 0
+      frames: 4
+    - row: 58
+      column: 0
+      frames: 4
+    - row: 59
+      column: 0
+      frames: 4
+    - row: 60
+      column: 0
+      frames: 4
+    - row: 61
+      column: 0
+      frames: 4
+    - row: 62
+      column: 0
+      frames: 4
+    - row: 63
+      column: 0
+      frames: 4
+    - row: 64
+      column: 0
+      frames: 4
+    - row: 65
+      column: 0
+      frames: 4
+    - row: 66
+      column: 0
+      frames: 4
+    - row: 67
+      column: 0
+      frames: 4
+    - row: 68
+      column: 0
+      frames: 4
+    - row: 69
+      column: 0
+      frames: 4
+    - row: 70
+      column: 0
+      frames: 4
+    - row: 71
+      column: 0
+      frames: 4
+    - row: 72
+      column: 0
+      frames: 4
+    - row: 73
+      column: 0
+      frames: 4
+    - row: 74
+      column: 0
+      frames: 4
+    - row: 75
+      column: 0
+      frames: 4
+    - row: 76
+      column: 0
+      frames: 4
+    - row: 77
+      column: 0
+      frames: 4
+    - row: 78
+      column: 0
+      frames: 4
+    - row: 79
+      column: 0
+      frames: 4
+    - row: 80
+      column: 0
+      frames: 4
+    - row: 81
+      column: 0
+      frames: 4
+    - row: 82
+      column: 0
+      frames: 4
+    - row: 83
+      column: 0
+      frames: 4
+    - row: 84
+      column: 0
+      frames: 4
+    - row: 85
+      column: 0
+      frames: 4
+    - row: 86
+      column: 0
+      frames: 4
+    - row: 87
+      column: 0
+      frames: 4
+    - row: 88
+      column: 0
+      frames: 4
+    - row: 89
+      column: 0
+      frames: 4
+    - row: 90
+      column: 0
+      frames: 4
+    - row: 91
+      column: 0
+      frames: 4
+    - row: 92
+      column: 0
+      frames: 4
+    - row: 93
+      column: 0
+      frames: 4
+    - row: 94
+      column: 0
+      frames: 4
+  - id: terrain-ocean
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 95
+      column: 0
+      frames: 4
+    - row: 96
+      column: 0
+      frames: 4
+    - row: 97
+      column: 0
+      frames: 4
+    - row: 98
+      column: 0
+      frames: 4
+    - row: 99
+      column: 0
+      frames: 4
+    - row: 100
+      column: 0
+      frames: 4
+    - row: 101
+      column: 0
+      frames: 4
+    - row: 102
+      column: 0
+      frames: 4
+    - row: 103
+      column: 0
+      frames: 4
+    - row: 104
+      column: 0
+      frames: 4
+    - row: 105
+      column: 0
+      frames: 4
+    - row: 106
+      column: 0
+      frames: 4
+    - row: 107
+      column: 0
+      frames: 4
+    - row: 108
+      column: 0
+      frames: 4
+    - row: 109
+      column: 0
+      frames: 4
+    - row: 110
+      column: 0
+      frames: 4
+    - row: 111
+      column: 0
+      frames: 4
+    - row: 112
+      column: 0
+      frames: 4
+    - row: 113
+      column: 0
+      frames: 4
+    - row: 114
+      column: 0
+      frames: 4
+    - row: 115
+      column: 0
+      frames: 4
+    - row: 116
+      column: 0
+      frames: 4
+    - row: 117
+      column: 0
+      frames: 4
+    - row: 118
+      column: 0
+      frames: 4
+    - row: 119
+      column: 0
+      frames: 4
+    - row: 120
+      column: 0
+      frames: 4
+    - row: 121
+      column: 0
+      frames: 4
+    - row: 122
+      column: 0
+      frames: 4
+    - row: 123
+      column: 0
+      frames: 4
+    - row: 124
+      column: 0
+      frames: 4
+    - row: 125
+      column: 0
+      frames: 4
+    - row: 126
+      column: 0
+      frames: 4
+    - row: 127
+      column: 0
+      frames: 4
+    - row: 128
+      column: 0
+      frames: 4
+    - row: 129
+      column: 0
+      frames: 4
+    - row: 130
+      column: 0
+      frames: 4
+    - row: 131
+      column: 0
+      frames: 4
+    - row: 132
+      column: 0
+      frames: 4
+    - row: 133
+      column: 0
+      frames: 4
+    - row: 134
+      column: 0
+      frames: 4
+    - row: 135
+      column: 0
+      frames: 4
+    - row: 136
+      column: 0
+      frames: 4
+    - row: 137
+      column: 0
+      frames: 4
+    - row: 138
+      column: 0
+      frames: 4
+    - row: 139
+      column: 0
+      frames: 4
+    - row: 140
+      column: 0
+      frames: 4
+    - row: 141
+      column: 0
+      frames: 4
   - id: zone-empty-c
     sheetID: default-map_3x3
     tileSize:
