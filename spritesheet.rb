@@ -288,7 +288,7 @@ class Sprite
             @variant_key = column
         end
 
-        puts "Sprite #{file.img_filename} ID#{sprite_id} SZ#{pixel_size} PH#{pixel_height} R#{row} C#{column} X#{x} Y#{y} A#{is_animated} F#{frames} V#{variant_key}"
+        # puts "Sprite #{file.img_filename} ID#{sprite_id} SZ#{pixel_size} PH#{pixel_height} R#{row} C#{column} X#{x} Y#{y} A#{is_animated} F#{frames} V#{variant_key}"
     end
 end
 
