@@ -3,7 +3,8 @@ require 'chunky_png'
 require 'yaml'
 
 srcdir = '../Pixelmash/export/edges'
-destdir = './scratch/edges/'
+key_destdir = './scratch/edges/'
+sprite_destdir = '../Pixelmash/export/themes/default-map/1x1/a'
 
 def fail(msg)
     puts msg
@@ -12,12 +13,12 @@ end
 
 Dir.exist?(srcdir) or fail("Source directory not found.")
 
-if !Dir.exist?(destdir)
-    Dir.mkdir(destdir)
-    puts "Created directory " + destdir
+if !Dir.exist?(key_destdir)
+    Dir.mkdir(key_destdir)
+    puts "Created directory " + key_destdir
 end
 
-base_files = Dir.glob(File.join(srcdir, '*-base*.png'))
+base_files = Dir.glob(File.join(srcdir, '*-base_*.png'))
 
 class SpriteRow
     attr_reader :imgs
@@ -72,6 +73,10 @@ class EdgeGenerator
         load_edge_rotations(dirpath, "NE", ["angle-ne", "angle-se", "angle-sw", "angle-nw"])
         load_edge_rotations(dirpath, "NE-shallow", ["corner-ne", "corner-se", "corner-sw", "corner-nw"])
 
+        @dirt_color = ChunkyPNG::Color.from_hsl(33, 0.33, 0.8)
+        @mockup_ocean_color = ChunkyPNG::Color.from_hsl(200, 1.0, 0.15) #was 0.29 l
+        @edge_gradient_rgb = [87, 249, 255] # seawater
+
         @mockup_canvas_name = "key-#{@sprite_id}_#{@pixel_size}.png"
         @mockup_sample_rows = 16
         @mockup_sample_cols = 16
@@ -94,18 +99,14 @@ class EdgeGenerator
         @edge_imgs[keys[3]] = row.map { |img| img.rotate_left }
     end
 
-    def process(destdir)
+    def process(key_destdir, sprite_destdir)
         puts "Process #{to_s}"
-
-        # eg. see the 0xff example: NW wavefront is fully visible (and NE is not)
-        # could use ChunkyPNG mask functionality? mask using top left pixel color of the N edge image?
 
         mockup_sample_width = @pixel_size * 3 * @mockup_sample_rows
         mockup_sample_height = @pixel_size * 3 * @mockup_sample_cols
-
         mockup_canvas = ChunkyPNG::Image.new(mockup_sample_width, mockup_sample_height)
         256.times { |index| make_mockup(mockup_canvas, index, 0) }
-        mockup_canvas.save(File.join(destdir, @mockup_canvas_name))
+        mockup_canvas.save(File.join(key_destdir, @mockup_canvas_name))
 
         # puts "Variants:"
         # @variant_map.each_with_index do |mapped_key, variant_key|
@@ -116,8 +117,8 @@ class EdgeGenerator
         #     end
         # end
 
-        save_variants(destdir)
-        save_yaml(destdir)
+        save_variants(sprite_destdir)
+        save_yaml(key_destdir)
     end
 
     # each mockup is a 3x3 tile space, so you can mark up the neighbors
@@ -136,9 +137,9 @@ class EdgeGenerator
                 compose_tile(canvas, neighbors, frame, x + @pixel_size, y + @pixel_size, idlog)
             else
                 if neighbors.values[i]
-                    color = ChunkyPNG::Color.from_hsl(33, 0.33, 0.8) #dirt
+                    color = @dirt_color #dirt
                 else
-                    color = ChunkyPNG::Color.from_hsl(200, 1.0, 0.15) #water # was 0.29 l
+                    color = @mockup_ocean_color
                 end
                 coord = neighbors.coord_for_edge_index(i)
                 nx = coord.x * @pixel_size
@@ -149,6 +150,7 @@ class EdgeGenerator
         # puts neighbors.to_s
 
         identity = idlog.join("|")
+
         existing_variant_key = @variants.index(identity)
         if existing_variant_key == nil
             @variants.push(identity)
@@ -179,10 +181,10 @@ class EdgeGenerator
         compose_edge(canvas, idlog, "straight-w", frame, x, y, neighbors.W)
 
         # add deep diagonal edges
-        compose_edge(canvas, idlog, "angle-ne", x, frame, y, neighbors.N && neighbors.E)
-        compose_edge(canvas, idlog, "angle-se", x, frame, y, neighbors.E && neighbors.S)
-        compose_edge(canvas, idlog, "angle-sw", x, frame, y, neighbors.S && neighbors.W)
-        compose_edge(canvas, idlog, "angle-nw", x, frame, y, neighbors.N && neighbors.W)
+        compose_edge(canvas, idlog, "angle-ne", frame, x, y, neighbors.N && neighbors.E)
+        compose_edge(canvas, idlog, "angle-se", frame, x, y, neighbors.E && neighbors.S)
+        compose_edge(canvas, idlog, "angle-sw", frame, x, y, neighbors.S && neighbors.W)
+        compose_edge(canvas, idlog, "angle-nw", frame, x, y, neighbors.N && neighbors.W)
     end
 
     def compose_edge(canvas, idlog, img_key, frame, x, y, condition)
@@ -234,13 +236,13 @@ class EdgeGenerator
         # max value is 3. max alpha for that value is 0.5
         max_value = 3.0
         max_alpha = 0.5
-        ChunkyPNG::Color.rgba(87, 249, 255, (255 * (max_alpha * value / max_value)).to_i)
+        ChunkyPNG::Color.rgba(@edge_gradient_rgb[0], @edge_gradient_rgb[1], @edge_gradient_rgb[2], (255 * (max_alpha * value / max_value)).to_i)
         # ChunkyPNG::Color.grayscale_alpha(255, (255 * (max_alpha * value / max_value)).to_i)
     end
 
     def save_variants(destdir)
         @variants.each_with_index do |edge_list, variant_key|
-            file_name = "#{@sprite_id}_#{variant_key}_#{@pixel_size}.png"
+            file_name = "#{@sprite_id}_#{"%02d" % variant_key}_#{@pixel_size}.png"
             # puts "Save file #{file_name} with edges #{edge_list}"
             frame_index = 0
             row = @base_img.map do |base_frame|
@@ -346,5 +348,5 @@ end
 
 puts "TODO Clean up wavefront overlaps"
 base_files.each do |file|
-    EdgeGenerator.new(file).process(destdir)
+    EdgeGenerator.new(file).process(key_destdir, sprite_destdir)
 end
