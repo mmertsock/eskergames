@@ -35,12 +35,13 @@ class EdgeGenerator
         load_edge_rotations(dirpath, "NE", ["angle-ne", "angle-se", "angle-sw", "angle-nw"])
         load_edge_rotations(dirpath, "NE-shallow", ["corner-ne", "corner-se", "corner-sw", "corner-nw"])
 
-        @mockup_canvas_name = "#{@sprite_id}_#{@pixel_size}-mockup.png"
+        @mockup_canvas_name = "key-#{@sprite_id}_#{@pixel_size}.png"
         @mockup_sample_rows = 16
         @mockup_sample_cols = 16
         @mockup_stats = []
         @variant_map = [] # maps every 2-byte index value to a variant key
         @variants = [] # list of unique variants: index is variant key, value is edge config
+        @variant_neighborhoods = []
     end
 
     def to_s
@@ -61,10 +62,9 @@ class EdgeGenerator
 
         puts "TODO LIST"
         puts "Support animation frames"
-        puts "Water depth gradient"
         puts "Clean up wavefront overlaps"
         # eg. see the 0xff example: NW wavefront is fully visible (and NE is not)
-        puts "Generate yaml or js code for the variant mapping"
+        # could use ChunkyPNG mask functionality? mask using top left pixel color of the N edge image?
 
         mockup_sample_width = @pixel_size * 3 * @mockup_sample_rows
         mockup_sample_height = @pixel_size * 3 * @mockup_sample_cols
@@ -83,6 +83,7 @@ class EdgeGenerator
         # end
 
         save_variants(destdir)
+        save_yaml(destdir)
     end
 
     # each mockup is a 3x3 tile space, so you can mark up the neighbors
@@ -117,6 +118,7 @@ class EdgeGenerator
         existing_variant_key = @variants.index(identity)
         if existing_variant_key == nil
             @variants.push(identity)
+            @variant_neighborhoods.push(neighbors)
             @variant_map[index] = 1000 + (@variants.size - 1)
             canvas.rect(x, y, x + width - 1, y + height - 1, ChunkyPNG::Color.rgb(255, 0, 0), ChunkyPNG::Color::TRANSPARENT)
         else
@@ -127,6 +129,8 @@ class EdgeGenerator
 
     def compose_tile(canvas, neighbors, x, y, idlog)
         canvas.compose!(@base_img, x, y)
+
+        compose_depth_gradient(canvas, neighbors, x, y)
 
         # add shallow diagonal edges (special case)
         compose_edge(canvas, idlog, "corner-ne", x, y, neighbors.NE && !(neighbors.N || neighbors.E))
@@ -156,19 +160,74 @@ class EdgeGenerator
         end
     end
 
+    def score(*bools)
+        bools.count { |item| item }
+    end
+
+    def compose_depth_gradient(canvas, neighbors, x, y)
+        if @pixel_size < 5
+            return
+        end
+        corner_scores = {
+            "ne" => score(neighbors.N, neighbors.NE, neighbors.E),
+            "se" => score(neighbors.E, neighbors.SE, neighbors.S),
+            "sw" => score(neighbors.S, neighbors.SW, neighbors.W),
+            "nw" => score(neighbors.W, neighbors.NW, neighbors.N)
+        }
+        (0...@pixel_size).each do |dy|
+            yfraction = (dy * 1.0 / (@pixel_size - 1))
+            l = scale_value(yfraction, corner_scores["nw"], corner_scores["sw"])
+            r = scale_value(yfraction, corner_scores["ne"], corner_scores["se"])
+            if l + r > 0
+                (0...@pixel_size).each do |dx|
+                    xfraction = (dx * 1.0 / (@pixel_size - 1))
+                    edginess = scale_value(xfraction, l, r)
+                    color = edginess_gradient_color(edginess)
+                    # if @variants.size == 5 && neighbors.W
+                    #     puts "#{dx}, #{dy}: edginess=#{edginess}, color=#{ChunkyPNG::Color.a(color)}"
+                    # end
+                    canvas[dx + x, dy + y] = canvas.compose_pixel(dx + x, dy + y, color)
+                end
+            end
+        end
+    end
+
+    def scale_value(fraction, min, max)
+        min + fraction * (max - min)
+    end
+
+    def edginess_gradient_color(value)
+        # max value is 3. max alpha for that value is 0.5
+        max_value = 3.0
+        max_alpha = 0.5
+        ChunkyPNG::Color.rgba(87, 249, 255, (255 * (max_alpha * value / max_value)).to_i)
+        # ChunkyPNG::Color.grayscale_alpha(255, (255 * (max_alpha * value / max_value)).to_i)
+    end
+
     def save_variants(destdir)
         @variants.each_with_index do |edge_list, variant_key|
             file_name = "#{@sprite_id}_#{variant_key}_#{@pixel_size}.png"
             # puts "Save file #{file_name} with edges #{edge_list}"
-
             img = ChunkyPNG::Image.new(@pixel_size, @pixel_size)
             img.compose!(@base_img, 0, 0)
+            compose_depth_gradient(img, @variant_neighborhoods[variant_key], 0, 0)
             edge_list.split("|").each do |img_key|
                 img.compose!(@edge_imgs[img_key], 0, 0)
             end
             img.save(File.join(destdir, file_name))
         end
         puts "Generated #{@variants.size} variants for spritesheet.rb processing."
+    end
+
+    def save_yaml(destdir)
+        path = File.join(destdir, "edge-config.yaml")
+        variant_yaml = []
+        @variant_map.each_with_index do |mapped_key, variant_key|
+            variant_yaml[variant_key] = mapped_key % 1000
+        end
+        raw_yaml = "edgeVariants: [#{variant_yaml.join(", ")}]"
+        # :indentation => 3
+        IO.write(path, raw_yaml)
     end
 end
 
