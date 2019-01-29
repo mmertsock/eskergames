@@ -5,6 +5,7 @@ require 'yaml'
 srcdir = '../Pixelmash/export/edges'
 key_destdir = './scratch/edges/'
 sprite_destdir = '../Pixelmash/export/themes/default-map/1x1/a'
+#sprite_destdir = './scratch/edges/sprites/'
 
 def fail(msg)
     puts msg
@@ -68,6 +69,7 @@ class EdgeGenerator
 
         # not supporting animation yet
         @base_img = SpriteRow.new(@pixel_size, nil, base_file_path)
+        @deep_img = SpriteRow.new(@pixel_size, nil, File.join(dirpath, "#{@sprite_id}-deep_#{@pixel_size}.png"))
         @edge_imgs = {}
         load_edge_rotations(dirpath, "N", ["straight-n", "straight-e", "straight-s", "straight-w"])
         load_edge_rotations(dirpath, "NE", ["angle-ne", "angle-se", "angle-sw", "angle-nw"])
@@ -166,7 +168,7 @@ class EdgeGenerator
     def compose_tile(canvas, neighbors, frame, x, y, idlog)
         canvas.compose!(@base_img.frame(frame), x, y)
 
-        compose_depth_gradient(canvas, neighbors, x, y)
+        compose_depth_gradient(canvas, neighbors, frame, x, y)
 
         # add shallow diagonal edges (special case)
         compose_edge(canvas, idlog, "corner-ne", frame, x, y, neighbors.NE && !(neighbors.N || neighbors.E))
@@ -200,7 +202,7 @@ class EdgeGenerator
         bools.count { |item| item }
     end
 
-    def compose_depth_gradient(canvas, neighbors, x, y)
+    def compose_depth_gradient(canvas, neighbors, frame, x, y)
         if @pixel_size < 5
             return
         end
@@ -210,18 +212,21 @@ class EdgeGenerator
             "sw" => score(neighbors.S, neighbors.SW, neighbors.W),
             "nw" => score(neighbors.W, neighbors.NW, neighbors.N)
         }
+        deep_img = @deep_img.frame(frame)
         (0...@pixel_size).each do |dy|
             yfraction = (dy * 1.0 / (@pixel_size - 1))
             l = scale_value(yfraction, corner_scores["nw"], corner_scores["sw"])
             r = scale_value(yfraction, corner_scores["ne"], corner_scores["se"])
-            if l + r > 0
-                (0...@pixel_size).each do |dx|
-                    xfraction = (dx * 1.0 / (@pixel_size - 1))
-                    edginess = scale_value(xfraction, l, r)
+            (0...@pixel_size).each do |dx|
+                xfraction = (dx * 1.0 / (@pixel_size - 1))
+                edginess = scale_value(xfraction, l, r)
+                # if @variants.size == 5 && neighbors.W
+                #     puts "#{dx}, #{dy}: edginess=#{edginess}, color=#{ChunkyPNG::Color.a(color)}"
+                # end
+                color = deep_img_alpha(edginess, deep_img, dx, dy)
+                canvas[dx + x, dy + y] = canvas.compose_pixel(dx + x, dy + y, color)
+                if l + r > 0
                     color = edginess_gradient_color(edginess)
-                    # if @variants.size == 5 && neighbors.W
-                    #     puts "#{dx}, #{dy}: edginess=#{edginess}, color=#{ChunkyPNG::Color.a(color)}"
-                    # end
                     canvas[dx + x, dy + y] = canvas.compose_pixel(dx + x, dy + y, color)
                 end
             end
@@ -232,23 +237,27 @@ class EdgeGenerator
         min + fraction * (max - min)
     end
 
-    def edginess_gradient_color(value)
-        # max value is 3. max alpha for that value is 0.5
-        max_value = 3.0
+    def edginess_gradient_color(edginess)
+        max_edginess = 3.0
         max_alpha = 0.5
-        ChunkyPNG::Color.rgba(@edge_gradient_rgb[0], @edge_gradient_rgb[1], @edge_gradient_rgb[2], (255 * (max_alpha * value / max_value)).to_i)
-        # ChunkyPNG::Color.grayscale_alpha(255, (255 * (max_alpha * value / max_value)).to_i)
+        ChunkyPNG::Color.rgba(@edge_gradient_rgb[0], @edge_gradient_rgb[1], @edge_gradient_rgb[2], (255 * (max_alpha * edginess / max_edginess)).to_i)
+    end
+
+    def deep_img_alpha(edginess, img, dx, dy)
+        max_edginess = 3.0
+        depth = (max_edginess - edginess) / max_edginess # 0...1 range
+        ChunkyPNG::Color.fade(img[dx, dy], (255.0 * depth * depth * depth).to_i)
     end
 
     def save_variants(destdir)
         @variants.each_with_index do |edge_list, variant_key|
-            file_name = "#{@sprite_id}_#{"%02d" % variant_key}_#{@pixel_size}.png"
+            file_name = "#{@sprite_id}_#{variant_key}_#{@pixel_size}.png"
             # puts "Save file #{file_name} with edges #{edge_list}"
             frame_index = 0
             row = @base_img.map do |base_frame|
                 img = ChunkyPNG::Image.new(@pixel_size, @pixel_size)
-                img.compose!(base_frame, 0, 0)
-                compose_depth_gradient(img, @variant_neighborhoods[variant_key], 0, 0)
+                img.replace!(base_frame, 0, 0)
+                compose_depth_gradient(img, @variant_neighborhoods[variant_key], frame_index, 0, 0)
                 edge_list.split("|").each do |img_key|
                     img.compose!(@edge_imgs[img_key].frame(frame_index), 0, 0)
                 end
@@ -346,7 +355,6 @@ class EdgeGrid
     end
 end
 
-puts "TODO Clean up wavefront overlaps"
 base_files.each do |file|
     EdgeGenerator.new(file).process(key_destdir, sprite_destdir)
 end

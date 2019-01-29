@@ -46,13 +46,20 @@ class InputFile
         fail("Invalid pixel size: " + @path) if @pixel_size < 1
         @pixels_per_tile = @pixel_size / @tile_size
         @variant_key = name_parts.last.to_i
-        if @variant_key > 0 || name_parts.last == "0"
+        if @variant_key > 0 || name_parts.last == "0" || name_parts.last == "00"
             # explicit variant key found in filename, remove it from fname
             name_parts.pop
         end
         @sprite_id = name_parts.join("_")
         fail("Invalid filename: " + @path) if @sprite_id.empty?
     end
+
+    def <=>(other_file)
+        idcmp = @sprite_id <=> other_file.sprite_id
+        idcmp = (@variant_key <=> other_file.variant_key) if idcmp == 0
+        idcmp = (@pixel_size <=> other_file.pixel_size) if idcmp == 0
+        idcmp
+    end 
 
     def to_s
         "a? " + @is_animated.to_s + ", imgfn: " + @img_filename + ", tsc: " + @tile_size_component + ", px: " + @pixel_size.to_s + ", sid: " + @sprite_id + ", vk: " + @variant_key.to_s
@@ -77,7 +84,7 @@ class Processor
         @sheets = {}
         @sprite_groups = {}
         # sort to ensure sprite id/variant key ordering is identical in each Spritesheet
-        files.sort { |a, b| a.path <=> b.path }.each { |file| add_input_file(file) }
+        files.sort().each { |file| add_input_file(file) }
     end
 
     def has_spritesheet_for?(file)

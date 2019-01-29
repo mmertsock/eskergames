@@ -328,6 +328,8 @@ class SpriteMapLayerView {
 
     render(frameCounter) {
         if (!this._dirty || !this.canvasGrid) { return; }
+
+        frameCounter = this.isAnimated ? frameCounter : 0;
         let ctx = this.canvas.getContext("2d", { alpha: true });
         // if (!this._dirtyAnimatedOnly) {
             this.clear(ctx, this.canvasGrid.rectForFullCanvas);
