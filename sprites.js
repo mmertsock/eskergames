@@ -28,6 +28,7 @@ const ScriptPainterSession = CitySim.ScriptPainterSession;
 const ScriptPainterStore = CitySim.ScriptPainterStore;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
 const Sprite = CitySim.Sprite;
+const SpriteRenderModel = CitySim.SpriteRenderModel;
 const Spritesheet = CitySim.Spritesheet;
 const SpritesheetStore = CitySim.SpritesheetStore;
 const SpritesheetTheme = CitySim.SpritesheetTheme;
@@ -105,7 +106,7 @@ class LayerModel {
             ];
             variantKeys.forEach((row, y) => {
                 row.forEach((variantKey, x) => {
-                    this.layer.getTileAtPoint(new Point(x, y))._sprite = SpritesheetStore.mainMapStore.getSprite("terrain-ocean", variantKey);
+                    this.layer.getTileAtPoint(new Point(x, y))._sprite = SpritesheetStore.mainMapStore.getSprite("terrain-forest", variantKey);
                 });
             })
         }
@@ -242,30 +243,6 @@ class SpriteMapView {
     }
 }
 SpriteMapView.Kvo = { "frameCounter": "frameCounter" }
-
-class SpriteRenderModel {
-    constructor(modelRect, sprite, tileWidth, tilePlane) {
-        this.modelRect = modelRect;
-        this.screenTileRect = tilePlane.screenRectForModel(modelRect);
-        this.sprite = sprite;
-        this.tileWidth = tileWidth;
-        this.drawOrder = tilePlane.drawingOrderIndexForModelRect(modelRect);
-    }
-    render(ctx, canvasGrid, store, frameCounter) {
-        let sheet = store.getSpritesheet(this.sprite.sheetID, this.tileWidth);
-        if (!sheet) {
-            once("nosheet" + this.sprite.sheetID, () => debugWarn(`No Spritesheet found for ${this.debugDescription}`));
-            return;
-        }
-        sheet.renderSprite(ctx, this.screenRect(canvasGrid), this.sprite, this.tileWidth, frameCounter);
-    }
-    get debugDescription() {
-        return `<@(${this.modelRect.x}, ${this.modelRect.y}) #${this.sprite.uniqueID} w${this.tileWidth} o${this.drawOrder}>`;
-    }
-    screenRect(canvasGrid) {
-        return canvasGrid.rectForTileRect(this.screenTileRect);
-    }
-}
 
 class SpriteMapLayerView {
     constructor(mapView, layer) {

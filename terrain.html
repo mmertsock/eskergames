@@ -6,7 +6,17 @@
     <link rel="icon" href="city-icon-192.png">
     <link rel="apple-touch-icon" href="city-icon-180.png">
     <script>
-        window.citySimInitOptions = { initGame: false };
+        let readyItems = new Set();
+        let cityReady = function(type) {
+            readyItems.add(type);
+            if (readyItems.has("terrain.js") && readyItems.has("city.js")) {
+                CitySimTerrain.initialize();
+            }
+        }
+        window.citySimInitOptions = {
+            initGame: false,
+            onReady: () => cityReady("city.js")
+        };
     </script>
     <script defer src="js-yaml.min.js"></script>
     <script defer src="g.js"></script>
@@ -24,7 +34,7 @@
 
 <main>
     <div>
-        <map><canvas class="mainMap"></canvas></map>
+        <map class="mainMap"></map>
     </div>
     <controls>
         <row>

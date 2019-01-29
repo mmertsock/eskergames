@@ -61,6 +61,10 @@ const InputView = CitySim.InputView;
 const MapRenderer = CitySim.MapRenderer;
 const ScriptPainterStore = CitySim.ScriptPainterStore;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
+const Sprite = CitySim.Sprite;
+const Spritesheet = CitySim.Spritesheet;
+const SpritesheetStore = CitySim.SpritesheetStore;
+const SpritesheetTheme = CitySim.SpritesheetTheme;
 const Strings = CitySim.Strings;
 const Terrain = CitySim.Terrain;
 const TerrainRenderer = CitySim.TerrainRenderer;
@@ -758,7 +762,9 @@ class NewTerrainDialog extends GameDialog {
 class TerrainView {
     constructor() {
         this.session = null;
-        this.canvas = document.querySelector("canvas.mainMap");
+        this.elem = document.querySelector("map.mainMap");
+        this.canvas = document.createElement("canvas");
+        this.elem.append(this.canvas);
         this.canvasGrid = null;
         this._terrainRenderer = null;
         this._dirty = true;
@@ -885,25 +891,13 @@ class ControlsView {
     }
 }
 
-function dataIsReady(content) {
-    if (!content) {
-        alert("Failed to initialize CitySim base data.");
-        return;
-    }
+let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });
-    GameContent.shared = GameContent.prepare(content);
     GameScriptEngine.shared = new GameScriptEngine();
-    ScriptPainterStore.shared = new ScriptPainterStore();
     CitySimTerrain.view = new RootView();
     CitySimTerrain.uiRunLoop.resume();
     debugLog("Ready.");
 }
-
-let initialize = async function() {
-    debugLog("Initializing...");
-    let content = await GameContent.loadYamlFromLocalFile("city-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
-    dataIsReady(content);
-};
 
 return {
     initialize: initialize
@@ -911,4 +905,4 @@ return {
 
 })(); // end namespace
 
-CitySimTerrain.initialize();
+cityReady("terrain.js");

@@ -53,10 +53,13 @@ canvas {
     display: block;
 }
 
-canvas.mainMap {
+map.mainMap {
+    cursor: crosshair;
+}
+
+map canvas {
     width: 100%;
     height: 100%;
-    cursor: crosshair;
 }
 
 minimaps {

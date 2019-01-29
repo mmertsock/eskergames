@@ -2810,6 +2810,30 @@ class Sprite {
     }
 }
 
+class SpriteRenderModel {
+    constructor(modelRect, sprite, tileWidth, tilePlane) {
+        this.modelRect = modelRect;
+        this.screenTileRect = tilePlane.screenRectForModel(modelRect);
+        this.sprite = sprite;
+        this.tileWidth = tileWidth;
+        this.drawOrder = tilePlane.drawingOrderIndexForModelRect(modelRect);
+    }
+    render(ctx, canvasGrid, store, frameCounter) {
+        let sheet = store.getSpritesheet(this.sprite.sheetID, this.tileWidth);
+        if (!sheet) {
+            once("nosheet" + this.sprite.sheetID, () => debugWarn(`No Spritesheet found for ${this.debugDescription}`));
+            return;
+        }
+        sheet.renderSprite(ctx, this.screenRect(canvasGrid), this.sprite, this.tileWidth, frameCounter);
+    }
+    get debugDescription() {
+        return `<@(${this.modelRect.x}, ${this.modelRect.y}) #${this.sprite.uniqueID} w${this.tileWidth} o${this.drawOrder}>`;
+    }
+    screenRect(canvasGrid) {
+        return canvasGrid.rectForTileRect(this.screenTileRect);
+    }
+}
+
 class ScriptPainterCollection {
     static defaultExpectedSize() {
         return _1x1;
@@ -3385,6 +3409,7 @@ return {
     Simoleon: Simoleon,
     SingleChoiceInputCollection: SingleChoiceInputCollection,
     Sprite: Sprite,
+    SpriteRenderModel: SpriteRenderModel,
     Spritesheet: Spritesheet,
     SpritesheetStore: SpritesheetStore,
     SpritesheetTheme: SpritesheetTheme,
