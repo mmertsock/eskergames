@@ -87,12 +87,29 @@ class LayerModel {
             map: config.rootModel,
             tileClass: SpriteTileModel
         });
-        let randomSprites = config.index == 0 ? SpritesheetStore.mainMapStore.allSprites.filter(item => item.id == "terrain-dirt") : [];
+        // let randomSprites = config.index == 0 ? SpritesheetStore.mainMapStore.allSprites.filter(item => item.id == "terrain-dirt") : [];
         // let randomSprites = [SpritesheetStore.mainMapStore.spriteWithUniqueID("terrain-ocean-open|0")]
         this.layer.visitTiles(null, tile => {
             tile.layerModel = this;
-            tile._sprite = randomSprites.randomItem()
+            // tile._sprite = randomSprites.randomItem()
         });
+
+        if (config.index == 0) {
+            let variantKeys = [
+                [6, 2, 9, 26, 29, 12],
+                [26, 24, 43, 16, 36, 30],
+                [16, 10, 5, 8, 27, 43],
+                [36, 22, 16, 35, 29, 6],
+                [26, 13, 34, 13, 8, 33],
+                [5, 0, 3, 2, 10, 32]
+            ];
+            variantKeys.forEach((row, y) => {
+                row.forEach((variantKey, x) => {
+                    this.layer.getTileAtPoint(new Point(x, y))._sprite = SpritesheetStore.mainMapStore.getSprite("terrain-ocean", variantKey);
+                });
+            })
+        }
+
         this.kvo = new Kvo(this);
     }
 
@@ -259,6 +276,7 @@ class SpriteMapLayerView {
         this.mapView.elem.append(this.canvas);
         this.tiles = [];
         this.isAnimated = false;
+        this.allowAnimation = this.mapView.zoomLevel.allowAnimation;
         this._dirty = false;
         this._dirtyAnimatedOnly = false;
 
@@ -293,7 +311,7 @@ class SpriteMapLayerView {
                 if (!!tile && !!tile.sprite) {
                     let rect = new Rect(new Point(x, y), tile.sprite.tileSize);
                     tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
-                    this.isAnimated = this.isAnimated || tile.sprite.isAnimated;
+                    this.isAnimated = this.isAnimated || (tile.sprite.isAnimated && this.allowAnimation);
                 }
             }
         }

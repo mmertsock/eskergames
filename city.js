@@ -2724,6 +2724,10 @@ class SpritesheetStore {
         return this.theme.spriteTable[uniqueID];
     }
 
+    getSprite(id, variantKey) {
+        return this.theme.spriteTable[Sprite.makeUniqueID(id, variantKey)];
+    }
+
     getSpritesheet(sheetID, tileWidth) {
         let item = this.sheetTable[sheetID];
         return item ? item[tileWidth] : null;
@@ -2785,11 +2789,15 @@ class Spritesheet {
 }
 
 class Sprite {
+    static makeUniqueID(id, variantKey) {
+        return `${id}|${variantKey}`;
+    }
+
     constructor(config) {
         this.id = config.id;
         this.sheetID = config.sheetID;
         this.variantKey = config.variantKey;
-        this.uniqueID = `${this.id}|${this.variantKey}`;
+        this.uniqueID = Sprite.makeUniqueID(this.id, this.variantKey);
         this.row = config.row;
         this.column = config.column;
         this.frames = config.frames;

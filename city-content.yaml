@@ -181,15 +181,20 @@ mainMapView:
   zoomLevels:
   - tileWidth: 1
     allowGrid: false
+    allowAnimation: false
   - tileWidth: 3
     allowGrid: false
+    allowAnimation: false
   - tileWidth: 6
     allowGrid: true
+    allowAnimation: true
   - tileWidth: 12
     isDefault: true
     allowGrid: true
+    allowAnimation: true
   - tileWidth: 24
     allowGrid: true
+    allowAnimation: true
 
 controlPanelView:
   fillStyle: *PANELFILL
@@ -439,3 +444,339 @@ terrains:
   size:
     width: 256
     height: 256
+
+themes:
+- id: default-map
+  isDefault: true
+  sheets:
+  - id: default-map_1x1
+    path: spritesheets/default-map_1x1_1.png
+    tileSize:
+      width: 1
+      height: 1
+    tileWidth: 1
+    imageSize:
+      width: 4
+      height: 49
+  - id: default-map_1x1
+    path: spritesheets/default-map_1x1_12.png
+    tileSize:
+      width: 1
+      height: 1
+    tileWidth: 12
+    imageSize:
+      width: 48
+      height: 588
+  - id: default-map_1x1
+    path: spritesheets/default-map_1x1_2.png
+    tileSize:
+      width: 1
+      height: 1
+    tileWidth: 2
+    imageSize:
+      width: 8
+      height: 98
+  - id: default-map_1x1
+    path: spritesheets/default-map_1x1_24.png
+    tileSize:
+      width: 1
+      height: 1
+    tileWidth: 24
+    imageSize:
+      width: 96
+      height: 1176
+  - id: default-map_1x1
+    path: spritesheets/default-map_1x1_3.png
+    tileSize:
+      width: 1
+      height: 1
+    tileWidth: 3
+    imageSize:
+      width: 12
+      height: 147
+  - id: default-map_1x1
+    path: spritesheets/default-map_1x1_48.png
+    tileSize:
+      width: 1
+      height: 1
+    tileWidth: 48
+    imageSize:
+      width: 192
+      height: 2352
+  - id: default-map_1x1
+    path: spritesheets/default-map_1x1_6.png
+    tileSize:
+      width: 1
+      height: 1
+    tileWidth: 6
+    imageSize:
+      width: 24
+      height: 294
+  - id: default-map_3x3
+    path: spritesheets/default-map_3x3_144.png
+    tileSize:
+      width: 3
+      height: 3
+    tileWidth: 48
+    imageSize:
+      width: 144
+      height: 432
+  - id: default-map_3x3
+    path: spritesheets/default-map_3x3_18.png
+    tileSize:
+      width: 3
+      height: 3
+    tileWidth: 6
+    imageSize:
+      width: 18
+      height: 54
+  - id: default-map_3x3
+    path: spritesheets/default-map_3x3_3.png
+    tileSize:
+      width: 3
+      height: 3
+    tileWidth: 1
+    imageSize:
+      width: 3
+      height: 9
+  - id: default-map_3x3
+    path: spritesheets/default-map_3x3_36.png
+    tileSize:
+      width: 3
+      height: 3
+    tileWidth: 12
+    imageSize:
+      width: 36
+      height: 108
+  - id: default-map_3x3
+    path: spritesheets/default-map_3x3_6.png
+    tileSize:
+      width: 3
+      height: 3
+    tileWidth: 2
+    imageSize:
+      width: 6
+      height: 18
+  - id: default-map_3x3
+    path: spritesheets/default-map_3x3_72.png
+    tileSize:
+      width: 3
+      height: 3
+    tileWidth: 24
+    imageSize:
+      width: 72
+      height: 216
+  - id: default-map_3x3
+    path: spritesheets/default-map_3x3_9.png
+    tileSize:
+      width: 3
+      height: 3
+    tileWidth: 3
+    imageSize:
+      width: 9
+      height: 27
+  sprites:
+  - id: terrain-ocean
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 0
+      column: 0
+      frames: 4
+    - row: 1
+      column: 0
+      frames: 4
+    - row: 2
+      column: 0
+      frames: 4
+    - row: 3
+      column: 0
+      frames: 4
+    - row: 4
+      column: 0
+      frames: 4
+    - row: 5
+      column: 0
+      frames: 4
+    - row: 6
+      column: 0
+      frames: 4
+    - row: 7
+      column: 0
+      frames: 4
+    - row: 8
+      column: 0
+      frames: 4
+    - row: 9
+      column: 0
+      frames: 4
+    - row: 10
+      column: 0
+      frames: 4
+    - row: 11
+      column: 0
+      frames: 4
+    - row: 12
+      column: 0
+      frames: 4
+    - row: 13
+      column: 0
+      frames: 4
+    - row: 14
+      column: 0
+      frames: 4
+    - row: 15
+      column: 0
+      frames: 4
+    - row: 16
+      column: 0
+      frames: 4
+    - row: 17
+      column: 0
+      frames: 4
+    - row: 18
+      column: 0
+      frames: 4
+    - row: 19
+      column: 0
+      frames: 4
+    - row: 20
+      column: 0
+      frames: 4
+    - row: 21
+      column: 0
+      frames: 4
+    - row: 22
+      column: 0
+      frames: 4
+    - row: 23
+      column: 0
+      frames: 4
+    - row: 24
+      column: 0
+      frames: 4
+    - row: 25
+      column: 0
+      frames: 4
+    - row: 26
+      column: 0
+      frames: 4
+    - row: 27
+      column: 0
+      frames: 4
+    - row: 28
+      column: 0
+      frames: 4
+    - row: 29
+      column: 0
+      frames: 4
+    - row: 30
+      column: 0
+      frames: 4
+    - row: 31
+      column: 0
+      frames: 4
+    - row: 32
+      column: 0
+      frames: 4
+    - row: 33
+      column: 0
+      frames: 4
+    - row: 34
+      column: 0
+      frames: 4
+    - row: 35
+      column: 0
+      frames: 4
+    - row: 36
+      column: 0
+      frames: 4
+    - row: 37
+      column: 0
+      frames: 4
+    - row: 38
+      column: 0
+      frames: 4
+    - row: 39
+      column: 0
+      frames: 4
+    - row: 40
+      column: 0
+      frames: 4
+    - row: 41
+      column: 0
+      frames: 4
+    - row: 42
+      column: 0
+      frames: 4
+    - row: 43
+      column: 0
+      frames: 4
+    - row: 44
+      column: 0
+      frames: 4
+    - row: 45
+      column: 0
+      frames: 4
+    - row: 46
+      column: 0
+      frames: 4
+  - id: terrain-dirt
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 47
+      column: 0
+      frames: 1
+    - row: 47
+      column: 1
+      frames: 1
+    - row: 47
+      column: 2
+      frames: 1
+  - id: terrain-trees
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 48
+      column: 0
+      frames: 1
+    - row: 48
+      column: 1
+      frames: 1
+    - row: 48
+      column: 2
+      frames: 1
+  - id: zone-empty-c
+    sheetID: default-map_3x3
+    tileSize:
+      width: 3
+      height: 3
+    variants:
+    - row: 0
+      column: 0
+      frames: 1
+  - id: zone-empty-i
+    sheetID: default-map_3x3
+    tileSize:
+      width: 3
+      height: 3
+    variants:
+    - row: 1
+      column: 0
+      frames: 1
+  - id: zone-empty-r
+    sheetID: default-map_3x3
+    tileSize:
+      width: 3
+      height: 3
+    variants:
+    - row: 2
+      column: 0
+      frames: 1
