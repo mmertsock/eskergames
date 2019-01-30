@@ -183,19 +183,24 @@ mainMapView:
   - tileWidth: 1
     allowGrid: false
     allowAnimation: false
+    showBorder: false
   - tileWidth: 3
     allowGrid: false
     allowAnimation: false
+    showBorder: false
   - tileWidth: 6
     allowGrid: true
     allowAnimation: true
+    showBorder: true
   - tileWidth: 12
     isDefault: true
     allowGrid: true
     allowAnimation: true
+    showBorder: true
   - tileWidth: 24
     allowGrid: true
     allowAnimation: true
+    showBorder: true
 
 controlPanelView:
   fillStyle: *PANELFILL
@@ -461,7 +466,7 @@ themes:
     tileWidth: 1
     imageSize:
       width: 4
-      height: 142
+      height: 147
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_2.png
     tileSize:
@@ -470,7 +475,7 @@ themes:
     tileWidth: 2
     imageSize:
       width: 8
-      height: 284
+      height: 294
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_3.png
     tileSize:
@@ -479,7 +484,7 @@ themes:
     tileWidth: 3
     imageSize:
       width: 12
-      height: 426
+      height: 441
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_6.png
     tileSize:
@@ -488,7 +493,7 @@ themes:
     tileWidth: 6
     imageSize:
       width: 24
-      height: 852
+      height: 882
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_12.png
     tileSize:
@@ -497,7 +502,7 @@ themes:
     tileWidth: 12
     imageSize:
       width: 48
-      height: 1704
+      height: 1764
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_24.png
     tileSize:
@@ -506,7 +511,7 @@ themes:
     tileWidth: 24
     imageSize:
       width: 96
-      height: 3408
+      height: 3528
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_48.png
     tileSize:
@@ -515,7 +520,7 @@ themes:
     tileWidth: 48
     imageSize:
       width: 192
-      height: 6816
+      height: 7056
   - id: default-map_3x3
     path: spritesheets/default-map_3x3_3.png
     tileSize:
@@ -580,7 +585,7 @@ themes:
       width: 144
       height: 432
   sprites:
-  - id: terrain-dirt
+  - id: terrain-border-beach-edge
     sheetID: default-map_1x1
     tileSize:
       width: 1
@@ -592,7 +597,73 @@ themes:
     - row: 0
       column: 1
       frames: 1
-    - row: 0
+  - id: terrain-border-dirt-corner
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 1
+      column: 0
+      frames: 1
+    - row: 1
+      column: 1
+      frames: 1
+    - row: 1
+      column: 2
+      frames: 1
+  - id: terrain-border-dirt-edge
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 2
+      column: 0
+      frames: 1
+    - row: 2
+      column: 1
+      frames: 1
+  - id: terrain-border-water-corner
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 3
+      column: 0
+      frames: 1
+    - row: 3
+      column: 1
+      frames: 1
+    - row: 3
+      column: 2
+      frames: 1
+  - id: terrain-border-water-edge
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 4
+      column: 0
+      frames: 1
+    - row: 4
+      column: 1
+      frames: 1
+  - id: terrain-dirt
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 5
+      column: 0
+      frames: 1
+    - row: 5
+      column: 1
+      frames: 1
+    - row: 5
       column: 2
       frames: 1
   - id: terrain-forest
@@ -601,21 +672,6 @@ themes:
       width: 1
       height: 1
     variants:
-    - row: 1
-      column: 0
-      frames: 4
-    - row: 2
-      column: 0
-      frames: 4
-    - row: 3
-      column: 0
-      frames: 4
-    - row: 4
-      column: 0
-      frames: 4
-    - row: 5
-      column: 0
-      frames: 4
     - row: 6
       column: 0
       frames: 4
@@ -742,12 +798,6 @@ themes:
     - row: 47
       column: 0
       frames: 4
-  - id: terrain-freshwater
-    sheetID: default-map_1x1
-    tileSize:
-      width: 1
-      height: 1
-    variants:
     - row: 48
       column: 0
       frames: 4
@@ -763,6 +813,12 @@ themes:
     - row: 52
       column: 0
       frames: 4
+  - id: terrain-freshwater
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
     - row: 53
       column: 0
       frames: 4
@@ -889,12 +945,6 @@ themes:
     - row: 94
       column: 0
       frames: 4
-  - id: terrain-ocean
-    sheetID: default-map_1x1
-    tileSize:
-      width: 1
-      height: 1
-    variants:
     - row: 95
       column: 0
       frames: 4
@@ -910,6 +960,12 @@ themes:
     - row: 99
       column: 0
       frames: 4
+  - id: terrain-ocean
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
     - row: 100
       column: 0
       frames: 4
@@ -1034,6 +1090,21 @@ themes:
       column: 0
       frames: 4
     - row: 141
+      column: 0
+      frames: 4
+    - row: 142
+      column: 0
+      frames: 4
+    - row: 143
+      column: 0
+      frames: 4
+    - row: 144
+      column: 0
+      frames: 4
+    - row: 145
+      column: 0
+      frames: 4
+    - row: 146
       column: 0
       frames: 4
   - id: zone-empty-c
