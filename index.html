@@ -6,7 +6,17 @@
     <link rel="icon" href="city-icon-192.png">
     <link rel="apple-touch-icon" href="city-icon-180.png">
     <script>
-        window.citySimInitOptions = { initGame: false };
+        let readyItems = new Set();
+        let cityReady = function(type) {
+            readyItems.add(type);
+            if (readyItems.has("index.js") && readyItems.has("city.js")) {
+                CitySimIndex.initialize();
+            }
+        }
+        window.citySimInitOptions = {
+            initGame: false,
+            onReady: () => cityReady("city.js")
+        };
     </script>
     <script defer src="js-yaml.min.js"></script>
     <script defer src="g.js"></script>
@@ -321,7 +331,7 @@ section#background {
                 <nav>
                     <a class="showGameList" href="city.html">Load Game</a>
                     <a id="newGame" class="odd" href="city.html?new=1">Start New Game</a>
-                    <a id="painter" href="painter.html">Painter</a>
+                    <a id="sprites" href="sprites.html">Sprite Tool</a>
                     <!-- a id="unitTests" class="odd" href="tests.html">Unit Tests</a -->
                     <a class="showTerrainList" class="odd" href="terrain.html">Terrains</a>
                 </nav>

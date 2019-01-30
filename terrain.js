@@ -42,6 +42,7 @@ const SelectableList = Gaming.SelectableList;
 const UndoStack = Gaming.UndoStack;
 const Vector = Gaming.Vector;
 
+const BorderPainter = CitySim.BorderPainter;
 const CityMap = CitySim.CityMap;
 const MapLayer = CitySim.MapLayer;
 const GameContent = CitySimContent.GameContent;
@@ -1026,6 +1027,7 @@ class SpriteMapLayerView {
         Kvo.stopObservations(this);
     }
 
+    get map() { return this.mapView.model.session.map; }
     get allowAnimation() { return this.mapView.zoomLevel.allowAnimation; }
 
     zoomLevelChanged() {
@@ -1040,7 +1042,6 @@ class SpriteMapLayerView {
                     tileSpacing: 0
                 });
             }
-            // this.tilePlane = new TilePlane(this.canvasGrid.tileSize);
             this.updateTiles();
         }, 100);
     }
@@ -1088,28 +1089,24 @@ class SpriteMapLayerView {
 
         frameCounter = this.isAnimated ? frameCounter : 0;
         let ctx = this.canvas.getContext("2d", { alpha: true });
-        // if (!this._dirtyAnimatedOnly) {
-            this.clear(ctx, this.canvasGrid.rectForFullCanvas);
-        // }
+        // if (!this._dirtyAnimatedOnly)
+        this.clear(ctx, this.canvasGrid.rectForFullCanvas);
 
         if (this.borderPainter && this.mapView.zoomLevel.showBorder) {
             this.borderPainter.render(ctx, this, frameCounter);
         }
 
         let store = SpritesheetStore.mainMapStore;
-        let count = 0;
         this.tiles.forEach(tile => {
-            if (this.shouldRender(tile)) {
-                // if (this._dirtyAnimatedOnly) {
+            // if (this.shouldRender(tile)) {
+                // if (this._dirtyAnimatedOnly)
                 //     this.clear(ctx, tile.screenRect(this.canvasGrid));
-                // }
-                count += 1;
                 tile.render(ctx, this.canvasGrid, store, frameCounter);
-            }
+            // }
         });
 
         if (this.gridPainter) {
-            this.gridPainter.render(ctx, this.mapView.model.session.map, this.canvasGrid, this.mapView.zoomLevel);
+            this.gridPainter.render(ctx, this.map, this.canvasGrid, this.mapView.zoomLevel);
         }
 
         this._dirty = false;
@@ -1130,82 +1127,6 @@ class SpriteMapLayerView {
         } else {
             ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
         }
-    }
-}
-
-class BorderPainter {
-    constructor(store) {
-        this.store = store;
-    }
-
-    //  3|  
-    //  2|  ###1
-    //  1|  ###2
-    //  0|  ###2
-    // -1|  5443
-    // -2|
-    //  y -------
-    //   x2101234
-    // #: map area (3x3)
-    // 1: NE corner  (width, height - 1)
-    // 2: E edge:    (width, 0...height - 2)
-    // 3: SE corner: (width, -1)
-    // 4: S edge     (1...width - 1, -1)
-    // 5: SW corner  (0, -1)
-    // Render order here is backward: depicting a plane perpendicular to the rest of the map
-    render(ctx, layerView, frameCounter) {
-        let map = layerView.mapView.model.session.map;
-        let terrainLayer = map.terrainLayer;
-        if (map.size.width < 1 || map.size.height < 1) { return; }
-
-        // SE corner
-        this.renderTile(ctx, "corner", 1, new Point(map.size.width, -1), directions.NW, layerView, frameCounter);
-        // S edge
-        for (let x = map.size.width - 1; x > 0; x -= 1) {
-            this.renderTile(ctx, "edge", 1, new Point(x, -1), directions.N, layerView, frameCounter);
-        }
-        // SW corner
-        this.renderTile(ctx, "corner", 2, new Point(0, -1), directions.N, layerView, frameCounter);
-        // E edge
-        for (let y = 0; y < map.size.height - 1; y += 1) {
-            this.renderTile(ctx, "edge", 0, new Point(map.size.width, y), directions.W, layerView, frameCounter);
-        }
-        // NE corner
-        this.renderTile(ctx, "corner", 0, new Point(map.size.width, map.size.height - 1), directions.W, layerView, frameCounter);
-    }
-
-    renderTile(ctx, borderType, variantKey, point, neighborDirection, layerView, frameCounter) {
-        let terrainLayer = layerView.mapView.model.session.map.terrainLayer;
-        let neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[neighborDirection].offsettingPosition(point));
-        if (!neighbor) {
-            once("no neighbor", () => debugWarn(["no neighbor found", point.debugDescription, neighborDirection, Vector.unitsByDirection[neighborDirection].offsettingPosition(point).debugDescription])); return;
-        }
-
-        let terrainType = neighbor.type.isWater ? "water" : "dirt";
-        if (neighborDirection == directions.N && borderType == "edge" && neighbor.type.isWater) {
-            neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[directions.NE].offsettingPosition(point));
-            if (!!neighbor && neighbor.type.isLand) {
-                terrainType = "beach";
-                variantKey = 1;
-            }
-            neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[directions.NW].offsettingPosition(point));
-            if (!!neighbor && neighbor.type.isLand) {
-                terrainType = "beach";
-                variantKey = 0;
-            }
-        }
-
-        let sprite = this.store.getSprite(`terrain-border-${terrainType}-${borderType}`, variantKey);
-        if (!sprite) {
-            once("no sprite", () => debugLog(["no sprite", `terrain-border-${terrainType}-${borderType}`, variantKey])); return;
-        }
-        let tileWidth = layerView.canvasGrid.tileWidth;
-        let sheet = this.store.getSpritesheet(sprite.sheetID, tileWidth);
-        if (!sheet) {
-            once("no sheet", () => debugLog(["no sheet", sprite.sheetID, tileWidth])); return;
-        }
-        let rect = layerView.canvasGrid.rectForTile(layerView.tilePlane.screenTileForModel(point));
-        sheet.renderSprite(ctx, rect, sprite, frameCounter);
     }
 }
 

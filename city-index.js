@@ -247,10 +247,15 @@ class LoadGameMenu {
     }
 }
 
+function initialize() {
+    CitySim.loadMenu = new CitySimIndex.LoadGameMenu();
+}
+
 return {
+    initialize: initialize,
     LoadGameMenu: LoadGameMenu
 };
 
 })(); // end CitySim namespace
 
-CitySim.loadMenu = new CitySimIndex.LoadGameMenu();
+cityReady("index.js");

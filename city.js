@@ -376,76 +376,6 @@ class Plot {
 
 // ########################### MAP/GAME #######################
 
-    /*
-performance for 128x128 map:
-full edgeVariants array: 350 ms
-disabling _edgeVariants and just returning a single hard-coded terrain_x painter with random variantKey: 213 ms
-...with zero variantKey (disabling the more complex edge painters): 227 ms.
-So, doing 128x128 painters in general seems to be the slow thing. Even using the "blank" landform is 212 ms.
-Blank landform, change dirt painter to a single fillrect: 93 ms.
-So, I think we need to compile the painters.
-
-
-TODO try this:
-replace ScriptPainter with a hard-coded class that has hard-coded lines of JS for the four rects that the dirt painter paints.
-if that performs faster, then the perf bottleneck could be the line parsing that compiled scripts would improve.
-if it doesn't, then the perf bottleneck might be the sheer number of canvasrenderingcontext2d commands,
-or it could be related to scriptpainterstore stuff, or?
-painter.html, the real terrain_dirt: 100 iterations: 61 ms total, 0.61 ms average
-
-hm stubbed ScriptPainter and commented out *all* stuff in render(), and still got 64 ms total for 100 iterations.
-So the perf test in painter.html seems to show a *lot* of overhead that is completely outside of ScriptPainter.render.
-ok the checker background was most of the time.
-
-properly optimized perf test (no checkered background stuff):
-1-3 ms total, 0.01-0.03 ms avg for a fully stubbed out empty ScriptPainter.
-6-8 ms total, 0.06-0.08 ms avg for a fully hard-coded terrain_dirt painter
-10-13 ms total, 0.10-0.13 ms avg for the current dynamic line-parsing terrain_dirt painter.
-...which could easily add up to a couple of seconds for a 128x128 map.
-Goal is < 16 ms to render an entire 128x128 map, which means 
-1600 ms for 16384 iterations or 0.1 ms for 100 iteration perf test.
-or 1 ms for 1000 iteration perf test for more precision.
-softer goal: maybe render 64x64 at 60 fps, which means 4 ms for 1000 iterations.
-
-oh also the iterations was inaccurate bc it was rendering to 3 canvases. fixing that.
-
-Getting 30 ms for 1000 iterations of full dynamic terrain_dirt ScriptPainter. OOOOF
-Need to get it to 13% that time, aka 87% reduction, aka 8x faster, for minimum goal.
-20 ms for hard-coded terrain_dirt: so compiling may give 67% time, 33% reduction, 1.5x faster.
-
-back to terrain and edgeVariants and stuff. hard-coded stub ScriptPainter:
-- 230 ms with full _edgeVariants calculation and painting
-- 215 ms with _edgeVariants calculation but then hard-code 2 variants
-- 120 ms with 2 hard-coded variants
-- 150 ms with single hard-coded variant0 (_edgeVariants call avoided entirely).
-So, the number of painters isn't a big difference at this point.
-
-The edgeVariants calculation itself is definitely a big thing. So pre-calculating should make a big difference.
-Could calculate and cache once per tile on the fly. No need to store it in the save state.
-Caching edgeVariants value in TerrainTile: 257 ms -> 206 ms.
-
-Main bottleneck still seems to be the painting itself.
-Which means, need to focus on:
-- more efficient painting primitives
-- painting only the tiles needed, when needed
-
-Note that if it weren't for animation, could render the entire terrain to a static image.
-With animation, if total unique number of frames is small, could cache each possible frame on the fly 
-to a static image.
-Caching an entire 128x128 canvas offscreen: 2ms render time for the whole thing.
-So yeah that's a nice way to avoid the performance problem for now.
-
-Next steps:
-map/terrain thing is getting hacky and messy.
-Start over with a new map class and just throw out the old one.
-
-
-TRY: following the optimization strategies here https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas
-
-TODO read https://developer.mozilla.org/en-US/docs/Games/Techniques/Tilemaps
-
-    */
-
 class TerrainType {
     static fromDeserializedWrapper(data, schemaVersion) {
         let existing = TerrainType.all[data];
@@ -657,7 +587,7 @@ class TerrainTile extends MapTile {
             // return [{ id: "terrain_trees", variantKey: 0 }];
             return this._edgeVariants("trees", i => !i.tile.type.has(TerrainType.flags.trees));
         } else {
-            return [new PainterInfo("terrain_dirt", PainterInfo.pseudoRandomVariantKey("terrain_dirt", this.point))];
+            return new PainterInfoList([new PainterInfo("terrain_dirt", PainterInfo.pseudoRandomVariantKey("terrain_dirt", this.point))], _1x1);
         }
     }
 
@@ -679,7 +609,7 @@ class TerrainTile extends MapTile {
         var variants = [0].concat(firstBatch).concat(secondBatch)
             .map(i => new PainterInfo(id, i));
         // return [{ id: id, variantKey: 0 }, { id: id, variantKey: 1 }];
-        return variants;
+        return new PainterInfoList(variants, _1x1);
     }
 }
 
@@ -692,15 +622,37 @@ class PlotTile extends MapTile {
         super(point, layer);
         this._plot = null;
         this.isPaintOrigin = false;
+        this._painterInfoList = null;
     }
 
     get plot() { return this._plot; }
     set plot(value) {
         this._plot = value;
         this.isPaintOrigin = value ? value.isPaintOrigin(this.point) : false;
+        this._painterInfoList = null;
+        if (this._plot) {
+            debugLog([this._plot, this.isPaintOrigin, this.painterInfoList]);
+        }
     }
 
     get objectForSerialization() { return 0; }
+
+    get painterInfoList() {
+        if (this._painterInfoList) { return this._painterInfoList; }
+        this._painterInfoList = this._makePainterInfoList(this._plot);
+        return this._painterInfoList;
+    }
+
+    _makePainterInfoList(plot) {
+        if (!plot || !this.isPaintOrigin) { return new PainterInfoList([]); }
+        let id = null;
+        switch (plot.item.constructor.name) {
+            case Zone.name: id = `zone${plot.item.type}d0v0`; break;
+            case TerrainProp.name: id = `prop${plot.item.type}`; break;
+            default: return new PainterInfoList([]);
+        }
+        return new PainterInfoList([new PainterInfo(id, PainterInfo.safeVariantKey(id, plot.data.variantKey))], plot.bounds.size);
+    }
 }
 
 // Closely managed by CityMap
@@ -1979,10 +1931,6 @@ class RootView {
         this.views = [];
     }
 
-    get recentCachePerformance() {
-        return this.mapRenderer._terrainRenderer ? this.mapRenderer._terrainRenderer.offscreenRenderer.recentCachePerformance : null;
-    }
-
     setUp() {
         this._configureCommmands();
         var storage = GameStorage.shared;
@@ -2286,11 +2234,6 @@ class GameEngineControlsView {
             rates.push(Strings.template("uiFpsLabel", { value: Math.round(uiFrameRate), load: Number.uiPercent(uiLoad) }));
         }
 
-        let recentCachePerformance = CitySim.rootView.recentCachePerformance;
-        if (recentCachePerformance) {
-            rates.push(Strings.template("tileCachePerfLabel", { ratio: Number.uiPercent(recentCachePerformance.ratio), cacheSize: recentCachePerformance.cacheSize }));
-        }
-
         var engineFrameRate = engineRunLoop.getRecentMillisecondsPerFrame();
         if (!isNaN(engineFrameRate)) {
             rates.push(Strings.template("engineMsPerDayLabel", { value: Math.round(engineFrameRate) }));
@@ -2447,8 +2390,9 @@ class MapRenderer {
         if (!this.game) { return; }
         var ctx = this.drawContext;
         this._terrainRenderer.render(ctx, this.settings);
-        var r = this._plotRenderer;
-        this.game.city.map.visitEachPlot(plot => r.render(plot, ctx));
+        this._plotRenderer.render(ctx);
+        // var r = this._plotRenderer;
+        // this.game.city.map.visitEachPlot(plot => r.render(plot, ctx));
         this._toolRenderer.render(ctx);
     }
 }
@@ -2480,156 +2424,79 @@ class GridPainter {
     }
 }
 
-class OffscreenRenderer {
-    constructor(config) {
-        this.canvasGrid = config.canvasGrid;
-        this.store = ScriptPainterStore.shared;
-        this.metrics = null;
-        this.offscreenCanvas = document.createElement("canvas");
-        this.cache = {};
-        this.cachePerformance = new CircularArray(100);
+class BorderPainter {
+    constructor(store) {
+        this.store = store;
     }
 
-    get recentCachePerformance() {
-        if (this.cachePerformance.size < 5) return null;
-        let total = 0;
-        let cached = 0;
-        let cacheSize = 0;
-        for (var i = 0; i < this.cachePerformance.size; i += 1) {
-            let item = this.cachePerformance.getValue(i);
-            total += item.total;
-            cached += item.cached;
-            cacheSize = item.cacheSize;
+    //  3|  
+    //  2|  ###1
+    //  1|  ###2
+    //  0|  ###2
+    // -1|  5443
+    // -2|
+    //  y -------
+    //   x2101234
+    // #: map area (3x3)
+    // 1: NE corner  (width, height - 1)
+    // 2: E edge:    (width, 0...height - 2)
+    // 3: SE corner: (width, -1)
+    // 4: S edge     (1...width - 1, -1)
+    // 5: SW corner  (0, -1)
+    // Parameter view: should have getters: map, canvasGrid, and tilePlane
+    // Render order here is backward: depicting a plane perpendicular to the rest of the map
+    render(ctx, view, frameCounter) {
+        let map = view.map;
+        if (map.size.width < 1 || map.size.height < 1) { return; }
+
+        // SE corner
+        this.renderTile(ctx, "corner", 1, new Point(map.size.width, -1), directions.NW, view, frameCounter);
+        // S edge
+        for (let x = map.size.width - 1; x > 0; x -= 1) {
+            this.renderTile(ctx, "edge", 1, new Point(x, -1), directions.N, view, frameCounter);
         }
-        if (total == 0) return null;
-        let info = { ratio: cached / total, cacheSize: cacheSize };
-        return info;
+        // SW corner
+        this.renderTile(ctx, "corner", 2, new Point(0, -1), directions.N, view, frameCounter);
+        // E edge
+        for (let y = 0; y < map.size.height - 1; y += 1) {
+            this.renderTile(ctx, "edge", 0, new Point(map.size.width, y), directions.W, view, frameCounter);
+        }
+        // NE corner
+        this.renderTile(ctx, "corner", 0, new Point(map.size.width, map.size.height - 1), directions.W, view, frameCounter);
     }
 
-    beginFrame() {
-        this.frameInfo = { total: 0, cached: 0, cacheSize: 0 };
-        this._updateMetrics();
-    }
-
-    render(ctx, rect, info) {
-        let cached = this.cache[info.uniqueID];
-        this.frameInfo.total += 1;
-        if (cached) {
-            this.frameInfo.cached += 1;
-            this._copyImageToRect(ctx, rect, cached);
-            return;
+    renderTile(ctx, borderType, variantKey, point, neighborDirection, view, frameCounter) {
+        let terrainLayer = view.map.terrainLayer;
+        let neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[neighborDirection].offsettingPosition(point));
+        if (!neighbor) {
+            once("no neighbor", () => debugWarn(["no neighbor found", point.debugDescription, neighborDirection, Vector.unitsByDirection[neighborDirection].offsettingPosition(point).debugDescription])); return;
         }
 
-        let item = this._makeItem(info, rect);
-        info.getPainterSession(this.store).render(this.offscreenCtx, new Rect(item.origin, rect.size), this.canvasGrid, {});
-        this.cache[info.uniqueID] = item;
-        this._copyImageToRect(ctx, rect, item);
-    }
-
-    endFrame() {
-        this.frameInfo.cacheSize = Object.getOwnPropertyNames(this.cache).length;
-        this.cachePerformance.push(this.frameInfo);
-    }
-
-    clear() {
-        this.offscreenCtx.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
-        this.nextOrigin = new Point(0, 0);
-        this.rowHeight = 0;
-        this.size = { width: 0, height: 0 };
-        this.cache = {};
-        this.cachePerformance.reset();
-    }
-
-    get offscreenCtx() { return this.offscreenCanvas.getContext("2d", { alpha: true }); }
-
-    _makeItem(info, rect) {
-        if (this.nextOrigin.x + rect.width >= this.offscreenCanvas.width) {
-            this.nextOrigin = new Point(0, this.nextOrigin.y + this.rowHeight);
-            this.rowHeight = 0;
+        let terrainType = neighbor.type.isWater ? "water" : "dirt";
+        if (neighborDirection == directions.N && borderType == "edge" && neighbor.type.isWater) {
+            neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[directions.NE].offsettingPosition(point));
+            if (!!neighbor && neighbor.type.isLand) {
+                terrainType = "beach";
+                variantKey = 1;
+            }
+            neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[directions.NW].offsettingPosition(point));
+            if (!!neighbor && neighbor.type.isLand) {
+                terrainType = "beach";
+                variantKey = 0;
+            }
         }
-        let item = { info: info, origin: new Point(this.nextOrigin) };
-        this.nextOrigin.x += rect.width;
-        this.rowHeight = Math.max(this.rowHeight, rect.height);
-        this.size.width = Math.max(this.size.width, this.nextOrigin.x);
-        this.size.height = Math.max(this.size.height, this.nextOrigin.y + this.rowHeight);
-        // debugLog(`Reserved item ${info.uniqueID} at ${item.origin.debugDescription} for ${rect.debugDescription}; new size ${this.size.width}x${this.size.height}`);
-        return item;
-    }
 
-    _copyImageToRect(ctx, rect, item) {
-        ctx.drawImage(this.offscreenCanvas,
-            item.origin.x, item.origin.y, rect.width, rect.height,
-            rect.x, rect.y, rect.width, rect.height);
-    }
-
-    _updateMetrics() {
-        let newValue = `${this.canvasGrid.tileWidth}|${this.canvasGrid.canvas.width}|${this.canvasGrid.canvas.height}`;
-        if (newValue == this.metrics) return;
-        // debugLog(`OffscreenRenderer: resetting metrics to ${newValue}`);
-        this.metrics = newValue;
-        this.offscreenCanvas.width = this.canvasGrid.canvas.width;
-        this.offscreenCanvas.height = this.canvasGrid.canvas.height;
-        this.clear();
-    }
-}
-
-class TerrainRenderer {
-    constructor(config) {
-        this.canvasGrid = config.canvasGrid;
-        this.mapSource = config.mapSource;
-        this.offscreenRenderer = new OffscreenRenderer({ canvasGrid: config.canvasGrid });
-        debugLog(this.offscreenRenderer);
-    }
-
-    render(ctx, settings) {
-        let count = 0;
-        this.offscreenRenderer.beginFrame();
-
-        ctx.fillStyle = settings.edgePaddingFillStyle;
-        ctx.rectFill(this.canvasGrid.rectForFullCanvas);
-        if (!this.mapSource) { return; }
-        let map = this.mapSource.map;
-        ctx.fillStyle = settings.emptyFillStyle;
-        let size = map.tilePlane.size;
-        ctx.rectFill(this.canvasGrid.rectForTileRect(map.tilePlane.screenRectForModel(new Rect(0, 0, size.width, size.height))));
-
-        let visibleRect = map.tilePlane.modelRectForScreen(new Rect(0, 0, this.canvasGrid.tileSize.width, this.canvasGrid.tileSize.height));
-        map.terrainLayer.visitTiles(visibleRect, tile => {
-            let rect = this.canvasGrid.rectForTile(map.tilePlane.screenTileForModel(tile.point));
-            if (!rect) { return; }
-            count += 1;
-            tile.painterInfoList.forEach(item => {
-                this.offscreenRenderer.render(ctx, rect, item);
-            });
-        });
-
-        this.offscreenRenderer.endFrame();
-        return count;
-    }
-}
-
-// Could reuse this, with different settings, for 
-// minimaps and stuff.
-class PlotRenderer {
-    constructor(config) {
-        this.canvasGrid = config.canvasGrid;
-        this.game = config.game;
-    }
-    render(plot, ctx) {
-        var rect = this.canvasGrid.rectForTileRect(plot.bounds);
-        var painter = this._getPainterSession(plot, ScriptPainterStore.shared);
-        painter.render(ctx, rect, this.canvasGrid, plot.textTemplateInfo);
-    }
-
-    _getPainterSession(plot, store) {
-        switch (plot.item.constructor.name) {
-            case Zone.name:
-                var id = `zone${plot.item.type}d0v0`;
-                return store.getPainterSession(id, plot.data.variantKey);
-            case TerrainProp.name:
-                var id = `prop${plot.item.type}`;
-                return store.getPainterSession(id, plot.data.variantKey);
+        let sprite = this.store.getSprite(`terrain-border-${terrainType}-${borderType}`, variantKey);
+        if (!sprite) {
+            once("no sprite", () => debugLog(["no sprite", `terrain-border-${terrainType}-${borderType}`, variantKey])); return;
         }
+        let tileWidth = view.canvasGrid.tileWidth;
+        let sheet = this.store.getSpritesheet(sprite.sheetID, tileWidth);
+        if (!sheet) {
+            once("no sheet", () => debugLog(["no sheet", sprite.sheetID, tileWidth])); return;
+        }
+        let rect = view.canvasGrid.rectForTile(view.tilePlane.screenTileForModel(point));
+        sheet.renderSprite(ctx, rect, sprite, frameCounter);
     }
 }
 
@@ -2702,7 +2569,7 @@ class SpritesheetStore {
         let config = state.remaining.shift();
         // debugLog(`Loading Spritesheet image ${config.path}...`);
         config.image = new Image();
-        config.image.src = config.path;
+        config.image.src = `${config.path}?bustCache=${Date.now()}`;
         config.image.decode()
             .then(() => {
                 state.completed.push(new Spritesheet(config));
@@ -2781,7 +2648,7 @@ class Spritesheet {
         this.imageBounds = new Rect(new Point(0, 0), config.imageSize) // in device pixels
     }
 
-    renderSprite(ctx, rect, sprite, tileWidth, frameCounter) {
+    renderSprite(ctx, rect, sprite, frameCounter) {
         let src = this.sourceRect(sprite, frameCounter);
         if (!this.imageBounds.contains(src)) {
             once("oob" + sprite.uniqueID, () => debugWarn(`Sprite ${sprite.uniqueID} f${frameCounter} out of bounds in ${this.debugDescription}: ${src.debugDescription}`));
@@ -2849,7 +2716,7 @@ class SpriteRenderModel {
             once("nosheet" + this.sprite.sheetID, () => debugWarn(`No Spritesheet found for ${this.debugDescription}`));
             return;
         }
-        sheet.renderSprite(ctx, this.screenRect(canvasGrid), this.sprite, this.tileWidth, frameCounter);
+        sheet.renderSprite(ctx, this.screenRect(canvasGrid), this.sprite, frameCounter);
     }
     get debugDescription() {
         return `<@(${this.modelRect.x}, ${this.modelRect.y}) #${this.sprite.uniqueID} w${this.tileWidth} o${this.drawOrder}>`;
@@ -2970,10 +2837,28 @@ class ScriptPainterSession {
     }
 }
 
+class PainterInfoList {
+    constructor(items, size) {
+        this.items = items;
+        if (items.length == 0) {
+            this.uniqueID = "(empty)";
+        } else {
+            this.uniqueID = `${items.map(item => item.uniqueID).join("|")}|${size.width}|${size.height}`;
+        }
+    }
+    isEqual(other) {
+        return other && this.uniqueID == other.uniqueID;
+    }
+}
+
 class PainterInfo {
     static pseudoRandomVariantKey(painterID, point) {
         let count = ScriptPainterStore.shared.getVariantCount(painterID);
         return hashArrayOfInts([point.x, point.y]) % count;
+    }
+
+    static safeVariantKey(painterID, value) {
+        return value % ScriptPainterStore.shared.getVariantCount(painterID);
     }
 
     constructor(painterID, variantKey) {
@@ -3194,7 +3079,7 @@ class ScriptPainterStore {
         var data = GameContent.shared.painters[id];
         if (!data) { return null; }
         var variants = data.variants ? data.variants : [data];
-        var expectedSize = data.expectedSize ? data.expectedSize : { width: 1, height: 1 };
+        var expectedSize = data.expectedSize ? data.expectedSize : _1x1;
         var ds = this.deviceScale;
         this.cache[id] = variants.map(v => new ScriptPainter({ lines: v, expectedSize: expectedSize, deviceScale: ds }));
         return this.getPainter(id, variantKey)
@@ -3452,6 +3337,7 @@ return {
     citySimInitOptions: citySimInitOptions,
     rootView: rootView,
     uiRunLoop: uiRunLoop,
+    BorderPainter: BorderPainter,
     Budget: Budget,
     City: City,
     CityMap: CityMap,
@@ -3480,7 +3366,6 @@ return {
     SpritesheetTheme: SpritesheetTheme,
     Strings: Strings,
     Terrain: Terrain,
-    TerrainRenderer: TerrainRenderer,
     TerrainSpriteSource: TerrainSpriteSource,
     TerrainTile: TerrainTile,
     TerrainType: TerrainType,
