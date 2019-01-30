@@ -2,11 +2,11 @@
 
 /*
 TODOs
-- Think about tile coordinates. Bottom left = (0,0) may be more sane for stuff like directions, edges, etc., and also it makes more sense to the end user
 - Smoothing property for RandomLineGenerator: number of previous generations to average
 - Smoother riverbanks
 - Whenever regenerating, encode the raw parameters + RNG seed into a hex value, store that 
   with the terrain, so you can use that key to recreate the random map.
+    https://github.com/davidbau/seedrandom#saving-and-restoring-prng-state
 
 
 Preserving salt water after edits:
@@ -20,14 +20,6 @@ salt flag. The Terrain Options dialogue (setting name and stuff) has
 four switches to toggle the salt flag for each edge (when off, could
 set the depth value to negative to preserve it for future use but
 indicate it’s disabled).
-
-Trees as a layer on top of other terrain elements and plots. When a
-tree tile is not an edge in a given direction, could paint a few trees
-right next to the tile border. Keep these trees if you build a road or
-plop an empty zone or something. Certain buildings could preserve the
-trees. Hm maybe best way do do this is to implement the trees as
-individual props above the base forest tile. Delete the forest tile
-when building anything but preserve any tree props that don’t collide.
 
 */
 
@@ -59,18 +51,21 @@ const GameStorage = CitySim.GameStorage;
 const GridPainter = CitySim.GridPainter;
 const InputView = CitySim.InputView;
 const MapRenderer = CitySim.MapRenderer;
+const MapTile = CitySim.MapTile;
 const ScriptPainterStore = CitySim.ScriptPainterStore;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
 const Sprite = CitySim.Sprite;
+const SpriteRenderModel = CitySim.SpriteRenderModel;
 const Spritesheet = CitySim.Spritesheet;
 const SpritesheetStore = CitySim.SpritesheetStore;
 const SpritesheetTheme = CitySim.SpritesheetTheme;
 const Strings = CitySim.Strings;
 const Terrain = CitySim.Terrain;
-const TerrainRenderer = CitySim.TerrainRenderer;
+const TerrainSpriteSource = CitySim.TerrainSpriteSource;
 const TerrainTile = CitySim.TerrainTile;
 const TerrainType = CitySim.TerrainType;
 const TextInputView = CitySim.TextInputView;
+const TextLineView = CitySim.TextLineView;
 const ToolButton = CitySim.ToolButton;
 const ZoomSelector = CitySim.ZoomSelector;
 
@@ -557,6 +552,8 @@ class ReplaceMapAction {
 }
 
 class EditSession {
+    static Kvo() { return { "changeToken": "changeToken" }; }
+
     static quit(prompt) {
         if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
             window.location = "index.html";
@@ -590,7 +587,6 @@ class EditSession {
         // TODO
     }
 }
-EditSession.Kvo = { "changeToken": "changeToken" };
 
 class RootView {
     constructor() {
@@ -763,82 +759,58 @@ class TerrainView {
     constructor() {
         this.session = null;
         this.elem = document.querySelector("map.mainMap");
-        this.canvas = document.createElement("canvas");
-        this.elem.append(this.canvas);
-        this.canvasGrid = null;
-        this._terrainRenderer = null;
-        this._dirty = true;
+        this._mapView = null;
 
         let zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
         this.zoomSelection = new SelectableList(zoomers);
         this.zoomSelection.setSelectedIndex(2);
 
         this._configureCommmands();
-        this.setDirty();
-        CitySimTerrain.uiRunLoop.addDelegate(this);
     }
 
     setUp(session) {
         this.session = session;
-        this.canvasGrid = new FlexCanvasGrid({
-            canvas: this.canvas,
-            deviceScale: FlexCanvasGrid.getDevicePixelScale(),
-            tileWidth: this.zoomLevel.tileWidth,
-            tileSpacing: 0
+        this._mapView = new SpriteMapView({
+            model: new MapViewModel({ session: this.session }),
+            elem: this.elem,
+            zoomLevel: this.zoomLevel,
+            runLoop: CitySimTerrain.uiRunLoop
         });
-        this.gridPainter = new GridPainter(this.settings);
-
-        this._terrainRenderer = new TerrainRenderer({ canvasGrid: this.canvasGrid, mapSource: session });
-
-        this.session.kvo.changeToken.addObserver(this, () => this.setDirty());
-        this.setDirty();
     }
 
-    setDirty() { this._dirty = true; }
-
     get settings() { return GameContent.shared.mainMapView; }
-    get drawContext() { return this.canvas.getContext("2d", { alpha: false }); }
     get zoomLevel() { return this.zoomSelection.selectedItem.value; }
 
     zoomLevelActivated(value) {
-        if (!this.canvasGrid) { return; }
-        this.canvasGrid.setSize({ tileWidth: value.tileWidth, tileSpacing: 0 });
-        this.setDirty();
-    }
-
-    processFrame(rl) {
-        if (!this.session || !this._dirty) { return; }
-        this._dirty = false;
-        let timer = new PerfTimer("TerrainView.processFrame").start();
-        let settings = Object.assign({}, this.settings);
-        settings.edgePaddingFillStyle = "white";
-        let ctx = this.drawContext;
-        let count = this._terrainRenderer.render(ctx, settings);
-        this.gridPainter.render(ctx, this.session.terrain.map, this.canvasGrid, this.zoomLevel);
-        debugLog(`${timer.end().summary}, ${count} tiles rendered`);
-        // debugLog(this._terrainRenderer.offscreenRenderer.frameInfo);
+        if (this._mapView) this._mapView.zoomLevel = value;
     }
 
     _configureCommmands() {
         let gse = GameScriptEngine.shared;
-        gse.registerCommand("rerender", () => this.setDirty());
         gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
         gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
     }
 }
 
 class ControlsView {
+    static Kvo() { return { "fpsInfo": "fpsInfo" }; }
+
     constructor() {
         this.session = null;
+        this.fpsInfo = { timestamp: 0, value: null, load: null };
+        this._dirty = true;
+        this.kvo = new Kvo(this);
+
         this.root = document.querySelector("controls");
         this.buttons = [];
 
         let globalBlock = this.root.querySelector("#global-controls");
+        let viewBlock = this.root.querySelector("#view");
+
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("regenTerrainButtonLabel"), clickScript: "regenerate"}));
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("optionsButtonLabel"), clickScript: "showFileMenu"}));
         this.undoButton = new ToolButton({parent: globalBlock, title: Strings.str("undoButtonLabel"), clickScript: "terrainUndo"});
         this.redoButton = new ToolButton({parent: globalBlock, title: Strings.str("redoButtonLabel"), clickScript: "terrainRedo"});
-        this.buttons.push(new ToolButton({parent: globalBlock, title: "Render", clickScript: "rerender" }));
         this.buttons.push(this.undoButton);
         this.buttons.push(this.redoButton);
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("helpButtonLabel"), clickScript: "showGameHelp"}));
@@ -855,8 +827,15 @@ class ControlsView {
             clickScript: "zoomIn"
         }));
 
+        this.fpsView = new TextLineView({
+            parent: viewBlock,
+            binding: {
+                source: this.kvo.fpsInfo,
+                sourceFormatter: info => info.value ? Strings.template("uiFpsLabel", info) : null
+            }
+        }).configure(view => view.elem.addRemClass("minor", true));;
+
         this._configureCommmands();
-        this._dirty = true;
         CitySimTerrain.uiRunLoop.addDelegate(this);
     }
 
@@ -880,6 +859,16 @@ class ControlsView {
     }
 
     processFrame(rl) {
+        if (rl.latestFrameStartTimestamp() - this.fpsInfo.timestamp >= 2000) {
+            let value = rl.getRecentFramesPerSecond(), load = rl.getProcessingLoad();
+            let isValid = !isNaN(value) && !isNaN(load);
+            this.kvo.fpsInfo.setValue({ 
+                timestamp: rl.latestFrameStartTimestamp(),
+                value: isValid ? Number.uiInteger(value) : null,
+                load: isValid ? Number.uiPercent(load) : null
+            });
+        }
+
         if (!this._dirty) { return; }
         this._dirty = false;
         this.undoButton.isEnabled = !!this.session && this.session.undoStack.canUndo;
@@ -890,6 +879,258 @@ class ControlsView {
         GameScriptEngine.shared.registerCommand("showFileMenu", () => this.showFileMenu());
     }
 }
+
+
+
+class MapViewModel {
+    static Kvo() { return { "layers": "layers" }; }
+
+    constructor(config) {
+        this.layers = [];
+        this.session = config.session;
+        this.kvo = new Kvo(this);
+        this.session.kvo.changeToken.addObserver(this, () => this.reset());
+        this.reset();
+    }
+
+    // So this looks like a CityMap to the view model MapLayers
+    get size() { return this.session.map.size; }
+    get tilePlane() { return this.session.map.tilePlane; }
+
+    reset() {
+        this.layers = [];
+        this.layers.push(new MapLayerViewModel({
+            index: 0,
+            model: this,
+            spriteSource: new TerrainSpriteSource({
+                sourceLayer: this.session.map.terrainLayer,
+                spriteStore: SpritesheetStore.mainMapStore
+            })
+        }));
+        this.kvo.layers.notifyChanged();
+    }
+}
+
+class MapLayerViewModel {
+    static Kvo() { return { "layer": "layer" }; }
+
+    constructor(config) {
+        this.index = config.index;
+        this.model = config.model;
+        this.spriteSource = config.spriteSource;
+        this.kvo = new Kvo(this);
+
+        this.layer = new MapLayer({
+            id: `viewlayer-${config.index}`,
+            map: config.model,
+            tileClass: SpriteTileModel
+        });
+        this.layer.visitTiles(null, tile => {
+            tile.layerModel = this;
+            tile._sprite = this.spriteSource.getSprite(tile.point);
+        });
+    }
+
+    didSetSprite(tile, sprite) {
+        this.kvo.layer.notifyChanged();
+    }
+}
+
+class SpriteTileModel extends MapTile {
+    constructor(point, layer) {
+        super(point, layer);
+        this._sprite = null;
+    }
+
+    get sprite() { return this._sprite; }
+    set sprite(value) {
+        if (this._sprite == value) { return; }
+        this._sprite = value;
+        this.layerModel.didSetSprite(this, value);
+    }
+
+    get spriteRect() {
+        if (!this._sprite) { return null; }
+        return new Rect(this.point, this._sprite.tileSize);
+    }
+}
+
+class SpriteMapView {
+    static Kvo() { return { "frameCounter": "frameCounter", "zoomLevel": "_zoomLevel" }; }
+
+    constructor(config) {
+        this.model = config.model; // MapViewModel
+        this._zoomLevel = config.zoomLevel;
+        this.elem = config.elem;
+        this.layerViews = [];
+        this.millisecondsPerAnimationFrame = 500;
+        this.frameCounter = 0;
+        this.kvo = new Kvo(this);
+
+        this.rebuildLayers();
+        this.model.kvo.layers.addObserver(this, () => this.rebuildLayers());
+        config.runLoop.addDelegate(this);
+    }
+
+    get zoomLevel() { return this._zoomLevel; }
+    set zoomLevel(value) {
+        this.kvo.zoomLevel.setValue(value);
+    }
+
+    rebuildLayers() {
+        this.layerViews.forEach(view => view.remove());
+        this.layerViews = this.model.layers.map(layer => new SpriteMapLayerView({
+            mapView: this,
+            layer: layer,
+            wrap: false,
+            hasGrid: true
+        }));
+    }
+
+    processFrame(rl) {
+        this.updateFrameCounter(rl.latestFrameStartTimestamp());
+        this.layerViews.forEach(view => view.render(this.frameCounter));
+    }
+
+    updateFrameCounter(timestamp) {
+        let value = Math.floor(timestamp / this.millisecondsPerAnimationFrame);
+        if (value == this.frameCounter) return;
+        this.kvo.frameCounter.setValue(value);
+    }
+}
+
+class SpriteMapLayerView {
+    constructor(config) {
+        this.mapView = config.mapView;
+        this.model = config.layer;
+        this.wrap = !!config.wrap;
+        this.tilePlane = this.mapView.model.tilePlane;
+        this.canvas = document.createElement("canvas");
+        this.mapView.elem.append(this.canvas);
+        this.tiles = [];
+        this.isAnimated = false;
+        this._dirty = false;
+        this._dirtyAnimatedOnly = false;
+        if (!!config.hasGrid) {
+            this.gridPainter = new GridPainter(GameContent.shared.mainMapView);
+        }
+
+        this.mapView.kvo.frameCounter.addObserver(this, () => this.setDirty(true));
+        this.mapView.kvo.zoomLevel.addObserver(this, () => this.zoomLevelChanged());
+        this.model.kvo.layer.addObserver(this, () => this.updateTiles());
+
+        this.zoomLevelChanged();
+    }
+
+    remove() {
+        this.canvasGrid = null;
+        this.canvas.remove();
+        Kvo.stopObservations(this);
+    }
+
+    get allowAnimation() { return this.mapView.zoomLevel.allowAnimation; }
+
+    zoomLevelChanged() {
+        setTimeout(() => {
+            if (this.canvasGrid) {
+                this.canvasGrid.setSize({ tileWidth: this.mapView.zoomLevel.tileWidth, tileSpacing: 0 });
+            } else {
+                this.canvasGrid = new FlexCanvasGrid({
+                    canvas: this.canvas,
+                    deviceScale: FlexCanvasGrid.getDevicePixelScale(),
+                    tileWidth: this.mapView.zoomLevel.tileWidth,
+                    tileSpacing: 0
+                });
+            }
+            // this.tilePlane = new TilePlane(this.canvasGrid.tileSize);
+            this.updateTiles();
+        }, 100);
+    }
+
+    updateTiles() {
+        this.isAnimated = false;
+        let tiles = [];
+
+        if (this.wrap) {
+            for (let y = 0; y < this.canvasGrid.tilesHigh; y += 1) {
+                for (let x = 0; x < this.canvasGrid.tilesWide; x += 1) {
+                    let tile = this.model.layer.getTileAtPoint(new Point(x % this.model.layer.size.width, y % this.model.layer.size.height));
+                    if (!!tile && !!tile.sprite) {
+                        let rect = new Rect(new Point(x, y), tile.sprite.tileSize);
+                        tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
+                        this.isAnimated = this.isAnimated || (tile.sprite.isAnimated && this.allowAnimation);
+                    }
+                }
+            }
+        } else {
+            let canvasVisibleRect = new Rect(0, 0, this.canvasGrid.tileSize.width, this.canvasGrid.tileSize.height);
+            let modelVisibleRect = this.tilePlane.modelRectForScreen(canvasVisibleRect);
+            this.model.layer.visitTiles(modelVisibleRect, tile => {
+                if (!!tile.sprite) {
+                    let rect = new Rect(tile.point, tile.sprite.tileSize);
+                    tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
+                    this.isAnimated = this.isAnimated || (tile.sprite.isAnimated && this.allowAnimation);
+                }
+            });
+        }
+
+        tiles.sort((a, b) => a.drawOrder - b.drawOrder);
+        this.tiles = tiles;
+        this.setDirty();
+    }
+
+    setDirty(animatedOnly) {
+        if (!!animatedOnly && !this.isAnimated) return;
+        this._dirty = true;
+        this._dirtyAnimatedOnly = !!animatedOnly;
+    }
+
+    render(frameCounter) {
+        if (!this._dirty || !this.canvasGrid) { return; }
+
+        frameCounter = this.isAnimated ? frameCounter : 0;
+        let ctx = this.canvas.getContext("2d", { alpha: true });
+        // if (!this._dirtyAnimatedOnly) {
+            this.clear(ctx, this.canvasGrid.rectForFullCanvas);
+        // }
+
+        let store = SpritesheetStore.mainMapStore;
+        let count = 0;
+        this.tiles.forEach(tile => {
+            if (this.shouldRender(tile)) {
+                // if (this._dirtyAnimatedOnly) {
+                //     this.clear(ctx, tile.screenRect(this.canvasGrid));
+                // }
+                count += 1;
+                tile.render(ctx, this.canvasGrid, store, frameCounter);
+            }
+        });
+
+        if (this.gridPainter) {
+            this.gridPainter.render(ctx, this.mapView.model.session.terrain.map, this.canvasGrid, this.mapView.zoomLevel);
+        }
+
+        this._dirty = false;
+        this._dirtyAnimatedOnly = false;
+    }
+
+    shouldRender(tile) {
+        // if (this._dirtyAnimatedOnly && !!tile.sprite) {
+        //     return tile.sprite.isAnimated;
+        // }
+        return true;
+    }
+
+    clear(ctx, rect) {
+        if (this.model.index == 0) {
+            ctx.fillStyle = GameContent.shared.mainMapView.outOfBoundsFillStyle;
+            ctx.rectFill(rect);
+        } else {
+            ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
+        }
+    }
+}
+
 
 let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });

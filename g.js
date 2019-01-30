@@ -1121,13 +1121,20 @@ class Kvo {
         target._kvoDT = null;
     }
 
+    static configForClass(item) {
+        if (typeof(item.constructor.Kvo) == 'function') {
+            return item.constructor.Kvo();
+        } else {
+            return item.constructor.Kvo ? item.constructor.Kvo : {};
+        }
+    }
+
     constructor(item) {
         this._obj = item;
         this.eventName = `${item.constructor.name}.kvo`;
-        if (item.constructor.Kvo) {
-            for (var key of Object.getOwnPropertyNames(item.constructor.Kvo)) {
-                this[key] = new KvoProperty(this, item.constructor.Kvo[key]);
-            }
+        let config = Kvo.configForClass(item);
+        for (var key of Object.getOwnPropertyNames(config)) {
+            this[key] = new KvoProperty(this, config[key]);
         }
     }
     addObserver(target, block) {

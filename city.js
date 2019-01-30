@@ -738,7 +738,10 @@ class MapLayer {
         return { tiles: this._tiles.map2D(tile => tile.objectForSerialization) };
     }
 
-    getTileAtPoint(point) { return this._tiles[point.y][point.x]; }
+    getTileAtPoint(point) {
+        let row = this._tiles[point.y];
+        return row ? row[point.x] : null;
+    }
 
     // visits in draw order
     // rect is optional. only visits tiles in the given rect
@@ -814,6 +817,10 @@ class CityMap {
 
     get debugDescription() {
         return `<CityMap ${this.size.width}x${this.size.height} with 0 plots>`;
+    }
+
+    get visibleLayers() {
+        return [this.terrainLayer, this.plotLayer];
     }
 
     isValidCoordinate(x, y) { return this.bounds.containsTile(x, y); }
@@ -2725,7 +2732,7 @@ class SpritesheetStore {
     }
 
     getSprite(id, variantKey) {
-        return this.theme.spriteTable[Sprite.makeUniqueID(id, variantKey)];
+        return this.theme.getSprite(id, variantKey);
     }
 
     getSpritesheet(sheetID, tileWidth) {
@@ -2747,14 +2754,22 @@ class SpritesheetTheme {
         this.isDefault = config.isDefault;
         this.sheetConfigs = config.sheets;
         this.sprites = [];
+        this.spriteCounts = {};
         this.spriteTable = {};
         config.sprites.forEach(item => {
             item.variants.forEach((variant, index) => {
                 let sprite = new Sprite(Object.assign({}, item, variant, {"variantKey": index}));
                 this.spriteTable[sprite.uniqueID] = sprite;
                 this.sprites.push(sprite);
+                this.spriteCounts[sprite.id] = index + 1;
             });
         });
+    }
+
+    getSprite(id, variantKey) {
+        let count = this.spriteCounts[id];
+        if (typeof(count) === 'undefined') return null;
+        return this.spriteTable[Sprite.makeUniqueID(id, variantKey % count)];
     }
 }
 
@@ -2789,6 +2804,12 @@ class Spritesheet {
 }
 
 class Sprite {
+    static edgeVariantKey(edgeScore) {
+        if (edgeScore < 0 || edgeScore >= GameContent.shared.sprites.edgeVariants.length)
+            return 0;
+        return GameContent.shared.sprites.edgeVariants[edgeScore % GameContent.shared.sprites.edgeVariants.length];
+    }
+
     static makeUniqueID(id, variantKey) {
         return `${id}|${variantKey}`;
     }
@@ -2804,6 +2825,10 @@ class Sprite {
         this.tileSize = config.tileSize;
     }
     get isAnimated() { return this.frames > 1; }
+    get debugDescription() {
+        let animation = this.isAnimated ? `fc=${this.frames}` : "!a";
+        return `<Sprite #${this.id}/${this.variantKey} ${animation}>`;
+    }
 
     isEqual(other) {
         return other && other.uniqueID == this.uniqueID;
@@ -2831,6 +2856,46 @@ class SpriteRenderModel {
     }
     screenRect(canvasGrid) {
         return canvasGrid.rectForTileRect(this.screenTileRect);
+    }
+}
+
+class TerrainSpriteSource {
+    constructor(config) {
+        this.sourceLayer = config.sourceLayer;
+        this.store = config.spriteStore;
+    }
+    getSprite(point) {
+        let tile = this.sourceLayer.getTileAtPoint(point);
+        let type = tile.type;
+        if (type.isSaltwater) {
+            return this.edgeSprite("terrain-ocean", tile, n => n.type.isLand);
+        } else if (type.isFreshwater) {
+            return this.edgeSprite("terrain-freshwater", tile, n => n.type.isLand);
+        } else if (type.has(TerrainType.flags.trees)) {
+            return this.edgeSprite("terrain-forest", tile, n => !n.type.has(TerrainType.flags.trees));
+        } else {
+            return this.store.getSprite("terrain-dirt", hashArrayOfInts([tile.point.x, tile.point.y]));
+        }
+    }
+
+    edgeSprite(id, tile, neighborFilter) {
+        let score = 0;
+        score += this.score(tile, directions.NW, neighborFilter) ? (0x1 << 0) : 0;
+        score += this.score(tile, directions.N,  neighborFilter) ? (0x1 << 1) : 0;
+        score += this.score(tile, directions.NE, neighborFilter) ? (0x1 << 2) : 0;
+        score += this.score(tile, directions.W,  neighborFilter) ? (0x1 << 3) : 0;
+        score += this.score(tile, directions.E,  neighborFilter) ? (0x1 << 4) : 0;
+        score += this.score(tile, directions.SW, neighborFilter) ? (0x1 << 5) : 0;
+        score += this.score(tile, directions.S,  neighborFilter) ? (0x1 << 6) : 0;
+        score += this.score(tile, directions.SE, neighborFilter) ? (0x1 << 7) : 0;
+        return this.store.spriteWithUniqueID(Sprite.makeUniqueID(id, Sprite.edgeVariantKey(score)));
+    }
+
+    score(tile, direction, filter) {
+        let v = Vector.manhattanUnits[direction];
+        let neighbor = this.sourceLayer.getTileAtPoint(v.offsettingPosition(tile.point));
+        if (!neighbor) return 0;
+        return filter(neighbor) ? 1 : 0;
     }
 }
 
@@ -3416,9 +3481,11 @@ return {
     Strings: Strings,
     Terrain: Terrain,
     TerrainRenderer: TerrainRenderer,
+    TerrainSpriteSource: TerrainSpriteSource,
     TerrainTile: TerrainTile,
     TerrainType: TerrainType,
     TextInputView: TextInputView,
+    TextLineView: TextLineView,
     ToolButton: ToolButton,
     Z: Z,
     Zone: Zone,

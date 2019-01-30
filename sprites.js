@@ -187,7 +187,7 @@ class RootView {
 
     addMap(zoomLevel) {
         let elem = document.createElement("li");
-        this.maps.push(new SpriteMapView({ model: this.model, zoomLevel: zoomLevel, elem: elem }));
+        this.maps.push(new SpriteMapView({ model: this.model, zoomLevel: zoomLevel, elem: elem, runLoop: CitySimSprites.uiRunLoop }));
         this.elems.mapContainer.append(elem);
     }
 
@@ -223,7 +223,7 @@ class SpriteMapView {
 
         this.rebuildLayers();
         this.model.kvo.layers.addObserver(this, () => this.rebuildLayers());
-        CitySimSprites.uiRunLoop.addDelegate(this);
+        config.runLoop.addDelegate(this);
     }
 
     rebuildLayers() {
