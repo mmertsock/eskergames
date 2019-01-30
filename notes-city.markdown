@@ -11,17 +11,13 @@ Initial zone growth and RCI:
 
 Auto generate help dialog text for keyboard commands.
 Game-specific fonts for zones, maps, controls, etc.
-JS: set keyword for setters, instead of setX()
-JS: var, let, const
 JS: modules/import
 
 ### requestAnimationFrame
 
-Run the UI loop either as fast as possible or up to X frames/sec.
-Run an iteration of the game engine at the end of a UI loop, whenever X milliseconds have passed since the start of the previous iteration, depending on game speed. 
 Perhaps divide the work of a single game engine iteration among several animation frames to avoid the potential lag caused by a doing a full iteration during one frame.
 
-web works + requestAnimationFrame: would be a good time to eliminate direct coupling between renderers/views and the Game object hierarchy. introduce view models with simple, clean, flat KVO structure. the game worker sends updates the view models which trigger KVO notifications in the window context (KVO observations can't travel between worker and window anyway unless i implement remote-kvo), and the UI listens to the view model KVO.
+web workers + requestAnimationFrame: would be a good time to eliminate direct coupling between renderers/views and the Game object hierarchy. introduce view models with simple, clean, flat KVO structure. the game worker sends updates the view models which trigger KVO notifications in the window context (KVO observations can't travel between worker and window anyway unless i implement remote-kvo), and the UI listens to the view model KVO.
 
 https://www.destroyallsoftware.com/talks/boundaries
 GUI app starting around 21 minutes. reminds me of the design ideas i have for using web workers.
@@ -81,11 +77,6 @@ Click to center the map when Pointer tool is selected.
 Hold a key and click-drag to move the map? At least when the Pointer tool is selected?
 Pan the map when holding the cursor near the edge of the map?
 
-### Figure out where to go with graphics before adding more content
-
-Custom drawing scripts vs SVG vs PNG spritesheets?
-How to handle different zoom levels, animation frames, and building variants?
-
 ### Add more game content and logic
 
 1. Basic zone growth and RCI demand balance.
@@ -100,10 +91,6 @@ Adding game logic for zones to emit/consume/demand/avoid such environmental data
 ### More stuff
 
 Signposts or other ways to label the terrain, infrastructure, buildings.
-
-### Terrain
-
-Create a terrain.html tester/editor page, similar to painter.html, to do all terrain feature development. This could perhaps become the full god-mode terrain editor tool in the end.
 
 ### Undo button
 
@@ -148,49 +135,21 @@ tile is inset 12px, etc.
 Could use filters https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D#filters to smooth out terrain or data-overlay features.
 Inspired by the appearance of water/forests in the zoomed out map in SimCity Classic (see screenshot).
 
-## some notes on painting images to canvas
-
-https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D
-
-ctx.lineCap/lineJoin: be sure to set these properly
-
-ctx.createPattern: load an html/svg image element, and use it as a fillStyle. can repeat or not. So, could fill swaths of the terrain using a single repeating createPattern - eg 
-paint the entire dirt base layer, then paint chunks of water on top of that.
-
-ctx.drawImage just directly draws an image to canvas at a specified location.
-Allows drawing a subrectangle of an image - eg for slicing a spritesheet.
-
-ctx.clip can create clipping masks.
-
-ctx.create/get/putImageData for caching rasterized data.
-Could use this to make a cache of certain frequently rendered items?
-
-ctx.add/remove/clearHitRegion to easily determine items the mouse is interacting with.
-except Safari doesn't support it.
-
-ctx.filter
-
-## painting game items
-
-eventually should just move to sprite sheets and/or SVG data instead of this paint-script thing.
-
-sprite sheets: one bitmap per zoom level. And a separate bitmap for minimaps where 1 px == 1 tile. Note could still have arbitrary in-between zoom levels: when selecting sprites just round up to the next higher resolution, then use a canvas transform to scale down to the precise size needed.
-
-variants: a given item ID can have any number of variants; variantKey % numVariants determines which sprite-sheet or svg-group to lookup.
-
-Separate spritesheet/svg-group for each item ID + variant? Or big combined files? Or?
-
-maybe instead of (or on top of) a FlexCanvasGrid, have a BitCanvasGrid that is specifically for retro style bitmap gaming. Defines model-pixels-per-device-pixel, pixels-per-tile, etc. Has some paint helper methods that ensure good integer pixel alignment and crisp lines and easy lines/rectangles/dots, etc.
-
-
 ## animating game items
 
-game items can have an "atmospheric animation" that is a simple repeating loop with no real state or meaning; just makes the game look nice (e.g. waving grass, rotating wheels, puffing smoke, blinking lights). animations are one frame per second or something, small number of frames.
-use the variantKey to choose which of 60 frames per second to increment the animation frame on - this lets each animated item be a little out of phase, for variety. And don't start them all on frame zero, start on frame N and loop, to further offset them.
+animation and smoothing out render performance
 
-## Declarative UI
+a sort of double-buffer approach.
 
-On startup, parse the HTML. Attach TextLineViews and Bindings to matching HTML elements, etc.
+each paintable object registers itself in a collection of items with the same animation speed/frame count
+maintain an array of offscreen-prerendered rects for each item
+each run loop frame, render to screen using that array of prerendered rects
+
+to populate that prerendered array:
+each time that collection of items needs to increment an animation frame, make a queue of all the items in that collection, and initialize a new empty prerendered array
+each run loop frame, pre-render a portion of the queued items offscreen into the new prerender array. number of items prerendered depends on queue size and how much time is available. then at the end of that animation frame interval, swap the old and new prerender arrays
+
+also note that we could identify items in the collection that have identical painters and modelMetadata: these can be prerendered once and then painted in multiple places onscreen
 
 - - - - - -
 # Resources

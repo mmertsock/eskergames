@@ -8,7 +8,8 @@ require 'yaml'
 
 # TODO check argv for non-default value
 themedir = '../Pixelmash/export/themes/default-map/'
-destdir = './spritesheets'
+yaml_destdir = './scratch/'
+img_destdir = './spritesheets'
 
 def fail(msg)
     puts msg
@@ -108,11 +109,11 @@ class Processor
         sheet.add_input_file(file)
     end
 
-    def compose(destdir)
+    def compose(img_destdir, yaml_destdir)
         theme_id = all_sheets.first.theme_id
 
         all_sheets.each do |sheet|
-            fail("Failure composing sheet " + sheet.file_name) if !sheet.compose(destdir)
+            fail("Failure composing sheet " + sheet.file_name) if !sheet.compose(img_destdir)
             sheet.collect_sprites(@sprite_groups)
         end
         size_counts = @sprite_groups.values.map { |group| group.num_sizes }.uniq()
@@ -125,7 +126,7 @@ class Processor
         yaml_theme["sprites"] = @sprite_groups.values.map { |group| group.yaml_data }
         yaml_file_name = "sprites_" + theme_id + ".yaml"
         yaml_root = {"themes" => [yaml_theme]}
-        IO.write(yaml_file_name, yaml_root.to_yaml)
+        IO.write(File.join(yaml_destdir, yaml_file_name), yaml_root.to_yaml)
         puts "Saved config " + yaml_file_name
     end
 end
@@ -337,9 +338,9 @@ end
 
 Dir.exist?(themedir) or fail("Theme directory not found.")
 
-if !Dir.exist?(destdir)
-    Dir.mkdir(destdir)
-    puts "Created directory " + destdir
+if !Dir.exist?(img_destdir)
+    Dir.mkdir(img_destdir)
+    puts "Created directory " + img_destdir
 end
 
 static_input_files = Dir.glob(File.join(themedir, '[0-9]x[0-9]', '*.png'))
@@ -352,4 +353,4 @@ if input_files.empty?
 end
 
 processor = Processor.new(input_files)
-processor.compose(destdir)
+processor.compose(img_destdir, yaml_destdir)
