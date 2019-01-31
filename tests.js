@@ -1193,6 +1193,7 @@ function cityRectExtensionsTest() {
     }).buildAndRun();
 }
 
+// obsolete
 function gameMapTest() {
     new UnitTest("GameMap",function() {
         var config = { size: {width: 10, height: 6} };
@@ -1329,8 +1330,7 @@ TestSession.current = new TestSession([
     flexCanvasGridTest2,
     flexCanvasGridTest3,
     cityRectExtensionsTest,
-    simDateTest,
-    gameMapTest
+    simDateTest
 ]);
 // TestSession.current = new TestSession([tilePlaneTest]);
 

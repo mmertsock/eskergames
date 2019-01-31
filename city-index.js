@@ -6,6 +6,7 @@ const debugLog = Gaming.debugLog;
 const debugWarn = Gaming.debugWarn;
 const Rng = Gaming.Rng;
 const GameStorage = CitySim.GameStorage;
+const Strings = CitySim.Strings;
 
 class LoadGameMenu {
     constructor() {

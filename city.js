@@ -302,12 +302,11 @@ class TerrainProp {
 // calculating land values and stuff, etc.
 class Plot {
     static fromDeserializedWrapper(data, schemaVersion) {
-        deserializeAssert(data != null);
-        return new Plot({ dz: {
+        return data ? new Plot({ dz: {
             bounds: Rect.fromDeserializedWrapper(data.bounds, schemaVersion),
             item: Plot.deserializerForItemClass(data.itemClass)(data.item, schemaVersion),
             data: data.data
-        } });
+        } }) : null;
     }
 
     static deserializerForItemClass(itemClass) {
@@ -616,7 +615,9 @@ class TerrainTile extends MapTile {
 
 class PlotTile extends MapTile {
     static fromDeserializedWrapper(data, schemaVersion, point, layer) {
-        return new PlotTile(point, layer);
+        let tile = new PlotTile(point, layer);
+        tile.plot = Plot.fromDeserializedWrapper(data.plot, schemaVersion);
+        return tile;
     }
 
     constructor(point, layer) {
@@ -631,12 +632,11 @@ class PlotTile extends MapTile {
         this._plot = value;
         this.isPaintOrigin = value ? value.isPaintOrigin(this.point) : false;
         this._painterInfoList = null;
-        // if (this._plot) {
-        //     debugLog([this._plot, this.isPaintOrigin, this.painterInfoList]);
-        // }
     }
 
-    get objectForSerialization() { return 0; }
+    get objectForSerialization() {
+        return { plot: this._plot ? this._plot.objectForSerialization : null };
+    }
 
     get painterInfoList() {
         if (this._painterInfoList) { return this._painterInfoList; }
@@ -659,6 +659,9 @@ class PlotTile extends MapTile {
 // Closely managed by CityMap
 class MapLayer {
     static fromDeserializedWrapper(data, schemaVersion, config) {
+        if (!data) {
+            return new MapLayer(config);
+        }
         deserializeAssert(Array.isArray(data.tiles));
         return new MapLayer(config, {
             schemaVersion: schemaVersion,
@@ -738,11 +741,12 @@ class CityMap {
 
     static fromDeserializedWrapper(data, schemaVersion) {
         deserializeAssert(data != null);
-        deserializeAssert(data.size != null || data.terrainLayer != null);
+        deserializeAssert(data.size != null && data.terrainLayer != null);
         return new CityMap({dz: {
             size: data.size,
             schemaVersion: schemaVersion,
-            terrainLayer: data.terrainLayer
+            terrainLayer: data.terrainLayer,
+            plotLayer: data.plotLayer
         }});
     }
 
@@ -751,22 +755,25 @@ class CityMap {
         this.size = size;
         this.bounds = new Rect(new Point(0, 0), this.size);
         this.tilePlane = new TilePlane(this.size);
-        this.plotLayer = new MapLayer({ map: this, id: MapLayer.id.plots, tileClass: PlotTile });
+
 
         let terrainConfig = { map: this, id: MapLayer.id.terrain, tileClass: TerrainTile };
+        let plotConfig = { map: this, id: MapLayer.id.plots, tileClass: PlotTile };
         if (config.dz) {
             this.terrainLayer = MapLayer.fromDeserializedWrapper(config.dz.terrainLayer, config.dz.schemaVersion, terrainConfig);
+            this.plotLayer = MapLayer.fromDeserializedWrapper(config.dz.plotLayer, config.dz.schemaVersion, plotConfig);
         } else {
             this.terrainLayer = new MapLayer(terrainConfig);
+            this.plotLayer = new MapLayer(plotConfig);
         }
-        this.plotLayer = new MapLayer({ map: this, id: MapLayer.id.plots, tileClass: PlotTile });
         this.kvo = new Kvo(this);
     }
 
     get objectForSerialization() {
         return {
             size: this.size,
-            terrainLayer: this.terrainLayer.objectForSerialization
+            terrainLayer: this.terrainLayer.objectForSerialization,
+            plotLayer: this.plotLayer.objectForSerialization
         };
     }
 
