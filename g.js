@@ -218,7 +218,6 @@ CanvasRenderingContext2D.prototype.textFill = function(text, point, maxWidth) {
 };
 
 const _roundRectEllipseStops = {
-    rightMax: Math.PI * 2.0,
     right: 0.0,
     down: Math.PI * 0.5,
     left: Math.PI,
@@ -239,7 +238,7 @@ CanvasRenderingContext2D.prototype.roundRect = function(rect, xRadius, yRadius, 
     this.lineTo(ellipseExt.max.x, ext.min.y);
     this.ellipse(ellipseExt.max.x, ellipseExt.min.y, xRadius, yRadius, 0, _roundRectEllipseStops.up, _roundRectEllipseStops.right);
     this.closePath();
-    
+
     if (shouldFill) this.fill();
     if (shouldStroke) this.stroke();
 };

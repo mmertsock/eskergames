@@ -2778,14 +2778,8 @@ class BorderPainter {
         }
 
         let sprite = this.model.spriteStore.getSprite(`terrain-border-${terrainType}-${borderType}`, variantKey);
-        if (!sprite) {
-            once("no sprite", () => debugLog(["no sprite", `terrain-border-${terrainType}-${borderType}`, variantKey])); return;
-        }
-        let tileWidth = view.canvasGrid.tileWidth;
-        let sheet = this.model.spriteStore.getSpritesheet(sprite.sheetID, tileWidth);
-        if (!sheet) {
-            once("no sheet", () => debugLog(["no sheet", sprite.sheetID, tileWidth])); return;
-        }
+        let sheet = sprite ? this.model.spriteStore.getSpritesheet(sprite.sheetID, view.canvasGrid.tileWidth) : null;
+        if (!sheet) return;
         let rect = view.canvasGrid.rectForTile(this.model.map.tilePlane.screenTileForModel(point));
         sheet.renderSprite(ctx, rect, sprite, frameCounter);
     }
@@ -2893,12 +2887,16 @@ class SpritesheetStore {
     }
 
     getSprite(id, variantKey) {
-        return this.theme.getSprite(id, variantKey);
+        let sprite = this.theme.getSprite(id, variantKey);
+        if (!sprite) { once("no sprite " + id, () => debugWarn(`getSprite("${id}", ${variantKey}): no sprite found`)); }
+        return sprite;
     }
 
     getSpritesheet(sheetID, tileWidth) {
         let item = this.sheetTable[sheetID];
-        return item ? item[tileWidth] : null;
+        let sheet = item ? item[tileWidth] : null;
+        if (!sheet) { once("no sheet " + sheetID + tileWidth, () => debugWarn(`getSpritesheet("${sheetID}", ${tileWidth}): no sheet found`)); }
+        return sheet;
     }
 
     defaultTileVariantKey(tile) {
@@ -3010,10 +3008,7 @@ class SpriteRenderModel {
     }
     render(ctx, canvasGrid, store, frameCounter) {
         let sheet = store.getSpritesheet(this.sprite.sheetID, this.tileWidth);
-        if (!sheet) {
-            once("nosheet" + this.sprite.sheetID, () => debugWarn(`No Spritesheet found for ${this.debugDescription}`));
-            return;
-        }
+        if (!sheet) return;
         sheet.renderSprite(ctx, this.screenRect(canvasGrid), this.sprite, frameCounter);
     }
     get debugDescription() {
