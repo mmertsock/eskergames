@@ -217,6 +217,33 @@ CanvasRenderingContext2D.prototype.textFill = function(text, point, maxWidth) {
     }
 };
 
+const _roundRectEllipseStops = {
+    rightMax: Math.PI * 2.0,
+    right: 0.0,
+    down: Math.PI * 0.5,
+    left: Math.PI,
+    up: Math.PI * 1.5
+};
+CanvasRenderingContext2D.prototype.roundRect = function(rect, xRadius, yRadius, shouldFill, shouldStroke) {
+    this.beginPath();
+    let ext = rect.extremes;
+    let ellipseExt = rect.inset(xRadius, yRadius).extremes;
+
+    this.moveTo(ext.max.x, ellipseExt.min.y);
+    this.lineTo(ext.max.x, ellipseExt.max.y);
+    this.ellipse(ellipseExt.max.x, ellipseExt.max.y, xRadius, yRadius, 0, _roundRectEllipseStops.right, _roundRectEllipseStops.down);
+    this.lineTo(ellipseExt.min.x, ext.max.y);
+    this.ellipse(ellipseExt.min.x, ellipseExt.max.y, xRadius, yRadius, 0, _roundRectEllipseStops.down, _roundRectEllipseStops.left);
+    this.lineTo(ext.min.x, ellipseExt.min.y);
+    this.ellipse(ellipseExt.min.x, ellipseExt.min.y, xRadius, yRadius, 0, _roundRectEllipseStops.left, _roundRectEllipseStops.up);
+    this.lineTo(ellipseExt.max.x, ext.min.y);
+    this.ellipse(ellipseExt.max.x, ellipseExt.min.y, xRadius, yRadius, 0, _roundRectEllipseStops.up, _roundRectEllipseStops.right);
+    this.closePath();
+    
+    if (shouldFill) this.fill();
+    if (shouldStroke) this.stroke();
+};
+
 window.Mixins = {
     mix: function(prototype, name, func) {
         prototype[name] = prototype[name] || func;

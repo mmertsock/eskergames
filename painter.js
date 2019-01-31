@@ -212,7 +212,7 @@ class CanvasView {
     }
 
     get drawContext() {
-        return this.canvas.getContext("2d", { alpha: false });
+        return this.canvas.getContext("2d", { alpha: true });
     }
 
     get debugLoggingEnabled() {

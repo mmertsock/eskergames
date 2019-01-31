@@ -3323,8 +3323,8 @@ class ScriptPainter {
         }
     }
 
-    // [text,red,0.25,r,left,top,0.5,0.5,r,R]
-    //  0    1   2    3 4    5   6   7   8 9
+    // [text,red,0.25,r,left,top,0.5,0.5,r,R,white,0.2]
+    //  0    1   2    3 4    5   6   7   8 9 10    11
     _text(line, ctx, info) {
         var sz = this._toPx(line[2], line[3], info.yRange, info.twRange);
         ctx.textAlign = line[4];
@@ -3332,8 +3332,16 @@ class ScriptPainter {
         var x = this._toPx(line[6], line[8], info.xDomain, info.twRange);
         var y = this._toPx(line[7], line[8], info.yDomain, info.twRange);
         ctx.font = `${sz}px sans-serif`;
-        ctx.fillStyle = line[1];
         var text = String.fromTemplate(line[9], info.modelMetadata);
+        if (line.length > 10) {
+            // make a bubble
+            ctx.fillStyle = line[10];
+            let metrics = ctx.measureText(text);
+            let padding = (line.length > 11 ? line[11] : 0.15) * sz;
+            let rect = new Rect(x - padding, y - padding - 0.5 * sz, metrics.width + 2 * padding, sz + 2 * padding);
+            ctx.roundRect(rect, padding, padding, true, false);
+        }
+        ctx.fillStyle = line[1];
         ctx.textFill(text, new Point(x, y));
     }
 

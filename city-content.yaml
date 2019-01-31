@@ -240,7 +240,7 @@ painterTool:
 # stroke: style, shape, thickness, thick units, coords, coord units.
 #   e.g. stroke,red,rect,1,p,0.25,0.25,0.5,0.5,r
 # fill: style, shape, coords, coord units
-# text: style, text size, size units, align, baseline, center coords, center units, text
+# text: style, text size, size units, align, baseline, center coords, center units, text, [bubblecolor,[bubblepadding]]
 # poly: stroke style, fill style, width, width units, coord units, x1, y1, x2, y2, ..., [close]
 # rotate: amount, units
 # script: id, variant key (-1 to use current variant key)
@@ -259,94 +259,16 @@ painters:
     - [poly,black,,1,p, r, 1,0.7, 1,1, 0.7,1]
     - [poly,black,,1,p, r, 0.3,1, 0,1, 0,0.7]
   toolHighlightStuff:
-    - [poly,,black,0,p, r, 1.1,1.1, 1.4,1.4, 1.25,1.4, 1.13,1.52]
+    - [poly,black,0,p, r, 1.1,1.1, 1.4,1.4, 1.25,1.4, 1.13,1.52]
     - [text,black,0.75,tw,center,middle,1.44,1.8,r,"<highlightGlyph>"]
   purchasedFeedback:
-    - [text,green,10,p,left,middle,1.1,0.5,r,"<formattedPrice>"]
-  zoneRd0v0:
-    expectedSize: *ZONEPLOTSIZE
-    variants:
-      - - [fill,"hsl(0,50%,80%)",rect,0,0,1,1,r]
-        - [innerStroke,"hsl(0,60%,45%)",rect,1,p,0,0,1,1,r]
-        - [text,*RZONETEXTCOLOR,0.25,r,center,middle,0.5,0.5,r,R]
-  zoneCd0v0:
-    expectedSize: *ZONEPLOTSIZE
-    variants:
-      - - [fill,"hsl(240,50%,80%)",rect,0,0,1,1,r]
-        - [innerStroke,"hsl(240,60%,45%)",rect,1,p,0,0,1,1,r]
-        - [text,*CZONETEXTCOLOR,0.25,r,center,middle,0.5,0.5,r,C]
-  zoneId0v0:
-    expectedSize: *ZONEPLOTSIZE
-    variants:
-      - - [fill,"hsl(50,65%,80%)",rect,0,0,1,1,r]
-        - [innerStroke,"hsl(50,100%,35%)",rect,1,p,0,0,1,1,r]
-        - [text,*IZONETEXTCOLOR,0.25,r,center,middle,0.5,0.5,r,I]
+    - [text,green,10,p,left,middle,1.1,0.5,r,"<formattedPrice>","hsla(0,0%,100%,0.65)",0.25]
   proptree:
     variants:
       - - [fill,"hsl(35, 76%, 23%)",rect,0.4,0.5,0.2,0.5,r]
         - [fill,"hsl(120, 35%, 50%)",ellipse,0.25,-0.1,0.5,0.8,r]
       - - [fill,"hsl(35, 66%, 33%)",rect,0.4,0.5,0.2,0.5,r]
         - [fill,"hsl(120, 55%, 45%)",ellipse,0.2,0.1,0.6,0.6,r]
-  terrain_dirt:
-    variants:
-      - - [fill,*DIRTBASECOLOR,rect,0,0,1,1,r]
-        - [fill,'hsl(33, 25%, 70%)',rect,0.2,0.2,0.15,0.15,r]
-        - [fill,'hsl(33, 20%, 70%)',rect,0.4,0.7,0.15,0.15,r]
-        - [fill,'hsl(33, 30%, 65%)',rect,0.7,0.5,0.15,0.15,r]
-      - - [fill,*DIRTBASECOLOR,rect,0,0,1,1,r]
-        - [fill,"hsl(33, 30%, 65%)",rect,0.1,0.3,0.15,0.15,r]
-        - [fill,"hsl(33, 25%, 70%)",rect,0.5,0.2,0.15,0.15,r]
-        - [fill,"hsl(33, 20%, 70%)",rect,0.8,0.6,0.15,0.15,r]
-  terrain_freshwater:
-    variants:
-      - - [fill,"hsl(215, 100%, 42%)",rect,0,0,1,1,r]
-        - [fill,"hsl(215, 100%, 52%)",rect,0.2,0.2,0.15,0.15,r]
-        - [fill,"hsl(215, 100%, 52%)",rect,0.4,0.7,0.15,0.15,r]
-        - [fill,"hsl(215, 100%, 52%)",rect,0.7,0.5,0.15,0.15,r]
-      - - [fill,*DIRTBASECOLOR,rect,0,0,1,0.2,r]
-        - [fill,"hsl(215, 100%, 67%)",rect,0,0.2,1,0.2,r]
-      - - [fill,"hsl(215, 100%, 67%)",rect,0.6,0,0.4,0.2,r]
-        - [fill,"hsl(215, 100%, 67%)",rect,0.8,0,0.2,0.4,r]
-        - [fill,*DIRTBASECOLOR,rect,0.8,0,0.2,0.2,r]
-      - [[rotate,90,d], [script,terrain_freshwater,1]]
-      - [[rotate,90,d], [script,terrain_freshwater,2]]
-      - [[rotate,180,d],[script,terrain_freshwater,1]]
-      - [[rotate,180,d],[script,terrain_freshwater,2]]
-      - [[rotate,270,d],[script,terrain_freshwater,1]]
-      - [[rotate,270,d],[script,terrain_freshwater,2]]
-  terrain_saltwater:
-    variants:
-      - - [fill,"hsl(200, 100%, 29%)",rect,0,0,1,1,r]
-        - [fill,"hsl(200, 100%, 47%)",rect,0.2,0.2,0.15,0.15,r]
-        - [fill,"hsl(200, 100%, 47%)",rect,0.4,0.7,0.15,0.15,r]
-        - [fill,"hsl(200, 100%, 47%)",rect,0.7,0.5,0.15,0.15,r]
-      - - [fill,*DIRTBASECOLOR,rect,0,0,1,0.2,r]
-        - [fill,"hsl(200, 100%, 67%)",rect,0,0.2,1,0.2,r]
-      - - [fill,"hsl(200, 100%, 67%)",rect,0.6,0,0.4,0.2,r]
-        - [fill,"hsl(200, 100%, 67%)",rect,0.8,0,0.2,0.4,r]
-        - [fill,*DIRTBASECOLOR,rect,0.8,0,0.2,0.2,r]
-      - [[rotate,90,d], [script,terrain_saltwater,1]]
-      - [[rotate,90,d], [script,terrain_saltwater,2]]
-      - [[rotate,180,d],[script,terrain_saltwater,1]]
-      - [[rotate,180,d],[script,terrain_saltwater,2]]
-      - [[rotate,270,d],[script,terrain_saltwater,1]]
-      - [[rotate,270,d],[script,terrain_saltwater,2]]
-  terrain_trees:
-    variants:
-      - - [fill,"hsl(112, 100%, 23%)",rect,0,0,1,1,r]
-        - [fill,"hsl(112, 100%, 37%)",rect,0.2,0.2,0.15,0.15,r]
-        - [fill,"hsl(112, 100%, 37%)",rect,0.4,0.7,0.15,0.15,r]
-        - [fill,"hsl(112, 100%, 37%)",rect,0.7,0.5,0.15,0.15,r]
-      - - [fill,*DIRTBASECOLOR,rect,0.1,0,0.3,0.1,r]
-        - [fill,*DIRTBASECOLOR,rect,0.6,0,0.3,0.2,r]
-      - - [fill,*DIRTBASECOLOR,rect,0.7,0,0.3,0.1,r]
-        - [fill,*DIRTBASECOLOR,rect,0.9,0,0.1,0.2,r]
-      - [[rotate,90,d], [script,terrain_trees,1]]
-      - [[rotate,90,d], [script,terrain_trees,2]]
-      - [[rotate,180,d],[script,terrain_trees,1]]
-      - [[rotate,180,d],[script,terrain_trees,2]]
-      - [[rotate,270,d],[script,terrain_trees,1]]
-      - [[rotate,270,d],[script,terrain_trees,2]]
 
 ################## STRINGS ################
 
