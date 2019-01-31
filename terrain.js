@@ -792,6 +792,20 @@ class TerrainMapViewModel {
         }));
         this.kvo.layers.notifyChanged();
     }
+
+    configureCanvasGrid(existingGrid, canvas) {
+        if (existingGrid) {
+            existingGrid.setSize({ tileWidth: this.zoomLevel.tileWidth, tileSpacing: 0 });
+            return existingGrid;
+        } else {
+            return new FlexCanvasGrid({
+                canvas: canvas,
+                deviceScale: FlexCanvasGrid.getDevicePixelScale(),
+                tileWidth: this.zoomLevel.tileWidth,
+                tileSpacing: 0
+            });
+        }
+    };
 }
 
 class TerrainView {
@@ -826,8 +840,8 @@ class TerrainView {
 
     _configureCommmands() {
         let gse = GameScriptEngine.shared;
-        gse.registerCommand("zoomIn", () => this.model.zoomSelection.selectNext());
-        gse.registerCommand("zoomOut", () => this.model.zoomSelection.selectPrevious());
+        gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
+        gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
     }
 }
 

@@ -1987,7 +1987,7 @@ class RootView {
         this.game = game;
         if (!game) { return; }
         this.views.push(new PaletteView({ game: game, root: this.root.querySelector("palette") }));
-        this.views.push(this.mapView = new MainMapView({ game: game, elem: this.root.querySelector(".mainMap"), runLoop: uiRunLoop }));
+        this.views.push(new MainMapView({ game: game, elem: this.root.querySelector(".mainMap"), runLoop: uiRunLoop }));
         this.views.push(new ControlsView({ game: game, root: this.root.querySelector("controls") }));
     }
 

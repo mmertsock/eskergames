@@ -34,6 +34,8 @@ main {
 main > div {
     display: flex;
     flex-direction: row;
+    align-items: stretch;
+    flex-grow: 1;
 }
 
 palette {
@@ -44,30 +46,26 @@ palette {
     justify-content: center;
 }
 
-map {
-    display: block;
-    flex-grow: 1;
-}
-
 canvas {
     display: block;
 }
 
 map.mainMap {
+    display: block;
+    position: relative;
+    flex-grow: 1;
     cursor: crosshair;
-}
-
-map canvas {
-    width: 100%;
-    height: 100%;
 }
 
 map.mainMap canvas {
     position: absolute;
+    width: 100%;
+    height: 100%;
 }
 
+/*
 minimaps {
-    /* float on right side of map, bottom aligned so it's near the control panel */
+    // float on right side of map, bottom aligned so it's near the control panel
     float: right;
     max-width: 25%;
     width: 200px;
@@ -78,8 +76,9 @@ minimaps canvas {
     min-height: 100px;
     max-height: 30%;
     margin: 0 0 6px 0;
-    /* TODO bottom-align. Hide any that won't fit in the vertical space allotted. */
+//    TODO bottom-align. Hide any that won't fit in the vertical space allotted.
 }
+*/
 
 controls {
     display: flex;
