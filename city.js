@@ -362,7 +362,8 @@ class Plot {
 
     isPaintOrigin(point) {
         return (point.x == this.bounds.x)
-            && (point.y == this.bounds.y + this.bounds.height - 1);
+            && (point.y == this.bounds.y);
+//            && (point.y == this.bounds.y + this.bounds.height - 1);
     }
 
     canAddToMap(map) {
@@ -630,9 +631,9 @@ class PlotTile extends MapTile {
         this._plot = value;
         this.isPaintOrigin = value ? value.isPaintOrigin(this.point) : false;
         this._painterInfoList = null;
-        if (this._plot) {
-            debugLog([this._plot, this.isPaintOrigin, this.painterInfoList]);
-        }
+        // if (this._plot) {
+        //     debugLog([this._plot, this.isPaintOrigin, this.painterInfoList]);
+        // }
     }
 
     get objectForSerialization() { return 0; }
@@ -733,6 +734,8 @@ class MapLayer {
 MapLayer.id = { terrain: "terrain", plots: "plots" };
 
 class CityMap {
+    static Kvo() { return { "plots": "plots" }; }
+
     static fromDeserializedWrapper(data, schemaVersion) {
         deserializeAssert(data != null);
         deserializeAssert(data.size != null || data.terrainLayer != null);
@@ -757,7 +760,7 @@ class CityMap {
             this.terrainLayer = new MapLayer(terrainConfig);
         }
         this.plotLayer = new MapLayer({ map: this, id: MapLayer.id.plots, tileClass: PlotTile });
-        this._updateTerrainInfo();
+        this.kvo = new Kvo(this);
     }
 
     get objectForSerialization() {
@@ -782,7 +785,6 @@ class CityMap {
         tiles.forEachFlat(tile => {
             this.terrainLayer.getTileAtPoint(tile.point).type = tile.type;
         });
-        this._updateTerrainInfo();
     }
 
     plotAtTile(point) {
@@ -809,22 +811,22 @@ class CityMap {
         }
         // let index = this._plots.push(plot) - 1;
         this.plotLayer.visitTiles(plot.bounds, tile => { tile.plot = plot; });
-        if (!fromFile) { debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription}`); }
+        if (!fromFile) {
+            debugLog(`Added plot ${plot.title} at ${plot.bounds.debugDescription}`);
+            this.kvo.plots.notifyChanged();
+        }
         return plot;
     }
 
     removePlot(plot) {
         this.plotLayer.visitTiles(plot.bounds, tile => { tile.plot = null; });
+        this.kvo.plots.notifyChanged();
     }
 
     visitEachPlot(block) {
         this.plotLayer.visitTiles(null, tile => {
             if (tile.isPaintOrigin) block(tile.plot);
         });
-    }
-
-    _updateTerrainInfo() {
-        debugLog("TODO recalculate stuff in the terrain layer")
     }
 }
 
@@ -1464,19 +1466,22 @@ class MapToolSession {
         this.preemptedSession = config.preemptedSession;
         this.singleClickMovementTolerance = MapToolController.settings().singleClickMovementTolerance;
         this._activationTimestamp = Date.now();
-        this._tile = null; // TODO refactor this/make it part of this.state
+        this._viewTile = null; // TODO refactor this/make it part of this.state
+        this._modelTile = null;
         this.state = {}; // TODO a generic way to do model object state
     }
 
     receivedPointInput(inputSequence) {
         var action = null;
         // TODO can use this.state to determine if the tile changed between this and the last point-input
-        var tile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
-        if (tile) {
+        let viewTile = this.canvasGrid.tileForCanvasPoint(inputSequence.latestPoint);
+        let modelTile = this.tilePlane.modelTileForScreen(viewTile);
+        if (modelTile) {
             if (inputSequence.isSingleClick) {
-                action = this.tool.performSingleClickAction(this, tile);
+                action = this.tool.performSingleClickAction(this, modelTile);
             }
-            this._tile = tile;
+            this._viewTile = viewTile;
+            this._modelTile = modelTile;
         }
         return { code: MapToolSession.InputResult.continueCurrentSession, action: action };
     }
@@ -1488,6 +1493,8 @@ class MapToolSession {
     end() { }
 
     // UI stuff
+
+    get tilePlane() { return this.game.city.map.tilePlane; }
 
     // modelMetadata dictionary to pass to ScriptPainters
     get textTemplateInfo() {
@@ -1502,7 +1509,7 @@ class MapToolSession {
 
     // (optional) List of tiles that may be affected. e.g. to paint with translucent overlay
     get affectedTileRects() {
-        if (!this._tile) { return null; }
+        if (!this._viewTile) { return null; }
         return {
             // a zone might be a single 3x3 rect, a road may be a bunch of 1x1s
             tileRects: [],
@@ -1514,13 +1521,13 @@ class MapToolSession {
     // (optional) Primary tile rect the tool is pointing to
     get focusTileRect() {
         // TODO rely on the stored state instead of recalculating at render time
-        return this.tool.focusRectForTileCoordinate(this, this._tile);
+        return this.tilePlane.screenRectForModel(this.tool.focusRectForTileCoordinate(this, this._modelTile));
     }
 
     // (optional) What to render next to the cursor. Note it defines the position
     // to paint at; not the current cursor x/y position.
     get hoverStatusRenderInfo() {
-        if (!this._tile) { return null; }
+        if (!this._viewTile) { return null; }
         // Some tools may not display a hover status. e.g. the Pointer
         // or only sometimes, e.g. show tile coords if holding Option key with the Pointer.
         return {
@@ -1576,7 +1583,7 @@ class MapToolController {
     }
 
     initialize(config) {
-        this.game = config.game;
+        this.game = config.viewModel.game;
         this.canvasGrid = config.canvasGrid;
         this.canvasInputController = config.canvasInputController;
         this.canvasInputController.pushDelegate(this);
@@ -1980,8 +1987,7 @@ class RootView {
         this.game = game;
         if (!game) { return; }
         this.views.push(new PaletteView({ game: game, root: this.root.querySelector("palette") }));
-        this.mapRenderer = new MapRenderer({ game: game, canvas: this.root.querySelector("canvas.mainMap") });
-        this.views.push(this.mapRenderer);
+        this.views.push(this.mapView = new MainMapView({ game: game, elem: this.root.querySelector(".mainMap"), runLoop: uiRunLoop }));
         this.views.push(new ControlsView({ game: game, root: this.root.querySelector("controls") }));
     }
 
@@ -2304,96 +2310,381 @@ class NewsView {
     }
 }
 
-class MapRenderer {
+class AnimationState {
+    static Kvo() { return { "frameCounter": "frameCounter" }; }
+
+    constructor(runLoop) {
+        this.millisecondsPerAnimationFrame = 500;
+        this.frameCounter = 0;
+        this.kvo = new Kvo(this);
+        runLoop.addDelegate(this);
+    }
+
+    processFrame(rl) {
+        let value = Math.floor(rl.latestFrameStartTimestamp() / this.millisecondsPerAnimationFrame);
+        if (value == this.frameCounter) return;
+        this.kvo.frameCounter.setValue(value);
+    }
+}
+
+class MainMapViewModel {
     static defaultZoomLevel() {
         return GameContent.defaultItemFromArray(GameContent.shared.mainMapView.zoomLevels);
     }
+    static settings() { return GameContent.shared.mainMapView; }
+
+    static Kvo() { return { "zoomLevel": "_zoomLevel" }; }
 
     constructor(config) {
-        this.canvas = config.canvas;
-        var zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
+        this.game = config.game;
+        this._zoomLevel = config.zoomLevel;
+        this.animation = new AnimationState(config.runLoop);
+        this.layers = [];
+        this.layers.push(new MapLayerViewModel({
+            index: 0,
+            model: this,
+            showGrid: false,
+            showBorder: true,
+            spriteSource: new TerrainSpriteSource({
+                sourceLayer: this.map.terrainLayer,
+                spriteStore: this.spriteStore
+            })
+        }));
+        this.layers.push(new MapLayerViewModel({
+            index: 1,
+            model: this,
+            showGrid: true,
+            showBorder: false,
+            spriteSource: new PlotSpriteSource({
+                sourceLayer: this.map.plotLayer,
+                spriteStore: this.spriteStore
+            }),
+            binding: this.map.kvo.plots
+        }));
+        this.kvo = new Kvo(this);
+    }
+
+    get map() { return this.game.city.map; }
+    get zoomLevel() { return this._zoomLevel; }
+    set zoomLevel(value) { this.kvo.zoomLevel.setValue(value); }
+    get spriteStore() { return SpritesheetStore.mainMapStore; }
+
+    configureCanvasGrid(existingGrid, canvas) {
+        if (existingGrid) {
+            existingGrid.setSize({ tileWidth: this.zoomLevel.tileWidth, tileSpacing: 0 });
+            return existingGrid;
+        } else {
+            return new FlexCanvasGrid({
+                canvas: canvas,
+                deviceScale: FlexCanvasGrid.getDevicePixelScale(),
+                tileWidth: this.zoomLevel.tileWidth,
+                tileSpacing: 0
+            });
+        }
+    };
+}
+
+class MainMapView {
+    constructor(config) {
+        this.elem = config.elem;
+        this.runLoop = config.runLoop;
+
+        let zoomers = MainMapViewModel.settings().zoomLevels.map((z) => new ZoomSelector(z, this));
         this.zoomSelection = new SelectableList(zoomers);
-        this.initialize(config.game);
-    }
-
-    // Cached once per run loop frame
-    get settings() {
-        if (this._settings) { return this._settings; }
-        this._settings = GameContent.shared.mainMapView;
-        return this._settings;
-    }
-
-    get zoomLevel() {
-        return this.zoomSelection.selectedItem.value;
-    }
-
-    get drawContext() {
-        return this.canvas.getContext("2d", { alpha: false });
-    }
-
-    zoomLevelActivated(value) {
-        debugLog("Set MapRenderer zoom to " + value.tileWidth);
-        this.canvasGrid.setSize({ tileWidth: value.tileWidth, tileSpacing: 0 });
-    }
-
-    initialize(game) {
-        this.game = game;
-
-        this.canvasGrid = new FlexCanvasGrid({
-            canvas: this.canvas,
-            deviceScale: FlexCanvasGrid.getDevicePixelScale(),
-            tileWidth: this.zoomLevel.tileWidth,
-            tileSpacing: 0
+        this.model = new MainMapViewModel({
+            game: config.game,
+            runLoop: config.runLoop,
+            zoomLevel: this.zoomSelection.selectedItem.value
         });
+        this.layerViews = [];
+        this.rebuildLayers();
 
         this._configureCommmands();
+        this.runLoop.addDelegate(this);
+    }
+
+    rebuildLayers() {
+        this.layerViews.forEach(view => view.remove());
+        this.layerViews = this.model.layers.map(layer => new SpriteMapLayerView({
+            containerElem: this.elem,
+            layer: layer,
+            wrap: false
+        }));
+        this.layerViews.push(new MapToolLayerView({
+            containerElem: this.elem,
+            viewModel: this.model
+        }));
+    }
+
+    processFrame(rl) {
+        this.layerViews.forEach(view => view.render());
+    }
+
+    zoomLevelActivated(value) { this.model.zoomLevel = value; }
+
+    _configureCommmands() {
+        const gse = GameScriptEngine.shared;
+        gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
+        gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
+        gse.registerCommand("setZoomLevel", (index) => this.zoomSelection.setSelectedIndex(index));
+    }
+}
+
+class MapToolLayerView {
+    constructor(config) {
+        this.viewModel = config.viewModel;
+        this.canvas = document.createElement("canvas");
+        config.containerElem.append(this.canvas);
+
+        this.canvasGrid = this.viewModel.configureCanvasGrid(this.canvasGrid, this.canvas);
         this.canvasInputController = new PointInputController({
             eventTarget: this.canvas,
             trackAllMovement: true
         });
         MapToolController.shared.initialize({
-            game: this.game,
+            viewModel: this.viewModel,
             canvasInputController: this.canvasInputController,
             canvasGrid: this.canvasGrid
         });
+        this.toolRenderer = new MapToolSessionRenderer({ canvasGrid: this.canvasGrid, viewModel: this.viewModel });
 
-        this._terrainRenderer = new TerrainRenderer({ canvasGrid: this.canvasGrid, mapSource: this.game.city });
-        this._plotRenderer = new PlotRenderer({ canvasGrid: this.canvasGrid, game: this.game });
-        this._toolRenderer = new MapToolSessionRenderer({ canvasGrid: this.canvasGrid, game: this.game });
-        debugLog(`MapRenderer: init canvasGrid tw=${this.canvasGrid.tileWidth} sz=${this.canvasGrid.tilesWide}x${this.canvasGrid.tilesHigh}`);
+        this.viewModel.kvo.zoomLevel.addObserver(this, () => this.zoomLevelChanged());
+        this.zoomLevelChanged();
+    }
 
-        var ctx = this.drawContext;
-        ctx.fillStyle = this.settings.edgePaddingFillStyle;
-        ctx.rectFill(this.canvasGrid.rectForFullCanvas);
+    remove() {
+        this.canvasGrid = null;
+        this.canvas.remove();
+        Kvo.stopObservations(this);
+    }
 
-        uiRunLoop.addDelegate(this);
+    zoomLevelChanged() {
+        setTimeout(() => {
+            this.canvasGrid = this.viewModel.configureCanvasGrid(this.canvasGrid, this.canvas);
+        }, 100);
+    }
+
+    render() {
+        let ctx = this.canvas.getContext("2d", { alpha: true });
+        ctx.rectClear(this.canvasGrid.rectForFullCanvas);
+        this.toolRenderer.render(ctx);
+    }
+}
+
+class SpriteTileModel extends MapTile {
+    constructor(point, layer) {
+        super(point, layer);
+        this._sprite = null;
+    }
+
+    get sprite() { return this._sprite; }
+    set sprite(value) {
+        if (this._sprite == value) { return; }
+        this._sprite = value;
+        this.layerModel.didSetSprite(this, value);
+    }
+
+    get spriteRect() {
+        if (!this._sprite) { return null; }
+        return new Rect(this.point, this._sprite.tileSize);
+    }
+}
+
+class SpriteMapView {
+    constructor(config) {
+        this.model = config.model; // MapViewModel
+        this.elem = config.elem;
+        this.layerViews = [];
+
+        this.rebuildLayers();
+        this.model.kvo.layers.addObserver(this, () => this.rebuildLayers());
+        config.runLoop.addDelegate(this);
+    }
+
+    rebuildLayers() {
+        this.layerViews.forEach(view => view.remove());
+        this.layerViews = this.model.layers.map(layer => new SpriteMapLayerView({
+            containerElem: this.elem,
+            layer: layer,
+            wrap: false
+        }));
     }
 
     processFrame(rl) {
-        // if (rl == uiRunLoop) {
-            this._settings = null;
-            this._render();
+        this.layerViews.forEach(view => view.render());
+    }
+}
+
+class MapLayerViewModel {
+    static Kvo() { return { "layer": "layer" }; }
+
+    constructor(config) {
+        this.index = config.index;
+        this.model = config.model; // MapViewModel
+        this.showGrid = config.showGrid;
+        this.showBorder = config.showBorder;
+        this.spriteSource = config.spriteSource;
+        this.kvo = new Kvo(this);
+
+        this.layer = new MapLayer({
+            id: `viewlayer-${this.index}`,
+            map: this.model.map,
+            tileClass: SpriteTileModel
+        });
+        this.layer.visitTiles(null, tile => {
+            tile.layerModel = this;
+        });
+        this.rebuildSprites();
+
+        if (!!config.binding) {
+            config.binding.addObserver(this, () => this.rebuildSprites());
+        }
+    }
+
+    rebuildSprites() {
+        this.layer.visitTiles(null, tile => {
+            tile._sprite = this.spriteSource.getSprite(tile.point);
+        });
+        this.kvo.layer.notifyChanged();
+    }
+
+    didSetSprite(tile, sprite) {
+        this.kvo.layer.notifyChanged();
+    }
+
+    get isBottomLayer() { return this.index == 0; }
+}
+
+class SpriteMapLayerView {
+    constructor(config) {
+        // Base initialization
+        this.containerElem = config.containerElem;
+        this.layerModel = config.layer; // MapLayerViewModel
+        this.wrap = !!config.wrap;
+        this.viewModel = this.layerModel.model; // MapViewModel
+        this.tilePlane = this.viewModel.map.tilePlane;
+        this.borderPainter = !!this.layerModel.showBorder ? new BorderPainter(this.viewModel) : null;
+        this.gridPainter = !!this.layerModel.showGrid ? new GridPainter(GameContent.shared.mainMapView) : null;
+
+        // Resettable view state
+        this.canvas = document.createElement("canvas");
+        this.containerElem.append(this.canvas);
+        this.tiles = [];
+        this.isAnimated = false;
+        this._dirty = false;
+        this._needsUpdateTiles = false;
+        this._dirtyAnimatedOnly = false;
+
+        // Connections
+        this.viewModel.animation.kvo.frameCounter.addObserver(this, () => this.setDirty(true));
+        this.viewModel.kvo.zoomLevel.addObserver(this, () => this.zoomLevelChanged());
+        this.layerModel.kvo.layer.addObserver(this, () => this.setNeedsUpdateTiles());
+
+        // First iteration of data, async
+        this.zoomLevelChanged();
+    }
+
+    remove() {
+        this.canvasGrid = null;
+        this.canvas.remove();
+        Kvo.stopObservations(this);
+    }
+
+    zoomLevelChanged() {
+        setTimeout(() => {
+            this.canvasGrid = this.viewModel.configureCanvasGrid(this.canvasGrid, this.canvas);
+            this.setNeedsUpdateTiles();
+        }, 100);
+    }
+
+    setNeedsUpdateTiles() {
+        this._needsUpdateTiles = true;
+    }
+
+    setDirty(animatedOnly) {
+        if (!!animatedOnly && !this.isAnimated) return;
+        this._dirty = true;
+        this._dirtyAnimatedOnly = !!animatedOnly;
+    }
+
+    updateTiles() {
+        if (!this.canvasGrid) return;
+        this._needsUpdateTiles = false;
+        let tiles = [];
+        let hasAnimatedTiles = false;
+        if (this.wrap) {
+            for (let y = 0; y < this.canvasGrid.tilesHigh; y += 1) {
+                for (let x = 0; x < this.canvasGrid.tilesWide; x += 1) {
+                    let tile = this.layerModel.layer.getTileAtPoint(new Point(x % this.layerModel.layer.size.width, y % this.layerModel.layer.size.height));
+                    if (!!tile && !!tile.sprite) {
+                        let rect = new Rect(new Point(x, y), tile.sprite.tileSize);
+                        tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
+                        hasAnimatedTiles = hasAnimatedTiles || tile.sprite.isAnimated;
+                    }
+                }
+            }
+        } else {
+            let canvasVisibleRect = new Rect(0, 0, this.canvasGrid.tileSize.width, this.canvasGrid.tileSize.height);
+            let modelVisibleRect = this.tilePlane.modelRectForScreen(canvasVisibleRect);
+            this.layerModel.layer.visitTiles(modelVisibleRect, tile => {
+                if (!!tile.sprite) {
+                    let rect = new Rect(tile.point, tile.sprite.tileSize);
+                    tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
+                    hasAnimatedTiles = hasAnimatedTiles || tile.sprite.isAnimated;
+                }
+            });
+        }
+        tiles.sort((a, b) => a.drawOrder - b.drawOrder);
+
+        this.isAnimated = hasAnimatedTiles && this.viewModel.zoomLevel.allowAnimation;
+        this.tiles = tiles;
+        this.setDirty();
+    }
+
+    render() {
+        if (this._needsUpdateTiles) this.updateTiles();
+        if (!this._dirty || !this.canvasGrid) return;
+
+        let frameCounter = this.isAnimated ? this.viewModel.animation.frameCounter : 0;
+        let ctx = this.canvas.getContext("2d", { alpha: !this.layerModel.isBottomLayer });
+        // if (!this._dirtyAnimatedOnly)
+        this.clear(ctx, this.canvasGrid.rectForFullCanvas);
+
+        if (this.borderPainter && this.viewModel.zoomLevel.showBorder) {
+            this.borderPainter.render(ctx, this, frameCounter);
+        }
+
+        let store = this.viewModel.spriteStore;
+        this.tiles.forEach(tile => {
+            // if (this.shouldRender(tile)) {
+                // if (this._dirtyAnimatedOnly)
+                //     this.clear(ctx, tile.screenRect(this.canvasGrid));
+                tile.render(ctx, this.canvasGrid, store, frameCounter);
+            // }
+        });
+
+        if (this.gridPainter) {
+            this.gridPainter.render(ctx, this.viewModel.map, this.canvasGrid, this.viewModel.zoomLevel);
+        }
+
+        this._dirty = false;
+        this._dirtyAnimatedOnly = false;
+    }
+
+    shouldRender(tile) {
+        // if (this._dirtyAnimatedOnly && !!tile.sprite) {
+        //     return tile.sprite.isAnimated;
         // }
+        return true;
     }
 
-    _configureCommmands() {
-        var gse = GameScriptEngine.shared;
-        // gse.registerCommand("panMap", (direction) => {
-        //     debugLog("TODO panMap: " + direction);
-        // });
-        gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
-        gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
-        gse.registerCommand("setZoomLevel", (index) => this.zoomSelection.setSelectedIndex(index));
-    }
-
-    _render() {
-        if (!this.game) { return; }
-        var ctx = this.drawContext;
-        this._terrainRenderer.render(ctx, this.settings);
-        this._plotRenderer.render(ctx);
-        // var r = this._plotRenderer;
-        // this.game.city.map.visitEachPlot(plot => r.render(plot, ctx));
-        this._toolRenderer.render(ctx);
+    clear(ctx, rect) {
+        if (this.layerModel.isBottomLayer) {
+            ctx.fillStyle = GameContent.shared.mainMapView.outOfBoundsFillStyle;
+            ctx.rectFill(rect);
+        } else {
+            ctx.rectClear(rect);
+        }
     }
 }
 
@@ -2425,8 +2716,8 @@ class GridPainter {
 }
 
 class BorderPainter {
-    constructor(store) {
-        this.store = store;
+    constructor(model) {
+        this.model = model; // MapViewModel
     }
 
     //  3|  
@@ -2446,7 +2737,7 @@ class BorderPainter {
     // Parameter view: should have getters: map, canvasGrid, and tilePlane
     // Render order here is backward: depicting a plane perpendicular to the rest of the map
     render(ctx, view, frameCounter) {
-        let map = view.map;
+        let map = this.model.map;
         if (map.size.width < 1 || map.size.height < 1) { return; }
 
         // SE corner
@@ -2466,7 +2757,7 @@ class BorderPainter {
     }
 
     renderTile(ctx, borderType, variantKey, point, neighborDirection, view, frameCounter) {
-        let terrainLayer = view.map.terrainLayer;
+        let terrainLayer = this.model.map.terrainLayer;
         let neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[neighborDirection].offsettingPosition(point));
         if (!neighbor) {
             once("no neighbor", () => debugWarn(["no neighbor found", point.debugDescription, neighborDirection, Vector.unitsByDirection[neighborDirection].offsettingPosition(point).debugDescription])); return;
@@ -2486,23 +2777,23 @@ class BorderPainter {
             }
         }
 
-        let sprite = this.store.getSprite(`terrain-border-${terrainType}-${borderType}`, variantKey);
+        let sprite = this.model.spriteStore.getSprite(`terrain-border-${terrainType}-${borderType}`, variantKey);
         if (!sprite) {
             once("no sprite", () => debugLog(["no sprite", `terrain-border-${terrainType}-${borderType}`, variantKey])); return;
         }
         let tileWidth = view.canvasGrid.tileWidth;
-        let sheet = this.store.getSpritesheet(sprite.sheetID, tileWidth);
+        let sheet = this.model.spriteStore.getSpritesheet(sprite.sheetID, tileWidth);
         if (!sheet) {
             once("no sheet", () => debugLog(["no sheet", sprite.sheetID, tileWidth])); return;
         }
-        let rect = view.canvasGrid.rectForTile(view.tilePlane.screenTileForModel(point));
+        let rect = view.canvasGrid.rectForTile(this.model.map.tilePlane.screenTileForModel(point));
         sheet.renderSprite(ctx, rect, sprite, frameCounter);
     }
 }
 
 class MapToolSessionRenderer {
     constructor(config) {
-        this.game = config.game;
+        this.game = config.viewModel.game;
         this.canvasGrid = config.canvasGrid;
         this._feedbackSettings = Object.assign({}, MapToolController.settings().feedback);
         this._style = MapToolController.settings().mapOverlayStyle;
@@ -2512,6 +2803,8 @@ class MapToolSessionRenderer {
             this._feedbackSettings[key].painter = ScriptPainterStore.shared.getPainterSession(this._feedbackSettings[key].painter);
         });
     }
+
+    get tilePlane() { return this.game.city.map.tilePlane; }
 
     render(ctx) {
         this._frameCounter = this._frameCounter + 1;
@@ -2546,7 +2839,8 @@ class MapToolSessionRenderer {
         if (feedback.driftPerMillisecond) {
             ctx.translate(feedback.driftPerMillisecond.x * age, feedback.driftPerMillisecond.y * age);
         }
-        var rect = this.canvasGrid.rectForTileRect(item.focusTileRect);
+        let rect = this.canvasGrid.rectForTileRect(this.tilePlane.screenRectForModel(item.focusTileRect));
+        // debugLog([item.focusTileRect, rect]);
         feedback.painter.render(ctx, rect, this.canvasGrid, item);
         ctx.restore();
     }
@@ -2605,6 +2899,10 @@ class SpritesheetStore {
     getSpritesheet(sheetID, tileWidth) {
         let item = this.sheetTable[sheetID];
         return item ? item[tileWidth] : null;
+    }
+
+    defaultTileVariantKey(tile) {
+        return hashArrayOfInts([tile.point.x, tile.point.y]);
     }
 }
 
@@ -2741,7 +3039,7 @@ class TerrainSpriteSource {
         } else if (type.has(TerrainType.flags.trees)) {
             return this.edgeSprite("terrain-forest", tile, n => !n.type.has(TerrainType.flags.trees));
         } else {
-            return this.store.getSprite("terrain-dirt", hashArrayOfInts([tile.point.x, tile.point.y]));
+            return this.store.getSprite("terrain-dirt", this.store.defaultTileVariantKey(tile));
         }
     }
 
@@ -2763,6 +3061,25 @@ class TerrainSpriteSource {
         let neighbor = this.sourceLayer.getTileAtPoint(v.offsettingPosition(tile.point));
         if (!neighbor) return 0;
         return filter(neighbor) ? 1 : 0;
+    }
+}
+
+class PlotSpriteSource {
+    constructor(config) {
+        this.sourceLayer = config.sourceLayer;
+        this.store = config.spriteStore;
+    }
+
+    getSprite(point) {
+        let tile = this.sourceLayer.getTileAtPoint(point);
+        if (!tile || !tile.plot || !tile.isPaintOrigin) { return null; }
+        let plot = tile.plot;
+        if (plot.item instanceof Zone) {
+            return this.store.getSprite(`zone-empty-${plot.item.type.toLowerCase()}`, this.store.defaultTileVariantKey(tile));
+        } else if (plot.item instanceof TerrainProp) {
+            return this.store.getSprite(`prop-${plot.item.type}`, this.store.defaultTileVariantKey(tile));
+        }
+        return null;
     }
 }
 
@@ -3337,6 +3654,7 @@ return {
     citySimInitOptions: citySimInitOptions,
     rootView: rootView,
     uiRunLoop: uiRunLoop,
+    AnimationState: AnimationState,
     BorderPainter: BorderPainter,
     Budget: Budget,
     City: City,
@@ -3348,7 +3666,7 @@ return {
     InputView: InputView,
     KeyInputController: KeyInputController,
     MapLayer: MapLayer,
-    MapRenderer: MapRenderer,
+    MapLayerViewModel: MapLayerViewModel,
     MapTile: MapTile,
     Plot: Plot,
     RCIValue: RCIValue,
@@ -3360,6 +3678,7 @@ return {
     Simoleon: Simoleon,
     SingleChoiceInputCollection: SingleChoiceInputCollection,
     Sprite: Sprite,
+    SpriteMapView: SpriteMapView,
     SpriteRenderModel: SpriteRenderModel,
     Spritesheet: Spritesheet,
     SpritesheetStore: SpritesheetStore,

@@ -62,6 +62,10 @@ map canvas {
     height: 100%;
 }
 
+map.mainMap canvas {
+    position: absolute;
+}
+
 minimaps {
     /* float on right side of map, bottom aligned so it's near the control panel */
     float: right;

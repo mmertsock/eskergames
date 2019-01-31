@@ -42,20 +42,23 @@ const SelectableList = Gaming.SelectableList;
 const UndoStack = Gaming.UndoStack;
 const Vector = Gaming.Vector;
 
+const AnimationState = CitySim.AnimationState;
 const BorderPainter = CitySim.BorderPainter;
 const CityMap = CitySim.CityMap;
-const MapLayer = CitySim.MapLayer;
 const GameContent = CitySimContent.GameContent;
 const GameDialog = CitySim.GameDialog;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
 const GridPainter = CitySim.GridPainter;
 const InputView = CitySim.InputView;
+const MapLayer = CitySim.MapLayer;
+const MapLayerViewModel = CitySim.MapLayerViewModel;
 const MapRenderer = CitySim.MapRenderer;
 const MapTile = CitySim.MapTile;
 const ScriptPainterStore = CitySim.ScriptPainterStore;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
 const Sprite = CitySim.Sprite;
+const SpriteMapView = CitySim.SpriteMapView;
 const SpriteRenderModel = CitySim.SpriteRenderModel;
 const Spritesheet = CitySim.Spritesheet;
 const SpritesheetStore = CitySim.SpritesheetStore;
@@ -756,40 +759,75 @@ class NewTerrainDialog extends GameDialog {
     }
 }
 
+class TerrainMapViewModel {
+    static Kvo() { return { "zoomLevel": "_zoomLevel", "layers": "layers" }; }
+
+    constructor(config) {
+        this.session = config.session;
+        this._zoomLevel = config.zoomLevel;
+        this.animation = new AnimationState(config.runLoop);
+        this.layers = [];
+        this.kvo = new Kvo(this);
+
+        this.session.kvo.changeToken.addObserver(this, () => this.reset());
+        this.reset();
+    }
+
+    get map() { return this.session.map; }
+    get zoomLevel() { return this._zoomLevel; }
+    set zoomLevel(value) { this.kvo.zoomLevel.setValue(value); }
+    get spriteStore() { return SpritesheetStore.mainMapStore; }
+
+    reset() {
+        this.layers = [];
+        this.layers.push(new MapLayerViewModel({
+            index: 0,
+            model: this,
+            showGrid: true,
+            showBorder: true,
+            spriteSource: new TerrainSpriteSource({
+                sourceLayer: this.map.terrainLayer,
+                spriteStore: this.spriteStore
+            })
+        }));
+        this.kvo.layers.notifyChanged();
+    }
+}
+
 class TerrainView {
     constructor() {
         this.session = null;
         this.elem = document.querySelector("map.mainMap");
-        this._mapView = null;
-
+        this.mapView = null;
         let zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
         this.zoomSelection = new SelectableList(zoomers);
         this.zoomSelection.setSelectedIndex(2);
-
         this._configureCommmands();
     }
 
     setUp(session) {
+        let runLoop = CitySimTerrain.uiRunLoop;
         this.session = session;
-        this._mapView = new SpriteMapView({
-            model: new MapViewModel({ session: this.session }),
+        this.model = new TerrainMapViewModel({
+            session: this.session,
+            runLoop: runLoop,
+            zoomLevel: this.zoomSelection.selectedItem.value
+        });
+        this.mapView = new SpriteMapView({
+            model: this.model,
             elem: this.elem,
-            zoomLevel: this.zoomLevel,
-            runLoop: CitySimTerrain.uiRunLoop
+            runLoop: runLoop
         });
     }
 
     get settings() { return GameContent.shared.mainMapView; }
-    get zoomLevel() { return this.zoomSelection.selectedItem.value; }
 
-    zoomLevelActivated(value) {
-        if (this._mapView) this._mapView.zoomLevel = value;
-    }
+    zoomLevelActivated(value) { if (this.model) this.model.zoomLevel = value; }
 
     _configureCommmands() {
         let gse = GameScriptEngine.shared;
-        gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
-        gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
+        gse.registerCommand("zoomIn", () => this.model.zoomSelection.selectNext());
+        gse.registerCommand("zoomOut", () => this.model.zoomSelection.selectPrevious());
     }
 }
 
@@ -880,256 +918,6 @@ class ControlsView {
         GameScriptEngine.shared.registerCommand("showFileMenu", () => this.showFileMenu());
     }
 }
-
-class MapViewModel {
-    static Kvo() { return { "layers": "layers" }; }
-
-    constructor(config) {
-        this.layers = [];
-        this.session = config.session;
-        this.kvo = new Kvo(this);
-        this.session.kvo.changeToken.addObserver(this, () => this.reset());
-        this.reset();
-    }
-
-    // So this looks like a CityMap to the view model MapLayers
-    get size() { return this.session.map.size; }
-    get tilePlane() { return this.session.map.tilePlane; }
-
-    reset() {
-        this.layers = [];
-        this.layers.push(new MapLayerViewModel({
-            index: 0,
-            model: this,
-            spriteSource: new TerrainSpriteSource({
-                sourceLayer: this.session.map.terrainLayer,
-                spriteStore: SpritesheetStore.mainMapStore
-            })
-        }));
-        this.kvo.layers.notifyChanged();
-    }
-}
-
-class MapLayerViewModel {
-    static Kvo() { return { "layer": "layer" }; }
-
-    constructor(config) {
-        this.index = config.index;
-        this.model = config.model; // MapViewModel
-        this.spriteSource = config.spriteSource;
-        this.kvo = new Kvo(this);
-
-        this.layer = new MapLayer({
-            id: `viewlayer-${config.index}`,
-            map: config.model,
-            tileClass: SpriteTileModel
-        });
-        this.layer.visitTiles(null, tile => {
-            tile.layerModel = this;
-            tile._sprite = this.spriteSource.getSprite(tile.point);
-        });
-    }
-
-    didSetSprite(tile, sprite) {
-        this.kvo.layer.notifyChanged();
-    }
-}
-
-class SpriteTileModel extends MapTile {
-    constructor(point, layer) {
-        super(point, layer);
-        this._sprite = null;
-    }
-
-    get sprite() { return this._sprite; }
-    set sprite(value) {
-        if (this._sprite == value) { return; }
-        this._sprite = value;
-        this.layerModel.didSetSprite(this, value);
-    }
-
-    get spriteRect() {
-        if (!this._sprite) { return null; }
-        return new Rect(this.point, this._sprite.tileSize);
-    }
-}
-
-class SpriteMapView {
-    static Kvo() { return { "frameCounter": "frameCounter", "zoomLevel": "_zoomLevel" }; }
-
-    constructor(config) {
-        this.model = config.model; // MapViewModel
-        this._zoomLevel = config.zoomLevel;
-        this.elem = config.elem;
-        this.layerViews = [];
-        this.millisecondsPerAnimationFrame = 500;
-        this.frameCounter = 0;
-        this.kvo = new Kvo(this);
-
-        this.rebuildLayers();
-        this.model.kvo.layers.addObserver(this, () => this.rebuildLayers());
-        config.runLoop.addDelegate(this);
-    }
-
-    get zoomLevel() { return this._zoomLevel; }
-    set zoomLevel(value) {
-        this.kvo.zoomLevel.setValue(value);
-    }
-
-    rebuildLayers() {
-        this.layerViews.forEach(view => view.remove());
-        this.layerViews = this.model.layers.map(layer => new SpriteMapLayerView({
-            mapView: this,
-            layer: layer,
-            wrap: false,
-            hasGrid: true,
-            borderPainter: new BorderPainter(SpritesheetStore.mainMapStore)
-        }));
-    }
-
-    processFrame(rl) {
-        this.updateFrameCounter(rl.latestFrameStartTimestamp());
-        this.layerViews.forEach(view => view.render(this.frameCounter));
-    }
-
-    updateFrameCounter(timestamp) {
-        let value = Math.floor(timestamp / this.millisecondsPerAnimationFrame);
-        if (value == this.frameCounter) return;
-        this.kvo.frameCounter.setValue(value);
-    }
-}
-
-class SpriteMapLayerView {
-    constructor(config) {
-        this.mapView = config.mapView;
-        this.model = config.layer; // MapLayerViewModel
-        this.wrap = !!config.wrap;
-        this.tilePlane = this.mapView.model.tilePlane;
-        this.borderPainter = config.borderPainter;
-        this.canvas = document.createElement("canvas");
-        this.mapView.elem.append(this.canvas);
-        this.tiles = [];
-        this.isAnimated = false;
-        this._dirty = false;
-        this._dirtyAnimatedOnly = false;
-        this.gridPainter = !!config.hasGrid ? new GridPainter(GameContent.shared.mainMapView) : null;
-
-        this.mapView.kvo.frameCounter.addObserver(this, () => this.setDirty(true));
-        this.mapView.kvo.zoomLevel.addObserver(this, () => this.zoomLevelChanged());
-        this.model.kvo.layer.addObserver(this, () => this.updateTiles());
-
-        this.zoomLevelChanged();
-    }
-
-    remove() {
-        this.canvasGrid = null;
-        this.canvas.remove();
-        Kvo.stopObservations(this);
-    }
-
-    get map() { return this.mapView.model.session.map; }
-    get allowAnimation() { return this.mapView.zoomLevel.allowAnimation; }
-
-    zoomLevelChanged() {
-        setTimeout(() => {
-            if (this.canvasGrid) {
-                this.canvasGrid.setSize({ tileWidth: this.mapView.zoomLevel.tileWidth, tileSpacing: 0 });
-            } else {
-                this.canvasGrid = new FlexCanvasGrid({
-                    canvas: this.canvas,
-                    deviceScale: FlexCanvasGrid.getDevicePixelScale(),
-                    tileWidth: this.mapView.zoomLevel.tileWidth,
-                    tileSpacing: 0
-                });
-            }
-            this.updateTiles();
-        }, 100);
-    }
-
-    updateTiles() {
-        this.isAnimated = false;
-        let tiles = [];
-
-        if (this.wrap) {
-            for (let y = 0; y < this.canvasGrid.tilesHigh; y += 1) {
-                for (let x = 0; x < this.canvasGrid.tilesWide; x += 1) {
-                    let tile = this.model.layer.getTileAtPoint(new Point(x % this.model.layer.size.width, y % this.model.layer.size.height));
-                    if (!!tile && !!tile.sprite) {
-                        let rect = new Rect(new Point(x, y), tile.sprite.tileSize);
-                        tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
-                        this.isAnimated = this.isAnimated || (tile.sprite.isAnimated && this.allowAnimation);
-                    }
-                }
-            }
-        } else {
-            let canvasVisibleRect = new Rect(0, 0, this.canvasGrid.tileSize.width, this.canvasGrid.tileSize.height);
-            let modelVisibleRect = this.tilePlane.modelRectForScreen(canvasVisibleRect);
-            this.model.layer.visitTiles(modelVisibleRect, tile => {
-                if (!!tile.sprite) {
-                    let rect = new Rect(tile.point, tile.sprite.tileSize);
-                    tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
-                    this.isAnimated = this.isAnimated || (tile.sprite.isAnimated && this.allowAnimation);
-                }
-            });
-        }
-
-        tiles.sort((a, b) => a.drawOrder - b.drawOrder);
-        this.tiles = tiles;
-        this.setDirty();
-    }
-
-    setDirty(animatedOnly) {
-        if (!!animatedOnly && !this.isAnimated) return;
-        this._dirty = true;
-        this._dirtyAnimatedOnly = !!animatedOnly;
-    }
-
-    render(frameCounter) {
-        if (!this._dirty || !this.canvasGrid) { return; }
-
-        frameCounter = this.isAnimated ? frameCounter : 0;
-        let ctx = this.canvas.getContext("2d", { alpha: true });
-        // if (!this._dirtyAnimatedOnly)
-        this.clear(ctx, this.canvasGrid.rectForFullCanvas);
-
-        if (this.borderPainter && this.mapView.zoomLevel.showBorder) {
-            this.borderPainter.render(ctx, this, frameCounter);
-        }
-
-        let store = SpritesheetStore.mainMapStore;
-        this.tiles.forEach(tile => {
-            // if (this.shouldRender(tile)) {
-                // if (this._dirtyAnimatedOnly)
-                //     this.clear(ctx, tile.screenRect(this.canvasGrid));
-                tile.render(ctx, this.canvasGrid, store, frameCounter);
-            // }
-        });
-
-        if (this.gridPainter) {
-            this.gridPainter.render(ctx, this.map, this.canvasGrid, this.mapView.zoomLevel);
-        }
-
-        this._dirty = false;
-        this._dirtyAnimatedOnly = false;
-    }
-
-    shouldRender(tile) {
-        // if (this._dirtyAnimatedOnly && !!tile.sprite) {
-        //     return tile.sprite.isAnimated;
-        // }
-        return true;
-    }
-
-    clear(ctx, rect) {
-        if (this.model.index == 0) {
-            ctx.fillStyle = GameContent.shared.mainMapView.outOfBoundsFillStyle;
-            ctx.rectFill(rect);
-        } else {
-            ctx.clearRect(rect.x, rect.y, rect.width, rect.height);
-        }
-    }
-}
-
 
 let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });

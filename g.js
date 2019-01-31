@@ -1308,16 +1308,16 @@ class TilePlane {
     get bounds() { return new Rect({x: 0, y: 0}, this.size); }
 
     screenTileForModel(tile) {
-        return new Point(tile.x, this._flippedY(tile.y));
+        return tile ? new Point(tile.x, this._flippedY(tile.y)) : null;
     }
     screenRectForModel(rect) {
-        return new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height);
+        return rect ? new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height) : null;
     }
     modelTileForScreen(tile) {
-        return new Point(tile.x, this._flippedY(tile.y));
+        return tile ? new Point(tile.x, this._flippedY(tile.y)) : null;
     }
     modelRectForScreen(rect) {
-        return new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height);
+        return rect ? new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height) : null;
     }
 
     drawingOrderIndexForModelTile(tile) {
