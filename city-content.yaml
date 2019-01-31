@@ -388,7 +388,7 @@ themes:
     tileWidth: 1
     imageSize:
       width: 4
-      height: 147
+      height: 151
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_2.png
     tileSize:
@@ -397,7 +397,7 @@ themes:
     tileWidth: 2
     imageSize:
       width: 8
-      height: 294
+      height: 302
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_3.png
     tileSize:
@@ -406,7 +406,7 @@ themes:
     tileWidth: 3
     imageSize:
       width: 12
-      height: 441
+      height: 453
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_6.png
     tileSize:
@@ -415,7 +415,7 @@ themes:
     tileWidth: 6
     imageSize:
       width: 24
-      height: 882
+      height: 906
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_12.png
     tileSize:
@@ -424,7 +424,7 @@ themes:
     tileWidth: 12
     imageSize:
       width: 48
-      height: 1764
+      height: 1812
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_24.png
     tileSize:
@@ -433,7 +433,7 @@ themes:
     tileWidth: 24
     imageSize:
       width: 96
-      height: 3528
+      height: 3624
   - id: default-map_1x1
     path: spritesheets/default-map_1x1_48.png
     tileSize:
@@ -442,7 +442,7 @@ themes:
     tileWidth: 48
     imageSize:
       width: 192
-      height: 7056
+      height: 7248
   - id: default-map_3x3
     path: spritesheets/default-map_3x3_3.png
     tileSize:
@@ -507,7 +507,7 @@ themes:
       width: 144
       height: 432
   sprites:
-  - id: terrain-border-beach-edge
+  - id: prop-tree
     sheetID: default-map_1x1
     tileSize:
       width: 1
@@ -515,8 +515,26 @@ themes:
     variants:
     - row: 0
       column: 0
+      frames: 2
+    - row: 1
+      column: 0
+      frames: 2
+    - row: 2
+      column: 0
+      frames: 2
+    - row: 3
+      column: 0
+      frames: 2
+  - id: terrain-border-beach-edge
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
+    - row: 4
+      column: 0
       frames: 1
-    - row: 0
+    - row: 4
       column: 1
       frames: 1
   - id: terrain-border-dirt-corner
@@ -525,13 +543,13 @@ themes:
       width: 1
       height: 1
     variants:
-    - row: 1
+    - row: 5
       column: 0
       frames: 1
-    - row: 1
+    - row: 5
       column: 1
       frames: 1
-    - row: 1
+    - row: 5
       column: 2
       frames: 1
   - id: terrain-border-dirt-edge
@@ -540,10 +558,10 @@ themes:
       width: 1
       height: 1
     variants:
-    - row: 2
+    - row: 6
       column: 0
       frames: 1
-    - row: 2
+    - row: 6
       column: 1
       frames: 1
   - id: terrain-border-water-corner
@@ -552,13 +570,13 @@ themes:
       width: 1
       height: 1
     variants:
-    - row: 3
+    - row: 7
       column: 0
       frames: 1
-    - row: 3
+    - row: 7
       column: 1
       frames: 1
-    - row: 3
+    - row: 7
       column: 2
       frames: 1
   - id: terrain-border-water-edge
@@ -567,10 +585,10 @@ themes:
       width: 1
       height: 1
     variants:
-    - row: 4
+    - row: 8
       column: 0
       frames: 1
-    - row: 4
+    - row: 8
       column: 1
       frames: 1
   - id: terrain-dirt
@@ -579,13 +597,13 @@ themes:
       width: 1
       height: 1
     variants:
-    - row: 5
+    - row: 9
       column: 0
       frames: 1
-    - row: 5
+    - row: 9
       column: 1
       frames: 1
-    - row: 5
+    - row: 9
       column: 2
       frames: 1
   - id: terrain-forest
@@ -594,18 +612,6 @@ themes:
       width: 1
       height: 1
     variants:
-    - row: 6
-      column: 0
-      frames: 4
-    - row: 7
-      column: 0
-      frames: 4
-    - row: 8
-      column: 0
-      frames: 4
-    - row: 9
-      column: 0
-      frames: 4
     - row: 10
       column: 0
       frames: 4
@@ -735,12 +741,6 @@ themes:
     - row: 52
       column: 0
       frames: 4
-  - id: terrain-freshwater
-    sheetID: default-map_1x1
-    tileSize:
-      width: 1
-      height: 1
-    variants:
     - row: 53
       column: 0
       frames: 4
@@ -753,6 +753,12 @@ themes:
     - row: 56
       column: 0
       frames: 4
+  - id: terrain-freshwater
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
     - row: 57
       column: 0
       frames: 4
@@ -882,12 +888,6 @@ themes:
     - row: 99
       column: 0
       frames: 4
-  - id: terrain-ocean
-    sheetID: default-map_1x1
-    tileSize:
-      width: 1
-      height: 1
-    variants:
     - row: 100
       column: 0
       frames: 4
@@ -900,6 +900,12 @@ themes:
     - row: 103
       column: 0
       frames: 4
+  - id: terrain-ocean
+    sheetID: default-map_1x1
+    tileSize:
+      width: 1
+      height: 1
+    variants:
     - row: 104
       column: 0
       frames: 4
@@ -1027,6 +1033,18 @@ themes:
       column: 0
       frames: 4
     - row: 146
+      column: 0
+      frames: 4
+    - row: 147
+      column: 0
+      frames: 4
+    - row: 148
+      column: 0
+      frames: 4
+    - row: 149
+      column: 0
+      frames: 4
+    - row: 150
       column: 0
       frames: 4
   - id: zone-empty-c
