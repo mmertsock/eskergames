@@ -2518,7 +2518,7 @@ class CanvasTileViewport {
         this.marginSize = { width: config.marginSize.width, height: config.marginSize.height };
         this.kvo = new Kvo(this);
         this.canvasStack.kvo.canvasDeviceSize.addObserver(this, () => this.updateTilePlane(null));
-        this.updateTilePlane(this.centerTile);
+        this.updateTilePlane(null);
     }
 
     // tiles wide/high
@@ -2532,6 +2532,11 @@ class CanvasTileViewport {
     get zoomLevel() { return this.zoomSelection.selectedItem.value; }
     zoomIn() { this.zoomSelection.selectNext(); }
     zoomOut() { this.zoomSelection.selectPrevious(); }
+
+    get centerTile() { return this._centerTile; }
+    set centerTile(value) {
+        this.updateTilePlane(value);
+    }
 
     getContext(index, isOpaque) {
         return new TileRenderContext({
@@ -2554,13 +2559,16 @@ class CanvasTileViewport {
     }
 
     updateTilePlane(newCenterTile) {
-        let log = false;
+        let log = false; //!!newCenterTile;
 
         this.tilePlane.tileWidth = this.zoomLevel.tileWidth * this.canvasStack.pixelScale;
         this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
-        if (newCenterTile) this._centerTile = newCenterTile;
         let modelBounds = new Rect(new Point(0, 0), this.tilePlane.size);
+        if (newCenterTile) this._centerTile = modelBounds.clampedPoint(newCenterTile).integral();
         // Change in mapSize can make centerTile invalid
+        if (log) {
+            debugLog(["newCenterTile", newCenterTile, "modelBounds", modelBounds, "centerCandidate", this._centerTile, "contains", modelBounds.containsTile(this._centerTile)]);
+        }
         if (!modelBounds.containsTile(this._centerTile))
             this._centerTile = modelBounds.center.integral();
 
@@ -2584,6 +2592,7 @@ class CanvasTileViewport {
             checkMargins.height = false;
             if (log) debugLog("Map smaller than viewport vertically.");
         }
+        if (log) debugLog(`updateTilePlane(${newCenterTile ? newCenterTile.debugDescription : "null"}): offset ${this.tilePlane.offset.debugDescription} => ${newOffset.debugDescription}`);
         this.tilePlane.offset = newOffset;
 
         // Don't stray horizontally/vertically beyond margins

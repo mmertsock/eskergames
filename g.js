@@ -704,6 +704,12 @@ class Rect {
     rounded() {
         return new Rect(Math.round(this.x), Math.round(this.y), Math.round(this.width), Math.round(this.height));
     }
+    clampedPoint(point) {
+        let ext = this.extremes;
+        return new Point(
+            Math.clamp(point.x, {min: ext.min.x, max: ext.max.x - 1}),
+            Math.clamp(point.y, {min: ext.min.y, max: ext.max.y - 1}));
+    }
 }
 
 class Vector extends XYValue {

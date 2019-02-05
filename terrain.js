@@ -809,6 +809,15 @@ class TerrainView {
         this.resetLayers();
         this.model.kvo.layers.addObserver(this, () => this.resetLayers());
         this.runLoop.addDelegate(this);
+
+        this.viewport.canvasStack.getCanvas(this.viewport.canvasStack.length - 1).addEventListener("click", evt => {
+            evt.preventDefault();
+            let point = new Point(evt.offsetX * this.viewport.canvasStack.pixelScale, evt.offsetY * this.viewport.canvasStack.pixelScale);
+            let tile = this.viewport.tilePlane.modelTileForScreenPoint(point);
+            if (!tile) return;
+            // debugLog(`map click: evt (${evt.offsetX},${evt.offsetY}), point ${point.debugDescription}, tile ${tile.debugDescription}`);
+            this.viewport.centerTile = tile;
+        });
     }
 
     resetLayers() {
