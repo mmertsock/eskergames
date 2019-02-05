@@ -800,6 +800,7 @@ class TerrainView {
         this.viewport = new CanvasTileViewport({
             mapSize: this.model.map.size,
             layerCount: this.model.layers.length,
+            initialZoomLevel: GameContent.shared.mainMapView.zoomLevels[2],
             containerElem: this.elem,
             animation: new AnimationState(this.runLoop),
             marginSize: {width: 2, height: 2} // 1 tile border + 1 tile blank space

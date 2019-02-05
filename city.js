@@ -2508,28 +2508,24 @@ class CanvasTileViewport {
         let initialZoomLevel = config.initialZoomLevel ? config.initialZoomLevel : GameContent.defaultItemFromArray(zoomLevels);
         this.zoomSelection.setSelectedIndex(initialZoomLevel.index);
 
-        this.tilePlane = new TilePlane(config.mapSize, this.zoomLevel.tileWidth);
-        debugLog("TODO use layerCount to initialize the canvasStack immediately")
         this.canvasStack = new CanvasStack(config.containerElem, config.layerCount);
+        this.tilePlane = new TilePlane(config.mapSize, this.zoomLevel.tileWidth * this.canvasStack.pixelScale);
+        this._centerTile = new Point(this.tilePlane.size.width * 0.5, this.tilePlane.size.height * 0.5).integral();
         this.animation = config.animation;
 
         // number of tiles to allow showing on each side of 
         // the tilePlane's bounds when panning to edges.
         this.marginSize = { width: config.marginSize.width, height: config.marginSize.height };
-
-        debugLog("TODO initialize the tile plane's viewportSize, then initialize content offset at the center of the plane")
-        this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
-
-        debugLog("TODO listen to CanvasStack resize events and update the tile plane accordingly, including the visibleModelRect KVO");
-
         this.kvo = new Kvo(this);
+        this.canvasStack.kvo.canvasDeviceSize.addObserver(this, () => this.updateTilePlane(null));
+        this.updateTilePlane(this.centerTile);
     }
 
     // tiles wide/high
     get mapSize() { return this.tilePlane.size; }
     set mapSize(value) {
         this.tilePlane.size = value;
-        debugLog("TODO update other stuff as needed");
+        this.updateTilePlane();
         this.kvo.mapSize.notifyChanged();
     }
 
@@ -2538,7 +2534,6 @@ class CanvasTileViewport {
     zoomOut() { this.zoomSelection.selectPrevious(); }
 
     getContext(index, isOpaque) {
-        this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
         return new TileRenderContext({
             canvas: this.canvasStack.getCanvas(index),
             viewport: this,
@@ -2548,15 +2543,80 @@ class CanvasTileViewport {
 
     zoomLevelActivated(value) {
         if (!this.tilePlane) return;
-        debugLog(["TODO update content offset, etc., to keep things centered.", value, this.tilePlane]);
         // TODO hmm should TilePlane do this automatically? eh thinking no.
         // have it not care at all what the content offset is. this can have the logic for 
         // keeping things within correct bounds.
         // To help with unit testing the logic, could have a method on class Rect or something 
         // to do a generic "constrain this rect within a larger rect" logic for any panning/zoom/resize
         // changes to make sure the viewport doesn't stray too far off the map edge.
-        this.tilePlane.tileWidth = value.tileWidth;
+        this.updateTilePlane(null);
         this.kvo.zoomLevel.notifyChanged();
+    }
+
+    updateTilePlane(newCenterTile) {
+        let log = false;
+
+        this.tilePlane.tileWidth = this.zoomLevel.tileWidth * this.canvasStack.pixelScale;
+        this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
+        if (newCenterTile) this._centerTile = newCenterTile;
+        let modelBounds = new Rect(new Point(0, 0), this.tilePlane.size);
+        // Change in mapSize can make centerTile invalid
+        if (!modelBounds.containsTile(this._centerTile))
+            this._centerTile = modelBounds.center.integral();
+
+        // Try to preserve _centerTile
+        let viewportScreenBounds = this.tilePlane.viewportScreenBounds;
+        let currentCenterPoint = this.tilePlane.screenRectForModelTile(this._centerTile).center;
+        let targetCenterPoint = viewportScreenBounds.center;
+        let newOffset = this.tilePlane.offset.adding(targetCenterPoint.x - currentCenterPoint.x, targetCenterPoint.y - currentCenterPoint.y);
+
+        // Force center horizontally/vertically if map is smaller than viewport
+        let checkMargins = { width: true, height: true };
+        let mapModelRect = new Rect(0, 0, this.tilePlane.size.width, this.tilePlane.size.height);
+        let mapScreenSize = this.tilePlane.screenRectForModelRect(mapModelRect).size;
+        if (mapScreenSize.width < viewportScreenBounds.width) {
+            newOffset.x = 0.5 * (viewportScreenBounds.width - mapScreenSize.width);
+            checkMargins.width = false;
+            if (log) debugLog("Map smaller than viewport horizontally.");
+        }
+        if (mapScreenSize.height < viewportScreenBounds.height) {
+            newOffset.y = 0.5 * (viewportScreenBounds.height - mapScreenSize.height);
+            checkMargins.height = false;
+            if (log) debugLog("Map smaller than viewport vertically.");
+        }
+        this.tilePlane.offset = newOffset;
+
+        // Don't stray horizontally/vertically beyond margins
+        if (checkMargins.width || checkMargins.height) {
+            newOffset = this.tilePlane.offset;
+            let viewportExtremes = viewportScreenBounds.extremes;
+            let marginExtremes = this.tilePlane.screenRectForModelRect(mapModelRect.inset(-2 * this.marginSize.width, -2 * this.marginSize.height)).extremes;
+            if (checkMargins.width) {
+                // Since we don't check a given direction if the map was smaller than the screen,
+                // we know we would only need to adjust left or right but not both ways.
+                if (marginExtremes.min.x > viewportExtremes.min.x) {
+                    newOffset.x -= (marginExtremes.min.x - viewportExtremes.min.x);
+                    if (log) debugLog("Fix left margin");
+                } else if (marginExtremes.max.x < viewportExtremes.max.x) {
+                    newOffset.x += (viewportExtremes.max.x - marginExtremes.max.x);
+                    if (log) debugLog("Fix right margin");
+                }
+            }
+            if (checkMargins.height) {
+                if (marginExtremes.min.y > viewportExtremes.min.y) {
+                    newOffset.y -= (marginExtremes.min.y - viewportExtremes.min.y);
+                    if (log) debugLog("Fix top margin");
+                } else if (marginExtremes.max.x < viewportExtremes.max.x) {
+                    newOffset.y += (viewportExtremes.max.y - marginExtremes.max.y);
+                    if (log) debugLog("Fix bottom margin");
+                }
+            }
+            if (!newOffset.isEqual(this.tilePlane.offset))
+                this.tilePlane.offset = newOffset;
+        }
+
+        this._centerTile = this.tilePlane.visibleModelRect.center.integral();
+        this.kvo.visibleModelRect.notifyChanged();
     }
 }
 

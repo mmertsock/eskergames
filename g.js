@@ -1361,7 +1361,7 @@ class TilePlane {
         // current number of device pixels per tile.
         this.tileWidth = tileWidth;
         // screen origin (top left) offset, in device pixels.
-        this.offset = new Point(0, 0);
+        this._offset = new Point(0, 0);
         // size, in device pixels, of the rectangle visible on the screen
         this.viewportSize = { width: 0, height: 0 };
     }
@@ -1384,6 +1384,9 @@ class TilePlane {
         this._viewport = new Rect(0, 0, value.width, value.height);
     }
 
+    get offset() { return this._offset; }
+    set offset(value) { this._offset = value.integral(); }
+
     // ~~~~~~ Conversions of model <==> screen coordinates ~~~~~~
     // Handles any coordinates in or out of the model or screen bounds.
     // Accounts for pixelScale and offset but no concept of a viewport size.
@@ -1392,7 +1395,7 @@ class TilePlane {
 
     // top-left on-screen pixel coordinate of a model coordinate
     screenOriginForModelTile(tile) {
-        return tile ? new Point(this.offset.x + (tile.x * this._tileWidth), this.offset.y + (this._flippedModelY(tile.y) * this._tileWidth)) : null;
+        return tile ? new Point(this._offset.x + (tile.x * this._tileWidth), this._offset.y + (this._flippedModelY(tile.y) * this._tileWidth)) : null;
     }
 
     screenRectForModelTile(tile) {
@@ -1408,7 +1411,7 @@ class TilePlane {
     // any point within the visible bounds of a tile map to that model tile,
     // including the top left point (e.g. 0, 0) screen coords will map to the plane's top left model tile
     modelTileForScreenPoint(point) {
-        return point ? new Point(Math.floor((point.x - this.offset.x) / this._tileWidth), this._flippedModelY(Math.floor((point.y - this.offset.y) / this._tileWidth))) : null;
+        return point ? new Point(Math.floor((point.x - this._offset.x) / this._tileWidth), this._flippedModelY(Math.floor((point.y - this._offset.y) / this._tileWidth))) : null;
     }
 
     // smallest model rect that fully encompasses every pixel
@@ -1460,26 +1463,36 @@ class TilePlane {
 }
 
 class CanvasStack {
+    static Kvo() { return { "canvasDeviceSize": "_canvasDeviceSize" }; }
+
     constructor(containerElem, layerCount) {
         this.containerElem = containerElem;
         this.canvases = [];
         this.pixelScale = HTMLCanvasElement.getDevicePixelScale();
         this._updateMetricsDebounceTimeout = null;
-        document.defaultView.addEventListener("resize", e => {
-            this._updateMetricsDebounced();
-        });
+        this.kvo = new Kvo(this);
+
         layerCount = (typeof(layerCount) == 'undefined') ? 0 : layerCount;
         while (this.length < layerCount) {
             this.addCanvas();
         }
+
+        document.defaultView.addEventListener("resize", e => {
+            this._updateMetricsDebounced();
+        });
+        this.updateCanvasDeviceSize();
     }
 
     get length() { return this.canvases.length; }
 
     // device pixel size of the canvases
-    get canvasDeviceSize() {
-        if (this.canvases.length < 1) return { width: 0, height: 0 };
-        return { width: this.canvases[0].width, height: this.canvases[0].height };
+    get canvasDeviceSize() { return this._canvasDeviceSize; }
+    updateCanvasDeviceSize() {
+        if (this.canvases.length < 1) {
+            this.kvo.canvasDeviceSize.setValue({ width: 0, height: 0 });
+        } else {
+            this.kvo.canvasDeviceSize.setValue({ width: this.canvases[0].width, height: this.canvases[0].height });
+        }
     }
 
     // index 0 == bottom in drawing order
