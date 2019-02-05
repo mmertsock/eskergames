@@ -4,6 +4,8 @@ window.UnitTests = (function(outputElement) {
 
 const Binding = Gaming.Binding;
 const BoolArray = Gaming.BoolArray;
+const CanvasStack = Gaming.CanvasStack;
+const ChangeTokenBinding = Gaming.ChangeTokenBinding;
 const CircularArray = Gaming.CircularArray;
 const Dispatch = Gaming.Dispatch;
 const DispatchTarget = Gaming.DispatchTarget;
@@ -15,9 +17,9 @@ const Rect = Gaming.Rect;
 const Rng = Gaming.Rng;
 const SaveStateItem = Gaming.SaveStateItem;
 const TilePlane = Gaming.TilePlane;
-
 const UndoStack = Gaming.UndoStack;
-const GameMap = CitySim.GameMap;
+const Vector = Gaming.Vector;
+
 const SimDate = CitySim.SimDate;
 
 function appendOutputItem(msg, className) {
@@ -61,7 +63,7 @@ class TestSession {
         this.summarize();
     }
     summarize() {
-        logTestHeader("Test Summary");
+        logTestHeader("Test Summary " + new Date().toLocaleString());
         logTestMsg(`Tests run: ${this.testsPassed + this.testsFailed}`);
         if (this.testsFailed > 0) {
             logTestFail(`Tests failed: ${this.testsFailed}`);
@@ -77,6 +79,8 @@ class UnitTest {
         this.body = body;
         this.expectations = 0;
         this.failures = 0;
+        this.visualizationElem = document.querySelector("#visualizations");
+        this.hiddenTestElem = document.querySelector("#domContainer");
     }
 
     get isOK() { return this.failures == 0; }
@@ -85,6 +89,7 @@ class UnitTest {
     build() {
         return function(config, expect) {
             logTestHeader(this.name);
+            this.hiddenTestElem.removeAllChildren();
             try {
                 this.body(config, expect);
             } catch(e) {
@@ -103,7 +108,7 @@ class UnitTest {
             if (expect) {
                 logTestMsg(`expect: ${JSON.stringify(expect)}`);
             }
-            logTestHeader(`END ${this.name}`);
+            logTestHeader(`END ${this.name} (${this.failures} failure${this.failures == 1 ? "" : "s"})`);
         }.bind(this);
     }
 
@@ -131,10 +136,29 @@ class UnitTest {
         }
         return true;
     }
+    describe(value) {
+        let p = value ? Object.getPrototypeOf(value) : null;
+        while (p) {
+            if (!!Object.getOwnPropertyDescriptors(p).debugDescription)
+                return value.debugDescription;
+            p = Object.getPrototypeOf(p);
+        }
+        // if (!!value && !!value.constructor && !!Object.getOwnPropertyDescriptors(value.constructor.prototype).debugDescription) {
+        //     return value.debugDescription;
+        // }
+        return `${value}`;
+    }
     assertEqual(a, b, msg) {
         this.expectations += 1;
+        if (!!a && !!b && a.constructor == b.constructor && typeof(a.isEqual) == "function") {
+            if (!b.isEqual(a)) {
+                this.logFailure(this._assertMessage(`assertEqual failure: ${this.describe(a)} neq ${this.describe(b)}`, msg));
+                return false;
+            }
+            return true;
+        }
         if (a != b) {
-            this.logFailure(this._assertMessage(`assertEqual failure: ${a} != ${b}`, msg));
+            this.logFailure(this._assertMessage(`assertEqual failure: ${this.describe(a)} != ${this.describe(b)}`, msg));
             return false;
         }
         return true;
@@ -229,7 +253,7 @@ var randomLineTest = function() {
                 // logTestMsg(values.join(", "));
                 var sparkline = new Sparkline({ min: 0, max: 10, width: 200, height: 50 });
                 sparkline.append(values);
-                document.body.append(sparkline.elem);
+                this.visualizationElem.append(sparkline.elem);
             });
         });
 
@@ -241,7 +265,7 @@ var randomLineTest = function() {
         }
         var sparkline = new Sparkline({ min: 0, max: 20, width: 200, height: 50 });
         sparkline.append(values);
-        document.body.append(sparkline.elem);
+        this.visualizationElem.append(sparkline.elem);
     }).buildAndRun();
 }
 
@@ -773,22 +797,60 @@ class EmployeeWatcher {
         this.kvoHistory = [];
         if (top) {
             this.employee.kvo.addObserver(this, (source) => {
-                this.kvoHistory.push({ source: source, via: "top" });
+                this.kvoHistory.push({ source: source, via: "top", token: this.employee.kvo.token });
             });
         }
         if (child) {
             this.employee.kvo.salary.addObserver(this, (source) => {
                 this.salaryHistory.push(source.salary);
-                this.kvoHistory.push({ source: source, via: "salary" });
+                this.kvoHistory.push({ source: source, via: "salary", token: this.employee.kvo.salary.token });
             });
             this.employee.kvo.name.addObserver(this, (source) => {
-                this.kvoHistory.push({ source: source, via: "name" });
+                this.kvoHistory.push({ source: source, via: "name", token: this.employee.kvo.name.token });
             });
         }
     }
 }
 
+function changeTokenBindingTest() {
+    new UnitTest("ChangeTokenBinding", function() {
+        let business1 = new Business({ bagger: 10, manager: 100 });
+        let person1 = new Employee(business1, "bagger", "A");
+        let sut = new ChangeTokenBinding(person1.kvo.title, false);
+        this.assertFalse(sut.hasChange, "has: initial set to false");
+        this.assertFalse(sut.consume(), "consume: initial");
+        this.assertFalse(sut.consume(), "consume: initial x2");
+        person1.setTitle("manager");
+        this.assertTrue(sut.hasChange, "has: 1");
+        this.assertTrue(sut.consume(), "consume: 1");
+        this.assertFalse(sut.hasChange, "has: 1 consumed");
+        this.assertFalse(sut.consume(), "consume: after 1");
+        person1.setTitle("bagger");
+        this.assertTrue(sut.hasChange, "has: 2");
+        this.assertTrue(sut.hasChange, "has: 2 again");
+        this.assertTrue(sut.consume(), "consume: 2");
+        this.assertFalse(sut.consume(), "consume: 2 again");
+        this.assertFalse(sut.hasChange, "has: after 2");
+
+        sut = new ChangeTokenBinding(person1.kvo.title, true);
+        this.assertTrue(sut.hasChange, "has: initial set to true");
+        sut = new ChangeTokenBinding(person1.kvo.title, false);
+        this.assertFalse(sut.hasChange, "has: initial set to false with non-zero target token");
+
+        items = [new ChangeTokenBinding(person1.kvo.name, false), new ChangeTokenBinding(person1.kvo.title, true)];
+        this.assertTrue(ChangeTokenBinding.consumeAll(items), "consumeAll: one initial true value");
+        this.assertFalse(items[0].hasChange);
+        this.assertFalse(items[1].hasChange);
+        person1.setName("B");
+        this.assertTrue(ChangeTokenBinding.consumeAll(items), "consumeAll: after a change");
+        this.assertFalse(ChangeTokenBinding.consumeAll(items), "consumeAll: repeat is false");
+        this.assertFalse(items[0].hasChange);
+        this.assertFalse(items[1].hasChange);
+    }).buildAndRun();
+}
+
 function kvoTest() {
+
 
     new UnitTest("Kvo-Setup", function() {
         var business1 = new Business({ bagger: 10, manager: 100 });
@@ -814,18 +876,21 @@ function kvoTest() {
         if (this.assertEqual(house1.kvoHistory.length, 1)) {
             this.assertEqual(house1.kvoHistory[0].source, person1);
             this.assertEqual(house1.kvoHistory[0].via, "top");
+            this.assertEqual(house1.kvoHistory[0].token, 1);
         };
         person1.setName("B");
         if (this.assertEqual(house1.kvoHistory.length, 2)) {
             this.assertEqual(house1.kvoHistory[1].source, person1);
             this.assertEqual(house1.kvoHistory[1].via, "top");
+            this.assertEqual(house1.kvoHistory[1].token, 2);
         };
         person1.doStuff();
         if (this.assertEqual(house1.kvoHistory.length, 3)) {
             this.assertEqual(house1.kvoHistory[2].source, person1);
             this.assertEqual(house1.kvoHistory[2].via, "top");
+            this.assertEqual(house1.kvoHistory[2].token, 3);
         };
-        Kvo.stopObservations(house1);
+        Kvo.stopAllObservations(house1);
         person1.setName("C");
         this.assertEqual(house1.kvoHistory.length, 3);
     }).buildAndRun();
@@ -842,14 +907,16 @@ function kvoTest() {
         if (this.assertEqual(house1.kvoHistory.length, 1)) {
             this.assertEqual(house1.kvoHistory[0].source, person1);
             this.assertEqual(house1.kvoHistory[0].via, "salary");
+            this.assertEqual(house1.kvoHistory[0].token, 1);
         }
         person1.setName("C");
         this.assertEqual(house1.salaryHistory.length, 2);
         if (this.assertEqual(house1.kvoHistory.length, 2)) {
             this.assertEqual(house1.kvoHistory[1].source, person1);
             this.assertEqual(house1.kvoHistory[1].via, "name");
+            this.assertEqual(house1.kvoHistory[1].token, 1);
         }
-        Kvo.stopObservations(house1);
+        Kvo.stopAllObservations(house1);
         person1.setTitle("bagger");
         this.assertEqual(house1.salaryHistory.length, 2);
         this.assertEqual(house1.kvoHistory.length, 2);
@@ -865,14 +932,17 @@ function kvoTest() {
         if (this.assertEqual(house1.kvoHistory.length, 2)) {
             this.assertEqual(house1.kvoHistory[0].source, person1);
             this.assertEqual(house1.kvoHistory[0].via, "salary");
+            this.assertEqual(house1.kvoHistory[0].token, 1);
             this.assertEqual(house1.kvoHistory[1].source, person1);
             this.assertEqual(house1.kvoHistory[1].via, "top");
+            this.assertEqual(house1.kvoHistory[1].token, 1);
         }
         person1.doStuff();
         this.assertEqual(house1.salaryHistory.length, 2);
         if (this.assertEqual(house1.kvoHistory.length, 3)) {
             this.assertEqual(house1.kvoHistory[2].source, person1);
             this.assertEqual(house1.kvoHistory[2].via, "top");
+            this.assertEqual(house1.kvoHistory[2].token, 2);
         }
     }).buildAndRun();
 }
@@ -924,35 +994,357 @@ function bindingTest() {
 
 function tilePlaneTest() {
     new UnitTest("TilePlane", function() {
-        let sut = new TilePlane({ width: 7, height: 5 });
+        let sut = new TilePlane({ width: 7, height: 5 }, 1);
         this.assertEqual(sut.size.width, 7);
         this.assertEqual(sut.size.height, 5);
-        this.assertTrue(sut.screenTileForModel(new Point(0, 0)).isEqual(new Point(0, 4)), "screenTileForModel BL");
-        this.assertTrue(sut.screenTileForModel(new Point(6, 0)).isEqual(new Point(6, 4)), "screenTileForModel BR");
-        this.assertTrue(sut.screenTileForModel(new Point(6, 4)).isEqual(new Point(6, 0)), "screenTileForModel TR");
-        this.assertTrue(sut.screenTileForModel(new Point(0, 4)).isEqual(new Point(0, 0)), "screenTileForModel TL");
-        this.assertTrue(sut.screenTileForModel(new Point(1, 3)).isEqual(new Point(1, 1)), "screenTileForModel MID");
+        this.assertEqual(sut.tileWidth, 1);
+        this.assertEqual(sut.offset.x, 0);
+        this.assertEqual(sut.offset.y, 0);
+        this.assertEqual(sut.screenOriginForModelTile(null), null);
+        this.assertEqual(sut.screenRectForModelTile(null), null);
+        this.assertEqual(sut.screenRectForModelRect(null), null);
+        this.assertEqual(sut.modelTileForScreenPoint(null), null);
+        this.assertEqual(sut.modelRectForScreenRect(null), null);
+        this.assertFalse(sut.isModelRectVisible(null));
+        // TilePlane starts with visibleSize = 0x0.
+        this.assertFalse(sut.isModelRectVisible(new Rect(0, 0, 7, 5)));
+        this.assertTrue(sut.visibleModelRect.isEmpty());
 
-        this.assertTrue(sut.screenTileForModel(new Point(-1, 0)).isEqual(new Point(-1, 4)), "screenTileForModel OOB");
-        this.assertTrue(sut.screenTileForModel(new Point(7, 0)).isEqual(new Point(7, 4)), "screenTileForModel OOB");
-        this.assertTrue(sut.screenTileForModel(new Point(0, -1)).isEqual(new Point(0, 5)), "screenTileForModel OOB");
-        this.assertTrue(sut.screenTileForModel(new Point(0, 5)).isEqual(new Point(0, -1)), "screenTileForModel OOB");
+        let prepForExpectations = config => {
+            config.sut.tileWidth = config.tileWidth;
+            config.sut.offset = config.offset;
+            if (!!config.viewportSize) {
+                config.sut.viewportSize = config.viewportSize;
+            }
+            return `tw${config.tileWidth} o${config.offset.x},${config.offset.y} vp${config.sut.viewportSize.width}x${config.sut.viewportSize.height}`;
+        };
 
-        this.assertTrue(sut.modelTileForScreen(new Point(0, 0)).isEqual(new Point(0, 4)), "modelTileForScreen TL");
-        this.assertTrue(sut.modelTileForScreen(new Point(6, 0)).isEqual(new Point(6, 4)), "modelTileForScreen TR");
-        this.assertTrue(sut.modelTileForScreen(new Point(6, 4)).isEqual(new Point(6, 0)), "modelTileForScreen BR");
-        this.assertTrue(sut.modelTileForScreen(new Point(0, 4)).isEqual(new Point(0, 0)), "modelTileForScreen BL");
-        this.assertTrue(sut.modelTileForScreen(new Point(1, 3)).isEqual(new Point(1, 1)), "modelTileForScreen MID");
+        let testScreenRectForModelTile = config => {
+            let label = prepForExpectations(config);
+            config.expectations.forEach(e => {
+                this.assertEqual(config.sut.screenOriginForModelTile(new Point(e[0], e[1])), new Point(e[2], e[3]), "screenOriginForModelTile " + label);
+                this.assertEqual(config.sut.screenRectForModelTile(new Point(e[0], e[1])), new Rect(e[2], e[3], e[4], e[5]), "screenRectForModelTile " + label);
+            });
+        };
 
-        this.assertTrue(sut.modelTileForScreen(new Point(-1, 0)).isEqual(new Point(-1, 4)), "modelTileForScreen OOB");
-        this.assertTrue(sut.modelTileForScreen(new Point(7, 0)).isEqual(new Point(7, 4)), "modelTileForScreen OOB");
-        this.assertTrue(sut.modelTileForScreen(new Point(0, -1)).isEqual(new Point(0, 5)), "modelTileForScreen OOB");
-        this.assertTrue(sut.modelTileForScreen(new Point(0, 5)).isEqual(new Point(0, -1)), "modelTileForScreen OOB");
+        let testScreenRectForModelRect = config => {
+            let label = prepForExpectations(config);
+            config.expectations.forEach(e => {
+                this.assertEqual(config.sut.screenRectForModelRect(new Rect(e[0], e[1], e[2], e[3])), new Rect(e[4], e[5], e[6], e[7]), "screenRectForModelRect " + label);
+            });
+        };
 
-        this.assertTrue(sut.screenRectForModel(new Rect(1, 3, 1, 1)).isEqual(new Rect(1, 1, 1, 1)), "screenRectForModel 1311");
-        this.assertTrue(sut.screenRectForModel(new Rect(0, 1, 3, 2)).isEqual(new Rect(0, 2, 3, 2)), "screenRectForModel 0123");
-        this.assertTrue(sut.modelRectForScreen(new Rect(1, 1, 1, 1)).isEqual(new Rect(1, 3, 1, 1)), "screenRectForModel 1111");
-        this.assertTrue(sut.modelRectForScreen(new Rect(-2, 4, 7, 3)).isEqual(new Rect(-2, -2, 7, 3)), "modelRectForScreen -2473");
+        let testModelTileForScreenPoint = config => {
+            let label = prepForExpectations(config);
+            config.expectations.forEach(e => {
+                this.assertEqual(config.sut.modelTileForScreenPoint(new Point(e[0], e[1])), new Point(e[2], e[3]), "modelTileForScreenPoint " + label);
+            });
+        };
+
+        let testModelRectForScreenRect = config => {
+            let label = prepForExpectations(config);
+            config.expectations.forEach(e => {
+                this.assertEqual(config.sut.modelRectForScreenRect(new Rect(e[0], e[1], e[2], e[3])), new Rect(e[4], e[5], e[6], e[7]), "testModelRectForScreenRect " + label);
+            });
+        };
+
+        let testIsModelRectVisible = config => {
+            let label = prepForExpectations(config);
+            config.expectations.forEach(e => {
+                let rect = new Rect(e[1], e[2], e[3], e[4]);
+                let thisLabel = `isModelRectVisible ${label} for ${rect.debugDescription}`;
+                this.assertEqual(config.sut.isModelRectVisible(rect), e[0], thisLabel);
+            });
+        }
+
+        let testVisibleModelRect = config => {
+            let label = prepForExpectations(config);
+            config.expectations.forEach(e => {
+                config.sut.viewportSize = { width: e[0], height: e[1] };
+                let thisLabel = `visibleModelRect ${label} for ${e[0]}x${e[1]}`;
+                this.assertEqual(config.sut.visibleModelRect, new Rect(e[2], e[3], e[4], e[5]), thisLabel);
+            });
+        }
+
+        testScreenRectForModelTile({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 1,
+            expectations: [
+                // tile   // expected rect
+                [ 0,  4,  0, 0, 1, 1],
+                [ 6,  4,  6, 0, 1, 1],
+                [ 0,  0,  0, 4, 1, 1],
+                [ 1,  3,  1, 1, 1, 1],
+                [-1,  0, -1,  4, 1, 1],
+                [ 7,  0,  7,  4, 1, 1],
+                [ 0, -1,  0,  5, 1, 1],
+                [ 0,  5,  0, -1, 1, 1]
+            ]
+        });
+
+// -------------
+// |pixel origin
+// |screen tile
+// |model tile
+// -----------------
+// |p0,0   |p16,0  |y0 height 48. model rect has y2 height 3.
+// |s0,0   |s1,0   |  : y11 height 48. model rect has y1 height 4.
+// |m0,4   |m1,4   |  :  :
+// -----------------  :  :
+// |p0,16  |p16,16 |  :  :
+// |s0,1   |s1,1   |  :  :
+// |m0,3   |m1,3   |  :  :
+// -----------------  :  :
+// |p0,32  |p16,32 |  :  :
+// |s0,2   |s1,2   |  :  :
+// |m0,2   |m1,2   |  v  :
+// ----------------- --- :
+// |p0,48  |p16,48 |     v
+// |s0,3   |s1,3   |    ---
+// |m0,1   |m1,1   |
+// -----------------
+// |p0,64  |p16,64 |
+// |s0,4   |s1,4   |
+// |m0,0   |m1,0   |
+// -----------------
+        testScreenRectForModelTile({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 16,
+            expectations: [
+                // tile  // expected rect
+                [ 0,  4,   0,   0, 16, 16],
+                [ 6,  4,  96,   0, 16, 16],
+                [ 0,  0,   0,  64, 16, 16],
+                [ 1,  3,  16,  16, 16, 16],
+                [-1,  0, -16,  64, 16, 16],
+                [ 7,  0, 112,  64, 16, 16],
+                [ 0, -1,   0,  80, 16, 16],
+                [ 0,  5,   0, -16, 16, 16]
+            ]
+        });
+
+        testScreenRectForModelTile({
+            sut: sut,
+            offset: new Point(-19, 31),
+            tileWidth: 16,
+            expectations: [
+                // tile  // expected rect
+                [ 0,  4, -19,  31, 16, 16],
+                [ 6,  4,  77,  31, 16, 16],
+                [ 0,  0, -19,  95, 16, 16],
+                [ 1,  3,  -3,  47, 16, 16],
+                [ 0, -1, -19, 111, 16, 16]
+            ]
+        });
+
+        testScreenRectForModelRect({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 16,
+            expectations: [
+                // model rect    // screen rect
+                [ 0,  4,  1,  1,   0,   0,  16, 16],
+                [ 2,  1,  3,  2,  32,  32,  48, 32],
+                [-1, -1,  9,  7, -16, -16, 144,112] // full tile plane + 1-tile padding
+            ]
+        });
+
+        testScreenRectForModelRect({
+            sut: sut,
+            offset: new Point(27, -58),
+            tileWidth: 16,
+            expectations: [
+                // model rect    // screen rect
+                [ 0,  4,  1,  1,  27, -58,  16, 16],
+                [ 2,  1,  3,  2,  59, -26,  48, 32],
+                [-1, -1,  9,  7,  11, -74, 144,112] // full tile plane + 1-tile padding
+            ]
+        });
+
+        testModelTileForScreenPoint({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 1,
+            expectations: [
+                [0, 0, 0, 4],
+                [6, 4, 6, 0],
+                [3, 2, 3, 2]
+            ]
+        });
+
+        testModelTileForScreenPoint({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 16,
+            expectations: [
+                // point // model tile
+                [ 0,  0,    0,  4], // top left corner of a tile
+                [ 5,  5,    0,  4], // in the middle of a tile
+                [ -3, 271, -1, -12] // out of bounds
+            ]
+        });
+
+        testModelTileForScreenPoint({
+            sut: sut,
+            offset: new Point(37, -7),
+            tileWidth: 16,
+            expectations: [
+                // point // model tile
+                [ 0,  0,   -3, 4],
+                [37, 58,    0, 0]
+            ]
+        });
+
+        testModelRectForScreenRect({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 16,
+            expectations: [
+                // screen rect   // model rect
+                [ 0,  0, 32, 16,   0, 4, 2, 1], // aligned with tile boundaries
+                [ 0,  0,112, 80,   0, 0, 7, 5], // aligned with tile boundaries
+                [16, 32, 64, 48,   1, 0, 4, 3], // aligned with tile boundaries (with variations below)
+                [16, 37, 64, 48,   1,-1, 4, 4], // horizontally but not vertically aligned with tile boundaries
+                [21, 32, 64, 48,   1, 0, 5, 3], // vertically but not horizontally aligned with tile boundaries
+                [16, 32, 67, 43,   1, 0, 5, 3], // origin aligned but size is not
+                [5,   5,  5,  5,   0, 4, 1, 1]  // screen rect smaller than one tile, expands to one tile
+            ]
+        });
+
+        testModelRectForScreenRect({
+            sut: sut,
+            offset: new Point(7, -25),
+            tileWidth: 16,
+            expectations: [
+                [0, 0, 32, 16, -1, 2, 3, 2]
+            ]
+        });
+
+        testIsModelRectVisible({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 16,
+            viewportSize: {width: 100, height: 100},
+            expectations: [
+                //viz?  // model rect
+                [true,   0, 4, 1, 1],
+                [false, -1, 4, 1, 1],
+                [false,  0, 5, 1, 1]
+            ]
+        });
+
+        testIsModelRectVisible({
+            sut: sut,
+            offset: new Point(120, 120),
+            tileWidth: 16,
+            viewportSize: {width: 100, height: 100},
+            expectations: [
+                //viz?  // rect 
+                [false,  0, 4, 1, 1],
+                [true,  -2, 6, 1, 1]
+            ]
+        });
+
+        testVisibleModelRect({
+            sut: sut,
+            offset: new Point(0, 0),
+            tileWidth: 16,
+            expectations: [
+                // viewport  // model rect
+                [16, 16,     0, 4, 1, 1],
+                [16, 80,     0, 0, 1, 5],
+                [64, 16,     0, 4, 4, 1],
+                [37,  5,     0, 4, 3, 1],
+                [2,  98,     0,-2, 1, 7]
+            ]
+        });
+
+        testVisibleModelRect({
+            sut: sut,
+            offset: new Point(27, -61),
+            tileWidth: 16,
+            expectations: [
+                // viewport  // model rect
+                [16, 16,     -2, 0, 2, 2]
+            ]
+        });
+
+        let tiles = [[], [], [], [], []];
+        for (let y = 0; y < sut.size.height; y += 1) {
+            for (let x = 0; x < sut.size.width; x += 1) {
+                tiles[y][x] = sut.drawingOrderIndexForModelTile(new Point(x, y));
+            }
+        }
+        tiles.reverse(); // show how it will look on screen with flipped y
+        let isSorted = true;
+        for (let y = 0; y < sut.size.height; y += 1) {
+            for (let x = 0; x < sut.size.width; x += 1) {
+                if (x < sut.size.width - 1) {
+                    isSorted = isSorted && (tiles[y][x] < tiles[y][x + 1]);
+                }
+                if (y < sut.size.height - 1) {
+                    isSorted = isSorted && (tiles[y][x] < tiles[y + 1][x]);
+                }
+            }
+        }
+        this.assertTrue(isSorted);
+        logTestMsg(tiles.map(row => row.map(item => item.toString().padStart(4, "_")).join("")).join("\n"));
+
+        this.assertTrue(sut.drawingOrderIndexForModelRect(new Rect(0, 2, 1, 1)) < sut.drawingOrderIndexForModelRect(new Rect(1, 2, 1, 1)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(new Rect(0, 2, 1, 1)) < sut.drawingOrderIndexForModelRect(new Rect(0, 1, 1, 1)));
+        // XXXCCC
+        // RRRCCC R draws after X, and before C, and before Y
+        // RRRCCC
+        // RRRYYY
+        let r = new Rect(0, 0, 3, 3), c = new Rect(3, 1, 3, 3);
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) > sut.drawingOrderIndexForModelTile(new Point(0, 3)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) > sut.drawingOrderIndexForModelTile(new Point(1, 3)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) > sut.drawingOrderIndexForModelTile(new Point(2, 3)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) < sut.drawingOrderIndexForModelRect(c));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) < sut.drawingOrderIndexForModelTile(new Point(3, 0)));
+        this.assertTrue(sut.drawingOrderIndexForModelRect(r) < sut.drawingOrderIndexForModelTile(new Point(4, 0)));
+
+        sut.size = { width: 4, height: 10 };
+        sut.offset = new Point(0, 0);
+        sut.tileWidth = 7;
+        this.assertEqual(sut.screenRectForModelTile(new Point(2, 9)), new Rect(14, 0, 7, 7), "Size change");
+
+    }).buildAndRun();
+}
+
+function tilePlaneTestOld() {
+    new UnitTest("TilePlane (old)", function() {
+        let sut = new TilePlane({ width: 7, height: 5 }, 1);
+        this.assertEqual(sut.size.width, 7);
+        this.assertEqual(sut.size.height, 5);
+        this.assertTrue(sut.screenOriginForModelTile(new Point(0, 0)).isEqual(new Point(0, 4)), "screenTileForModel BL");
+        this.assertTrue(sut.screenOriginForModelTile(new Point(6, 0)).isEqual(new Point(6, 4)), "screenTileForModel BR");
+        this.assertTrue(sut.screenOriginForModelTile(new Point(6, 4)).isEqual(new Point(6, 0)), "screenTileForModel TR");
+        this.assertTrue(sut.screenOriginForModelTile(new Point(0, 4)).isEqual(new Point(0, 0)), "screenTileForModel TL");
+        this.assertTrue(sut.screenOriginForModelTile(new Point(1, 3)).isEqual(new Point(1, 1)), "screenTileForModel MID");
+
+        this.assertTrue(sut.screenOriginForModelTile(new Point(-1, 0)).isEqual(new Point(-1, 4)), "screenTileForModel OOB");
+        this.assertTrue(sut.screenOriginForModelTile(new Point(7, 0)).isEqual(new Point(7, 4)), "screenTileForModel OOB");
+        this.assertTrue(sut.screenOriginForModelTile(new Point(0, -1)).isEqual(new Point(0, 5)), "screenTileForModel OOB");
+        this.assertTrue(sut.screenOriginForModelTile(new Point(0, 5)).isEqual(new Point(0, -1)), "screenTileForModel OOB");
+
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(0, 0)).isEqual(new Point(0, 4)), "modelTileForScreen TL");
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(6, 0)).isEqual(new Point(6, 4)), "modelTileForScreen TR");
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(6, 4)).isEqual(new Point(6, 0)), "modelTileForScreen BR");
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(0, 4)).isEqual(new Point(0, 0)), "modelTileForScreen BL");
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(1, 3)).isEqual(new Point(1, 1)), "modelTileForScreen MID");
+
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(-1, 0)).isEqual(new Point(-1, 4)), "modelTileForScreen OOB");
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(7, 0)).isEqual(new Point(7, 4)), "modelTileForScreen OOB");
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(0, -1)).isEqual(new Point(0, 5)), "modelTileForScreen OOB");
+        this.assertTrue(sut.modelTileForScreenPoint(new Point(0, 5)).isEqual(new Point(0, -1)), "modelTileForScreen OOB");
+
+        this.assertTrue(sut.screenRectForModelRect(new Rect(1, 3, 1, 1)).isEqual(new Rect(1, 1, 1, 1)), "screenRectForModel 1311");
+        this.assertTrue(sut.screenRectForModelRect(new Rect(0, 1, 3, 2)).isEqual(new Rect(0, 2, 3, 2)), "screenRectForModel 0123");
+        this.assertTrue(sut.modelRectForScreenRect(new Rect(1, 1, 1, 1)).isEqual(new Rect(1, 3, 1, 1)), "screenRectForModel 1111");
+        this.assertTrue(sut.modelRectForScreenRect(new Rect(-2, 4, 7, 3)).isEqual(new Rect(-2, -2, 7, 3)), "modelRectForScreen -2473");
 
         let tiles = [[], [], [], [], []];
         for (let y = 0; y < sut.size.height; y += 1) {
@@ -990,6 +1382,45 @@ function tilePlaneTest() {
         this.assertTrue(sut.drawingOrderIndexForModelRect(r) < sut.drawingOrderIndexForModelTile(new Point(4, 0)));
     }).buildAndRun();
 };
+
+function canvasStackTest() {
+    new UnitTest("CanvasStack", function() {
+        let containerElem = document.createElement("div");
+        containerElem.style.width = "180px";
+        containerElem.style.height = "65px";
+        this.hiddenTestElem.append(containerElem);
+        let sut = new CanvasStack(containerElem);
+        this.assertEqual(sut.length, 0);
+
+        let canvas = sut.addCanvas();
+        this.assertEqual(sut.length, 1);
+        this.assertEqual(containerElem.childElementCount, 1);
+        if (this.assertTrue(!!canvas)) {
+            this.assertEqual(sut.getCanvas(0), canvas);
+            this.assertEqual(canvas.width, sut.pixelScale * 180);
+            this.assertEqual(canvas.height, sut.pixelScale * 65);
+        }
+
+        canvas = sut.addCanvas();
+        this.assertEqual(sut.length, 2);
+        this.assertEqual(containerElem.childElementCount, 2);
+        if (this.assertTrue(!!canvas)) {
+            this.assertEqual(sut.getCanvas(1), canvas);
+            this.assertTrue(sut.getCanvas(0) != sut.getCanvas(1));
+            this.assertEqual(canvas.width, sut.pixelScale * 180);
+            this.assertEqual(canvas.height, sut.pixelScale * 65);
+        }
+
+        sut.clear();
+        this.assertEqual(sut.length, 0);
+        this.assertEqual(containerElem.childElementCount, 0);
+
+        sut.clear();
+        sut = new CanvasStack(containerElem, 3);
+        this.assertEqual(sut.length, 3);
+        this.assertEqual(containerElem.childElementCount, 3);
+    }).buildAndRun();
+}
 
 function flexCanvasGridTest(config, expect) {
     if (!config || !expect) {
@@ -1316,6 +1747,7 @@ TestSession.current = new TestSession([
     // rectHashTest,
     manhattanDistanceFromTest,
     boolArrayTest,
+    changeTokenBindingTest,
     circularArrayTest,
     randomLineTest,
     randomTest,
@@ -1332,7 +1764,7 @@ TestSession.current = new TestSession([
     cityRectExtensionsTest,
     simDateTest
 ]);
-// TestSession.current = new TestSession([tilePlaneTest]);
+// TestSession.current = new TestSession([canvasStackTest]);
 
 return TestSession.current;
 

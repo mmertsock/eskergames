@@ -183,24 +183,24 @@ mainMapView:
   - tileWidth: 1
     allowGrid: false
     allowAnimation: false
-    showBorder: false
+    allowBorder: false
   - tileWidth: 3
     allowGrid: false
     allowAnimation: false
-    showBorder: false
+    allowBorder: false
   - tileWidth: 6
     allowGrid: true
     allowAnimation: true
-    showBorder: true
+    allowBorder: true
   - tileWidth: 12
     isDefault: true
     allowGrid: true
     allowAnimation: true
-    showBorder: true
+    allowBorder: true
   - tileWidth: 24
     allowGrid: true
     allowAnimation: true
-    showBorder: true
+    allowBorder: true
 
 controlPanelView:
   fillStyle: *PANELFILL

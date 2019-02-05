@@ -5,7 +5,9 @@ window.CitySim = (function() {
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
 const Binding = Gaming.Binding;
+const CanvasStack = Gaming.CanvasStack;
 const CircularArray = Gaming.CircularArray;
+const ChangeTokenBinding = Gaming.ChangeTokenBinding;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const Kvo = Gaming.Kvo;
 const Point = Gaming.Point;
@@ -2462,7 +2464,7 @@ class MapToolLayerView {
     remove() {
         this.canvasGrid = null;
         this.canvas.remove();
-        Kvo.stopObservations(this);
+        Kvo.stopAllObservations(this);
     }
 
     zoomLevelChanged() {
@@ -2475,6 +2477,86 @@ class MapToolLayerView {
         let ctx = this.canvas.getContext("2d", { alpha: true });
         ctx.rectClear(this.canvasGrid.rectForFullCanvas);
         this.toolRenderer.render(ctx);
+    }
+}
+
+class TileRenderContext {
+    constructor(config) {
+        this.canvas = config.canvas; // HTMLCanvasElement
+        this.viewport = config.viewport; // CanvasTileViewport
+        this.tilePlane = config.viewport.tilePlane;
+        this.isAnimated = config.viewport.zoomLevel.allowAnimation;
+        this.frameCounter = this.isAnimated ? config.viewport.animation.frameCounter : 0;
+        this.visibleModelRect = this.viewport.tilePlane.visibleModelRect;
+        this.isOpaque = !!config.isOpaque;
+        this._ctx = null;
+    }
+
+    get ctx() {
+        if (!this._ctx) this._ctx = this.canvas.getContext("2d", { alpha: !this.isOpaque });
+        return this._ctx;
+    }
+}
+
+class CanvasTileViewport {
+    static Kvo() { return { "zoomLevel": "zoomLevel", "mapSize": "mapSize", "visibleModelRect": "visibleModelRect" }; }
+
+    constructor(config) {
+        let zoomLevels = GameContent.shared.mainMapView.zoomLevels;
+        let zoomers = zoomLevels.map((z) => new ZoomSelector(z, this));
+        this.zoomSelection = new SelectableList(zoomers);
+        let initialZoomLevel = config.initialZoomLevel ? config.initialZoomLevel : GameContent.defaultItemFromArray(zoomLevels);
+        this.zoomSelection.setSelectedIndex(initialZoomLevel.index);
+
+        this.tilePlane = new TilePlane(config.mapSize, this.zoomLevel.tileWidth);
+        debugLog("TODO use layerCount to initialize the canvasStack immediately")
+        this.canvasStack = new CanvasStack(config.containerElem, config.layerCount);
+        this.animation = config.animation;
+
+        // number of tiles to allow showing on each side of 
+        // the tilePlane's bounds when panning to edges.
+        this.marginSize = { width: config.marginSize.width, height: config.marginSize.height };
+
+        debugLog("TODO initialize the tile plane's viewportSize, then initialize content offset at the center of the plane")
+        this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
+
+        debugLog("TODO listen to CanvasStack resize events and update the tile plane accordingly, including the visibleModelRect KVO");
+
+        this.kvo = new Kvo(this);
+    }
+
+    // tiles wide/high
+    get mapSize() { return this.tilePlane.size; }
+    set mapSize(value) {
+        this.tilePlane.size = value;
+        debugLog("TODO update other stuff as needed");
+        this.kvo.mapSize.notifyChanged();
+    }
+
+    get zoomLevel() { return this.zoomSelection.selectedItem.value; }
+    zoomIn() { this.zoomSelection.selectNext(); }
+    zoomOut() { this.zoomSelection.selectPrevious(); }
+
+    getContext(index, isOpaque) {
+        this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
+        return new TileRenderContext({
+            canvas: this.canvasStack.getCanvas(index),
+            viewport: this,
+            isOpaque: isOpaque
+        });
+    }
+
+    zoomLevelActivated(value) {
+        if (!this.tilePlane) return;
+        debugLog(["TODO update content offset, etc., to keep things centered.", value, this.tilePlane]);
+        // TODO hmm should TilePlane do this automatically? eh thinking no.
+        // have it not care at all what the content offset is. this can have the logic for 
+        // keeping things within correct bounds.
+        // To help with unit testing the logic, could have a method on class Rect or something 
+        // to do a generic "constrain this rect within a larger rect" logic for any panning/zoom/resize
+        // changes to make sure the viewport doesn't stray too far off the map edge.
+        this.tilePlane.tileWidth = value.tileWidth;
+        this.kvo.zoomLevel.notifyChanged();
     }
 }
 
@@ -2528,6 +2610,7 @@ class MapLayerViewModel {
     constructor(config) {
         this.index = config.index;
         this.model = config.model; // MapViewModel
+        this.isOpaque = config.isOpaque;
         this.showGrid = config.showGrid;
         this.showBorder = config.showBorder;
         this.spriteSource = config.spriteSource;
@@ -2559,138 +2642,59 @@ class MapLayerViewModel {
         this.kvo.layer.notifyChanged();
     }
 
+    drawingOrderSortedTiles(rect, tilePlane) {
+        let tiles = this.layer.filterTiles(rect, tile => !!tile.sprite);
+        return tiles.sort((a, b) => tilePlane.drawingOrderIndexForModelRect(a.spriteRect) - tilePlane.drawingOrderIndexForModelRect(b.spriteRect));
+    }
+
     get isBottomLayer() { return this.index == 0; }
 }
 
 class SpriteMapLayerView {
     constructor(config) {
-        // Base initialization
-        this.containerElem = config.containerElem;
-        this.layerModel = config.layer; // MapLayerViewModel
-        this.wrap = !!config.wrap;
-        this.viewModel = this.layerModel.model; // MapViewModel
-        this.tilePlane = this.viewModel.map.tilePlane;
-        this.borderPainter = !!this.layerModel.showBorder ? new BorderPainter(this.viewModel) : null;
-        this.gridPainter = !!this.layerModel.showGrid ? new GridPainter(GameContent.shared.mainMapView) : null;
-
-        // Resettable view state
-        this.canvas = document.createElement("canvas");
-        this.containerElem.append(this.canvas);
-        this.tiles = [];
-        this.isAnimated = false;
-        this._dirty = false;
-        this._needsUpdateTiles = false;
-        this._dirtyAnimatedOnly = false;
-
-        // Connections
-        this.viewModel.animation.kvo.frameCounter.addObserver(this, () => this.setDirty(true));
-        this.viewModel.kvo.zoomLevel.addObserver(this, () => this.zoomLevelChanged());
-        this.layerModel.kvo.layer.addObserver(this, () => this.setNeedsUpdateTiles());
-
-        // First iteration of data, async
-        this.zoomLevelChanged();
+        this.viewport = config.viewport;
+        this.layerModel = config.layerModel; // rely on the setter to initialize other stuff
     }
 
-    remove() {
-        this.canvasGrid = null;
-        this.canvas.remove();
-        Kvo.stopObservations(this);
-    }
-
-    zoomLevelChanged() {
-        setTimeout(() => {
-            this.canvasGrid = this.viewModel.configureCanvasGrid(this.canvasGrid, this.canvas);
-            this.setNeedsUpdateTiles();
-        }, 100);
-    }
-
-    setNeedsUpdateTiles() {
-        this._needsUpdateTiles = true;
-    }
-
-    setDirty(animatedOnly) {
-        if (!!animatedOnly && !this.isAnimated) return;
-        this._dirty = true;
-        this._dirtyAnimatedOnly = !!animatedOnly;
-    }
-
-    updateTiles() {
-        if (!this.canvasGrid) return;
-        this._needsUpdateTiles = false;
-        let tiles = [];
-        let hasAnimatedTiles = false;
-        if (this.wrap) {
-            for (let y = 0; y < this.canvasGrid.tilesHigh; y += 1) {
-                for (let x = 0; x < this.canvasGrid.tilesWide; x += 1) {
-                    let tile = this.layerModel.layer.getTileAtPoint(new Point(x % this.layerModel.layer.size.width, y % this.layerModel.layer.size.height));
-                    if (!!tile && !!tile.sprite) {
-                        let rect = new Rect(new Point(x, y), tile.sprite.tileSize);
-                        tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
-                        hasAnimatedTiles = hasAnimatedTiles || tile.sprite.isAnimated;
-                    }
-                }
-            }
-        } else {
-            let canvasVisibleRect = new Rect(0, 0, this.canvasGrid.tileSize.width, this.canvasGrid.tileSize.height);
-            let modelVisibleRect = this.tilePlane.modelRectForScreen(canvasVisibleRect);
-            this.layerModel.layer.visitTiles(modelVisibleRect, tile => {
-                if (!!tile.sprite) {
-                    let rect = new Rect(tile.point, tile.sprite.tileSize);
-                    tiles.push(new SpriteRenderModel(rect, tile.sprite, this.canvasGrid.tileWidth, this.tilePlane));
-                    hasAnimatedTiles = hasAnimatedTiles || tile.sprite.isAnimated;
-                }
-            });
-        }
-        tiles.sort((a, b) => a.drawOrder - b.drawOrder);
-
-        this.isAnimated = hasAnimatedTiles && this.viewModel.zoomLevel.allowAnimation;
-        this.tiles = tiles;
-        this.setDirty();
+    get viewModel() { return this.layerModel.model; }
+    get layerModel() { return this._layerModel; }
+    set layerModel(value) {
+        this._layerModel = value;
+        this.borderPainter = !!this._layerModel.showBorder ? new BorderPainter(this.viewModel) : null;
+        this.gridPainter = !!this._layerModel.showGrid ? new GridPainter(GameContent.shared.mainMapView) : null;
+        this.bindings = [
+            new ChangeTokenBinding(this.viewport.animation.kvo.frameCounter, true),
+            new ChangeTokenBinding(this.viewport.kvo, true),
+            new ChangeTokenBinding(this.layerModel.kvo.layer, true)
+        ];
     }
 
     render() {
-        if (this._needsUpdateTiles) this.updateTiles();
-        if (!this._dirty || !this.canvasGrid) return;
+        if (!ChangeTokenBinding.consumeAll(this.bindings)) return;
+        let context = this.viewport.getContext(this.layerModel.index, this.layerModel.isOpaque);
+        this.clear(context);
 
-        let frameCounter = this.isAnimated ? this.viewModel.animation.frameCounter : 0;
-        let ctx = this.canvas.getContext("2d", { alpha: !this.layerModel.isBottomLayer });
-        // if (!this._dirtyAnimatedOnly)
-        this.clear(ctx, this.canvasGrid.rectForFullCanvas);
-
-        if (this.borderPainter && this.viewModel.zoomLevel.showBorder) {
-            this.borderPainter.render(ctx, this, frameCounter);
-        }
-
-        let store = this.viewModel.spriteStore;
-        this.tiles.forEach(tile => {
-            // if (this.shouldRender(tile)) {
-                // if (this._dirtyAnimatedOnly)
-                //     this.clear(ctx, tile.screenRect(this.canvasGrid));
-                tile.render(ctx, this.canvasGrid, store, frameCounter);
-            // }
+        if (this.borderPainter) this.borderPainter.render(context);
+        
+        let tiles = this.layerModel.drawingOrderSortedTiles(context.visibleModelRect, context.tilePlane);
+        // debugLog(tiles);
+        tiles.forEach(tile => {
+            let sheet = this.viewModel.spriteStore.getSpritesheet(tile.sprite.sheetID, context.tilePlane.tileWidth);
+            if (!sheet) return;
+            sheet.renderSprite(context.ctx, context.tilePlane.screenRectForModelRect(tile.spriteRect), tile.sprite, context.frameCounter);
         });
 
         if (this.gridPainter) {
-            this.gridPainter.render(ctx, this.viewModel.map, this.canvasGrid, this.viewModel.zoomLevel);
+            this.gridPainter.render(context, context.tilePlane.visibleModelRect.intersection(this.viewModel.map.bounds));
         }
-
-        this._dirty = false;
-        this._dirtyAnimatedOnly = false;
     }
 
-    shouldRender(tile) {
-        // if (this._dirtyAnimatedOnly && !!tile.sprite) {
-        //     return tile.sprite.isAnimated;
-        // }
-        return true;
-    }
-
-    clear(ctx, rect) {
-        if (this.layerModel.isBottomLayer) {
-            ctx.fillStyle = GameContent.shared.mainMapView.outOfBoundsFillStyle;
-            ctx.rectFill(rect);
+    clear(context) {
+        if (context.isOpaque) {
+            context.ctx.fillStyle = GameContent.shared.mainMapView.outOfBoundsFillStyle;
+            context.ctx.rectFill(context.tilePlane.viewportScreenBounds);
         } else {
-            ctx.rectClear(rect);
+            context.ctx.rectClear(context.tilePlane.viewportScreenBounds);
         }
     }
 }
@@ -2700,20 +2704,22 @@ class GridPainter {
         this.gridColor = config.gridColor;
     }
 
-    render(ctx, map, canvasGrid, zoomLevel) {
-        if (!zoomLevel.allowGrid) { return; }
-        let ext = map.bounds.intersection(new Rect(0, 0, canvasGrid.tileSize.width + 1, canvasGrid.tileSize.height + 1)).extremes;
+    render(context, rect) {
+        rect = (rect ? rect : context.visibleModelRect).inset(0, -1);
+        if (!context.viewport.zoomLevel.allowGrid || rect.width < 1 || rect.height < 1) return;
+        let ext = rect.extremes;
         for (let y = ext.min.y; y <= ext.max.y; y += 1) {
-            this._renderGridLine(ctx, canvasGrid, new Point(ext.min.x, y), new Point(ext.max.x, y));
+            this._renderGridLine(context, new Point(ext.min.x, y), new Point(ext.max.x, y));
         }
         for (let x = ext.min.x; x <= ext.max.x; x += 1) {
-            this._renderGridLine(ctx, canvasGrid, new Point(x, ext.min.y), new Point(x, ext.max.y));
+            this._renderGridLine(context, new Point(x, ext.min.y), new Point(x, ext.max.y));
         }
     }
 
-    _renderGridLine(ctx, canvasGrid, start, end) {
-        start = canvasGrid.rectForTile(start);
-        end = canvasGrid.rectForTile(end);
+    _renderGridLine(context, start, end) {
+        start = context.tilePlane.screenOriginForModelTile(start);
+        end = context.tilePlane.screenOriginForModelTile(end);
+        let ctx = context.ctx;
         ctx.strokeStyle = this.gridColor;
         ctx.beginPath();
         ctx.moveTo(start.x, start.y);
@@ -2743,27 +2749,28 @@ class BorderPainter {
     // 5: SW corner  (0, -1)
     // Parameter view: should have getters: map, canvasGrid, and tilePlane
     // Render order here is backward: depicting a plane perpendicular to the rest of the map
-    render(ctx, view, frameCounter) {
+    render(context) {
+        if (!context.viewport.zoomLevel.allowBorder) return;
         let map = this.model.map;
         if (map.size.width < 1 || map.size.height < 1) { return; }
 
         // SE corner
-        this.renderTile(ctx, "corner", 1, new Point(map.size.width, -1), directions.NW, view, frameCounter);
+        this.renderTile(context, "corner", 1, new Point(map.size.width, -1), directions.NW);
         // S edge
         for (let x = map.size.width - 1; x > 0; x -= 1) {
-            this.renderTile(ctx, "edge", 1, new Point(x, -1), directions.N, view, frameCounter);
+            this.renderTile(context, "edge", 1, new Point(x, -1), directions.N);
         }
         // SW corner
-        this.renderTile(ctx, "corner", 2, new Point(0, -1), directions.N, view, frameCounter);
+        this.renderTile(context, "corner", 2, new Point(0, -1), directions.N);
         // E edge
         for (let y = 0; y < map.size.height - 1; y += 1) {
-            this.renderTile(ctx, "edge", 0, new Point(map.size.width, y), directions.W, view, frameCounter);
+            this.renderTile(context, "edge", 0, new Point(map.size.width, y), directions.W);
         }
         // NE corner
-        this.renderTile(ctx, "corner", 0, new Point(map.size.width, map.size.height - 1), directions.W, view, frameCounter);
+        this.renderTile(context, "corner", 0, new Point(map.size.width, map.size.height - 1), directions.W);
     }
 
-    renderTile(ctx, borderType, variantKey, point, neighborDirection, view, frameCounter) {
+    renderTile(context, borderType, variantKey, point, neighborDirection) {
         let terrainLayer = this.model.map.terrainLayer;
         let neighbor = terrainLayer.getTileAtPoint(Vector.manhattanUnits[neighborDirection].offsettingPosition(point));
         if (!neighbor) {
@@ -2785,10 +2792,10 @@ class BorderPainter {
         }
 
         let sprite = this.model.spriteStore.getSprite(`terrain-border-${terrainType}-${borderType}`, variantKey);
-        let sheet = sprite ? this.model.spriteStore.getSpritesheet(sprite.sheetID, view.canvasGrid.tileWidth) : null;
+        let sheet = sprite ? this.model.spriteStore.getSpritesheet(sprite.sheetID, context.tilePlane.tileWidth) : null;
         if (!sheet) return;
-        let rect = view.canvasGrid.rectForTile(this.model.map.tilePlane.screenTileForModel(point));
-        sheet.renderSprite(ctx, rect, sprite, frameCounter);
+        let rect = context.tilePlane.screenRectForModelTile(point);
+        sheet.renderSprite(context.ctx, rect, sprite, context.frameCounter);
     }
 }
 
@@ -3002,27 +3009,6 @@ class Sprite {
 
     isEqual(other) {
         return other && other.uniqueID == this.uniqueID;
-    }
-}
-
-class SpriteRenderModel {
-    constructor(modelRect, sprite, tileWidth, tilePlane) {
-        this.modelRect = modelRect;
-        this.screenTileRect = tilePlane.screenRectForModel(modelRect);
-        this.sprite = sprite;
-        this.tileWidth = tileWidth;
-        this.drawOrder = tilePlane.drawingOrderIndexForModelRect(modelRect);
-    }
-    render(ctx, canvasGrid, store, frameCounter) {
-        let sheet = store.getSpritesheet(this.sprite.sheetID, this.tileWidth);
-        if (!sheet) return;
-        sheet.renderSprite(ctx, this.screenRect(canvasGrid), this.sprite, frameCounter);
-    }
-    get debugDescription() {
-        return `<@(${this.modelRect.x}, ${this.modelRect.y}) #${this.sprite.uniqueID} w${this.tileWidth} o${this.drawOrder}>`;
-    }
-    screenRect(canvasGrid) {
-        return canvasGrid.rectForTileRect(this.screenTileRect);
     }
 }
 
@@ -3667,6 +3653,7 @@ return {
     AnimationState: AnimationState,
     BorderPainter: BorderPainter,
     Budget: Budget,
+    CanvasTileViewport: CanvasTileViewport,
     City: City,
     CityMap: CityMap,
     Game: Game,
@@ -3688,8 +3675,8 @@ return {
     Simoleon: Simoleon,
     SingleChoiceInputCollection: SingleChoiceInputCollection,
     Sprite: Sprite,
+    SpriteMapLayerView: SpriteMapLayerView,
     SpriteMapView: SpriteMapView,
-    SpriteRenderModel: SpriteRenderModel,
     Spritesheet: Spritesheet,
     SpritesheetStore: SpritesheetStore,
     SpritesheetTheme: SpritesheetTheme,
@@ -3698,6 +3685,7 @@ return {
     TerrainSpriteSource: TerrainSpriteSource,
     TerrainTile: TerrainTile,
     TerrainType: TerrainType,
+    TileRenderContext: TileRenderContext,
     TextInputView: TextInputView,
     TextLineView: TextLineView,
     ToolButton: ToolButton,

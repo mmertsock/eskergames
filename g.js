@@ -99,6 +99,13 @@ if (Array.prototype.removeItemAtIndex) {
         return this;
     }
 }
+Array.prototype.clearWithVisitor = function(block) {
+    for (let i = this.length - 1; i >= 0; i -= 1) {
+        block(this[i], i);
+    }
+    this.splice(0, this.length);
+    return this;
+}
 Array.prototype.forEachFlat = function(block) {
     for (var i = 0; i < this.length; i += 1) {
         for (var j = 0; j < this[i].length; j += 1) {
@@ -179,8 +186,8 @@ HTMLCanvasElement.prototype.rectForFullCanvas = function() {
 HTMLCanvasElement.prototype.updateBounds = function() {
     var cs = getComputedStyle(this);
     var scale = HTMLCanvasElement.getDevicePixelScale();
-    this.width = parseFloat(cs.width) * scale;
-    this.height = parseFloat(cs.height) * scale;
+    this.width = parseInt(cs.width) * scale;
+    this.height = parseInt(cs.height) * scale;
 };
 
 CanvasRenderingContext2D.prototype.rectClear = function(rect) {
@@ -1130,18 +1137,20 @@ class Dispatch {
         }
     }
 
-    remove(targetOrID) {
+    remove(targetOrID, eventName) {
         if (!targetOrID) { return; }
         var id = targetOrID.id ? targetOrID.id : targetOrID;
-        for (var eventName of Object.getOwnPropertyNames(this._blocks)) {
-            delete this._blocks[eventName][id];
+        for (var event of Object.getOwnPropertyNames(this._blocks)) {
+            if ((typeof(eventName) == 'undefined') || (event == eventName)) {
+                delete this._blocks[event][id];
+            }
         }
     }
 }
 Dispatch.shared = new Dispatch();
 
 class Kvo {
-    static stopObservations(target) {
+    static stopAllObservations(target) {
         if (!target._kvoDT) { return; }
         Dispatch.shared.remove(target._kvoDT);
         target._kvoDT = null;
@@ -1157,12 +1166,14 @@ class Kvo {
 
     constructor(item) {
         this._obj = item;
+        this._token = 0;
         this.eventName = `${item.constructor.name}.kvo`;
         let config = Kvo.configForClass(item);
         for (var key of Object.getOwnPropertyNames(config)) {
             this[key] = new KvoProperty(this, config[key]);
         }
     }
+    get token() { return this._token; }
     addObserver(target, block) {
         if (!target._kvoDT) { target._kvoDT = new DispatchTarget(); }
         target._kvoDT.register(this.eventName, (eventName, item) => {
@@ -1171,6 +1182,7 @@ class Kvo {
         return this;
     }
     notifyChanged(log) {
+        this._token += 1;
         Dispatch.shared.postEventSync(this.eventName, this._obj, log);
     }
     getValue() {
@@ -1183,7 +1195,9 @@ class KvoProperty {
         this.kvo = kvo;
         this.key = key;
         this.eventName = `${key}.${kvo.eventName}`;
+        this._token = 0;
     }
+    get token() { return this._token; }
     addObserver(target, block) {
         if (!target._kvoDT) { target._kvoDT = new DispatchTarget(); }
         target._kvoDT.register(this.eventName, (eventName, item) => {
@@ -1192,6 +1206,7 @@ class KvoProperty {
         return this;
     }
     notifyChanged(notifyRoot, log) {
+        this._token += 1;
         Dispatch.shared.postEventSync(this.eventName, this.kvo._obj, log);
         if (typeof(notifyRoot) === "undefined") { notifyRoot = true; }
         if (notifyRoot) { this.kvo.notifyChanged(log); }
@@ -1223,6 +1238,23 @@ class Binding {
 
     _updateTarget() {
         this.target.setValue(this.sourceFormatter(this.source.getValue(), this.source));
+    }
+}
+
+class ChangeTokenBinding {
+    static consumeAll(bindings) {
+        return bindings.map(item => item.consume()).filter(item => item).length > 0;
+    }
+
+    constructor(target, initialHasChange) {
+        this.target = target;
+        this.last = !!initialHasChange ? NaN : target.token;
+    }
+    get hasChange() { return this.last != this.target.token; }
+    consume() {
+        if (!this.hasChange) return false;
+        this.last = this.target.token;
+        return true;
     }
 }
 
@@ -1314,7 +1346,7 @@ KeyboardState.prototype.reset = function() {
 // Model coordinates have origin at bottom left, screen coordinates 
 // have origin at top left.
 //
-// left axis: model Y. right axis: screen Y
+// Left axis: model Y. right axis: screen Y
 //  012345
 // 4      -1
 // 3      0
@@ -1323,41 +1355,166 @@ KeyboardState.prototype.reset = function() {
 // 0      3
 // -1     4
 class TilePlane {
-    constructor(size) {
-        this.width = size.width;
-        this.height = size.height;
-        this._drawOrderFactor = Math.min(size.width, size.height);
-        this._yMinuend = this.height - 1;
+    constructor(size, tileWidth) {
+        // width/height of the primary model coordinate space. 1 unit = 1 tile
+        this.size = { width: size.width, height: size.height };
+        // current number of device pixels per tile.
+        this.tileWidth = tileWidth;
+        // screen origin (top left) offset, in device pixels.
+        this.offset = new Point(0, 0);
+        // size, in device pixels, of the rectangle visible on the screen
+        this.viewportSize = { width: 0, height: 0 };
     }
 
-    get size() { return { width: this.width, height: this.height }; }
-    get bounds() { return new Rect({x: 0, y: 0}, this.size); }
+    get size() { return this._size; }
+    set size(value) {
+        this._size = value;
+        this._yMinuend = this._size.height - 1;
+        this._drawOrderFactor = Math.min(this._size.width, this._size.height);
+    }
 
-    screenTileForModel(tile) {
-        return tile ? new Point(tile.x, this._flippedY(tile.y)) : null;
+    get tileWidth() { return this._tileWidth; }
+    set tileWidth(value) {
+        this._tileWidth = value;
+        this._singleTileSize = { width: this._tileWidth, height: this._tileWidth };
     }
-    screenRectForModel(rect) {
-        return rect ? new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height) : null;
+
+    get viewportSize() { return this._viewport.size; }
+    set viewportSize(value) {
+        this._viewport = new Rect(0, 0, value.width, value.height);
     }
-    modelTileForScreen(tile) {
-        return tile ? new Point(tile.x, this._flippedY(tile.y)) : null;
+
+    // ~~~~~~ Conversions of model <==> screen coordinates ~~~~~~
+    // Handles any coordinates in or out of the model or screen bounds.
+    // Accounts for pixelScale and offset but no concept of a viewport size.
+
+    _flippedModelY(y) { return this._yMinuend - y; }
+
+    // top-left on-screen pixel coordinate of a model coordinate
+    screenOriginForModelTile(tile) {
+        return tile ? new Point(this.offset.x + (tile.x * this._tileWidth), this.offset.y + (this._flippedModelY(tile.y) * this._tileWidth)) : null;
     }
-    modelRectForScreen(rect) {
-        return rect ? new Rect(rect.x, this._flippedY(rect.y + rect.height - 1), rect.width, rect.height) : null;
+
+    screenRectForModelTile(tile) {
+        return tile ? new Rect(this.screenOriginForModelTile(tile), this._singleTileSize) : null;
     }
+
+    screenRectForModelRect(rect) {
+        if (!rect) return null;
+        let origin = this.screenOriginForModelTile(new Point(rect.x, rect.y + rect.height - 1));
+        return new Rect(origin, { width: rect.width * this._tileWidth, height: rect.height * this._tileWidth });
+    }
+
+    // any point within the visible bounds of a tile map to that model tile,
+    // including the top left point (e.g. 0, 0) screen coords will map to the plane's top left model tile
+    modelTileForScreenPoint(point) {
+        return point ? new Point(Math.floor((point.x - this.offset.x) / this._tileWidth), this._flippedModelY(Math.floor((point.y - this.offset.y) / this._tileWidth))) : null;
+    }
+
+    // smallest model rect that fully encompasses every pixel
+    // size of the rect returned may vary depending on the alignment of the screen rect's origin to tile boundaries
+    modelRectForScreenRect(rect) {
+        // simplest approach is probably:
+        // convert rect.origin to modelTileForScreenPoint
+        // convert the bottom-right of rect to modelTileForScreenPoint
+        // make a model rect with those extremes
+        if (!rect) return null;
+        let modelTopLeft = this.modelTileForScreenPoint(rect.origin);
+        let modelBottomRight = this.modelTileForScreenPoint(new Point(rect.origin.x + rect.width - 1, rect.origin.y + rect.height - 1));
+        return new Rect(modelTopLeft.x, modelBottomRight.y, modelBottomRight.x - modelTopLeft.x + 1, modelTopLeft.y - modelBottomRight.y + 1);
+    }
+
+    // ~~~~~~ Tile painting logic ~~~~~~
+    // Produces integers to use for sorting tile coordinates in the order they should be 
+    // rendered on screen, to ensure tiles render top to bottom and left to right. Not 
+    // guaranteed to produce correct values outside the model bounds (based on this.size)
 
     drawingOrderIndexForModelTile(tile) {
-        tile = this.screenTileForModel(tile);
+        tile = new Point(tile.x, this._flippedModelY(tile.y));
         return (tile.x + tile.y) * this._drawOrderFactor + tile.y;
     }
+
     // assumes rect is non-empty
     drawingOrderIndexForModelRect(rect) {
-        rect = this.screenRectForModel(rect);
+        rect = new Rect(rect.x, this._flippedModelY(rect.y + rect.height - 1), rect.width, rect.height);
         let y = rect.y + rect.height - 1;
         return (rect.origin.x + y) * this._drawOrderFactor + y;
     }
-    
-    _flippedY(y) { return this._yMinuend - y; }
+
+    // ~~~~~~ Viewport calculations ~~~~~~
+    // Calculates visibility of model coordinates within the current
+    // viewport size, accounting for tileWidth and offset. Model
+    // tile is visible if at least one pixel of it is visible.
+
+    isModelRectVisible(rect) {
+        let tileRect = this.screenRectForModelRect(rect);
+        return tileRect ? this._viewport.intersects(tileRect) : false;
+    }
+
+    get viewportScreenBounds() { return this._viewport; }
+
+    get visibleModelRect() {
+        if (this._viewport.width < 1 || this._viewport.height < 1) { return new Rect(0, 0, 0, 0); }
+        return this.modelRectForScreenRect(this._viewport);
+    }
+}
+
+class CanvasStack {
+    constructor(containerElem, layerCount) {
+        this.containerElem = containerElem;
+        this.canvases = [];
+        this.pixelScale = HTMLCanvasElement.getDevicePixelScale();
+        this._updateMetricsDebounceTimeout = null;
+        document.defaultView.addEventListener("resize", e => {
+            this._updateMetricsDebounced();
+        });
+        layerCount = (typeof(layerCount) == 'undefined') ? 0 : layerCount;
+        while (this.length < layerCount) {
+            this.addCanvas();
+        }
+    }
+
+    get length() { return this.canvases.length; }
+
+    // device pixel size of the canvases
+    get canvasDeviceSize() {
+        if (this.canvases.length < 1) return { width: 0, height: 0 };
+        return { width: this.canvases[0].width, height: this.canvases[0].height };
+    }
+
+    // index 0 == bottom in drawing order
+    getCanvas(index) { return this.canvases[index]; }
+
+    addCanvas() {
+        let canvas = document.createElement("canvas");
+        this.containerElem.append(canvas);
+        this._updateCanvasMetrics(canvas);
+        this.canvases.push(canvas);
+        return canvas;
+    }
+
+    clear() {
+        this.canvases.clearWithVisitor(canvas => {
+            canvas.remove();
+        });
+    }
+
+    _updateMetricsDebounced() {
+        if (this._updateMetricsDebounceTimeout) {
+            window.clearTimeout(this._updateMetricsDebounceTimeout);
+        }
+        this._updateMetricsDebounceTimeout = window.setTimeout(() => this._updateMetrics(), 100);
+    }
+
+    _updateMetrics() {
+        this._updateMetricsDebounceTimeout = null;
+        this.canvases.forEach(canvas => this._updateCanvasMetrics(canvas));
+    }
+
+    _updateCanvasMetrics(canvas) {
+        canvas.width = canvas.clientWidth * this.pixelScale;
+        canvas.height = canvas.clientHeight * this.pixelScale;
+    }
 }
 
 /*
@@ -1583,6 +1740,8 @@ return {
     directions: directions,
     Binding: Binding,
     BoolArray: BoolArray,
+    CanvasStack: CanvasStack,
+    ChangeTokenBinding: ChangeTokenBinding,
     CircularArray: CircularArray,
     Dispatch: Dispatch,
     DispatchTarget: DispatchTarget,

@@ -3,7 +3,11 @@
 /*
 TODOs
 - Smoothing property for RandomLineGenerator: number of previous generations to average
-- Smoother riverbanks
+- Smoother riverbanks. Play with different random-walk algorithms. Get diagonal rivers working better.
+  Calculate the river banks in an ideal full-rational-number coordinate space, then iterate 
+  over the tile plane and set any tile to water if its coord is between the two banks in the ideal space.
+  - Could do a similar thing with random blob generator: generate one large ellipse for the overall blob shape,
+    then a collection of smaller random ellpises with centers along the perimeter of the main ellipse.
 - Whenever regenerating, encode the raw parameters + RNG seed into a hex value, store that 
   with the terrain, so you can use that key to recreate the random map.
     https://github.com/davidbau/seedrandom#saving-and-restoring-prng-state
@@ -29,7 +33,6 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAsser
 
 const Binding = Gaming.Binding;
 const BoolArray = Gaming.BoolArray;
-const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const Kvo = Gaming.Kvo;
 const PerfTimer = Gaming.PerfTimer;
 const Point = Gaming.Point;
@@ -43,26 +46,19 @@ const UndoStack = Gaming.UndoStack;
 const Vector = Gaming.Vector;
 
 const AnimationState = CitySim.AnimationState;
-const BorderPainter = CitySim.BorderPainter;
+const CanvasTileViewport = CitySim.CanvasTileViewport;
 const CityMap = CitySim.CityMap;
 const GameContent = CitySimContent.GameContent;
 const GameDialog = CitySim.GameDialog;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
-const GridPainter = CitySim.GridPainter;
 const InputView = CitySim.InputView;
 const MapLayer = CitySim.MapLayer;
 const MapLayerViewModel = CitySim.MapLayerViewModel;
-const MapRenderer = CitySim.MapRenderer;
-const MapTile = CitySim.MapTile;
-const ScriptPainterStore = CitySim.ScriptPainterStore;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
 const Sprite = CitySim.Sprite;
-const SpriteMapView = CitySim.SpriteMapView;
-const SpriteRenderModel = CitySim.SpriteRenderModel;
-const Spritesheet = CitySim.Spritesheet;
+const SpriteMapLayerView = CitySim.SpriteMapLayerView;
 const SpritesheetStore = CitySim.SpritesheetStore;
-const SpritesheetTheme = CitySim.SpritesheetTheme;
 const Strings = CitySim.Strings;
 const Terrain = CitySim.Terrain;
 const TerrainSpriteSource = CitySim.TerrainSpriteSource;
@@ -71,7 +67,6 @@ const TerrainType = CitySim.TerrainType;
 const TextInputView = CitySim.TextInputView;
 const TextLineView = CitySim.TextLineView;
 const ToolButton = CitySim.ToolButton;
-const ZoomSelector = CitySim.ZoomSelector;
 
 Point.tilesBetween = function(a, b, log) {
     var v = Vector.betweenPoints(a, b);
@@ -760,22 +755,17 @@ class NewTerrainDialog extends GameDialog {
 }
 
 class TerrainMapViewModel {
-    static Kvo() { return { "zoomLevel": "_zoomLevel", "layers": "layers" }; }
+    static Kvo() { return { "layers": "layers" }; }
 
     constructor(config) {
         this.session = config.session;
-        this._zoomLevel = config.zoomLevel;
-        this.animation = new AnimationState(config.runLoop);
         this.layers = [];
         this.kvo = new Kvo(this);
-
         this.session.kvo.changeToken.addObserver(this, () => this.reset());
         this.reset();
     }
 
     get map() { return this.session.map; }
-    get zoomLevel() { return this._zoomLevel; }
-    set zoomLevel(value) { this.kvo.zoomLevel.setValue(value); }
     get spriteStore() { return SpritesheetStore.mainMapStore; }
 
     reset() {
@@ -783,6 +773,7 @@ class TerrainMapViewModel {
         this.layers.push(new MapLayerViewModel({
             index: 0,
             model: this,
+            isOpaque: true,
             showGrid: true,
             showBorder: true,
             spriteSource: new TerrainSpriteSource({
@@ -792,56 +783,55 @@ class TerrainMapViewModel {
         }));
         this.kvo.layers.notifyChanged();
     }
-
-    configureCanvasGrid(existingGrid, canvas) {
-        if (existingGrid) {
-            existingGrid.setSize({ tileWidth: this.zoomLevel.tileWidth, tileSpacing: 0 });
-            return existingGrid;
-        } else {
-            return new FlexCanvasGrid({
-                canvas: canvas,
-                deviceScale: FlexCanvasGrid.getDevicePixelScale(),
-                tileWidth: this.zoomLevel.tileWidth,
-                tileSpacing: 0
-            });
-        }
-    };
 }
 
 class TerrainView {
     constructor() {
-        this.session = null;
+        this.runLoop = CitySimTerrain.uiRunLoop;
         this.elem = document.querySelector("map.mainMap");
-        this.mapView = null;
-        let zoomers = this.settings.zoomLevels.map((z) => new ZoomSelector(z, this));
-        this.zoomSelection = new SelectableList(zoomers);
-        this.zoomSelection.setSelectedIndex(2);
+        this.session = null;
+        this.viewport = null;
+        this.layerViews = [];
         this._configureCommmands();
     }
 
     setUp(session) {
-        let runLoop = CitySimTerrain.uiRunLoop;
-        this.session = session;
-        this.model = new TerrainMapViewModel({
-            session: this.session,
-            runLoop: runLoop,
-            zoomLevel: this.zoomSelection.selectedItem.value
+        this.model = new TerrainMapViewModel({ session: session });
+        this.viewport = new CanvasTileViewport({
+            mapSize: this.model.map.size,
+            layerCount: this.model.layers.length,
+            containerElem: this.elem,
+            animation: new AnimationState(this.runLoop),
+            marginSize: {width: 2, height: 2} // 1 tile border + 1 tile blank space
         });
-        this.mapView = new SpriteMapView({
-            model: this.model,
-            elem: this.elem,
-            runLoop: runLoop
-        });
+
+        this.resetLayers();
+        this.model.kvo.layers.addObserver(this, () => this.resetLayers());
+        this.runLoop.addDelegate(this);
     }
 
-    get settings() { return GameContent.shared.mainMapView; }
+    resetLayers() {
+        if (this.layerViews.length == 0) {
+            this.layerViews = this.model.layers.map(layer => new SpriteMapLayerView({
+                viewport: this.viewport,
+                layerModel: layer
+            }));
+        } else {
+            this.model.layers.forEach((layer, index) => {
+                this.layerViews[index].layerModel = layer;
+            });
+        }
+        this.viewport.mapSize = this.model.map.size;
+    }
 
-    zoomLevelActivated(value) { if (this.model) this.model.zoomLevel = value; }
+    processFrame(rl) {
+        this.layerViews.forEach(view => view.render());
+    }
 
     _configureCommmands() {
         let gse = GameScriptEngine.shared;
-        gse.registerCommand("zoomIn", () => this.zoomSelection.selectNext());
-        gse.registerCommand("zoomOut", () => this.zoomSelection.selectPrevious());
+        gse.registerCommand("zoomIn", () => { if (this.viewport) this.viewport.zoomIn(); });
+        gse.registerCommand("zoomOut", () => { if (this.viewport) this.viewport.zoomOut(); });
     }
 }
 
