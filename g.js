@@ -433,6 +433,45 @@ class CircularArray {
     }
 }
 
+class Easing {
+    static linearCurve(elapsed) { return elapsed; }
+    static smoothCurve(elapsed) {
+        if (elapsed < 0.5)
+            return 2 * elapsed * elapsed;
+        else
+            return 1 - (2 * (1-elapsed) * (1-elapsed));
+    }
+
+    constructor(durationSeconds, valueRange, curveFunc) {
+        this.durationMilliseconds = durationSeconds * 1000;
+        this.startTimestamp = 0;
+        this.valueRange = valueRange;
+        this.curveFunc = curveFunc;
+    }
+
+    start(timestamp) {
+        this.startTimestamp = (typeof(date) == 'undefined') ? Date.now() : timestamp;
+        return this;
+    }
+
+    get isComplete() { return Date.now() >= (this.startTimestamp + this.durationMilliseconds); }
+
+    get value() {
+        return Math.scaleValueLinear(this.curveFunc(this.normalizedTimeElapsed), Easing.zeroToOneRange, this.valueRange);
+    }
+
+    get normalizedTimeElapsed() {
+        return this.normalizedTimeElapsedFrom(Date.now());
+    }
+
+    normalizedTimeElapsedFrom(timestamp) {
+        if (this.startTimestamp < 1) return 0;
+        if (this.durationMilliseconds < 1) return 1;
+        return Math.clamp((timestamp - this.startTimestamp) / this.durationMilliseconds, Easing.zeroToOneRange);
+    }
+}
+Easing.zeroToOneRange = { min: 0, max: 1 };
+
 class SelectableList {
     constructor(items) {
         this.items = items;
@@ -1764,6 +1803,7 @@ return {
     CircularArray: CircularArray,
     Dispatch: Dispatch,
     DispatchTarget: DispatchTarget,
+    Easing: Easing,
     FlexCanvasGrid: FlexCanvasGrid,
     KeyboardState: KeyboardState,
     Kvo: Kvo,

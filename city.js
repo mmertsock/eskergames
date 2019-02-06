@@ -8,6 +8,7 @@ const Binding = Gaming.Binding;
 const CanvasStack = Gaming.CanvasStack;
 const CircularArray = Gaming.CircularArray;
 const ChangeTokenBinding = Gaming.ChangeTokenBinding;
+const Easing = Gaming.Easing;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const Kvo = Gaming.Kvo;
 const Point = Gaming.Point;
@@ -2511,21 +2512,22 @@ class CanvasTileViewport {
         this.canvasStack = new CanvasStack(config.containerElem, config.layerCount);
         this.tilePlane = new TilePlane(config.mapSize, this.zoomLevel.tileWidth * this.canvasStack.pixelScale);
         this._centerTile = new Point(this.tilePlane.size.width * 0.5, this.tilePlane.size.height * 0.5).integral();
+        this._offsetEasing = null;
         this.animation = config.animation;
 
         // number of tiles to allow showing on each side of 
         // the tilePlane's bounds when panning to edges.
         this.marginSize = { width: config.marginSize.width, height: config.marginSize.height };
         this.kvo = new Kvo(this);
-        this.canvasStack.kvo.canvasDeviceSize.addObserver(this, () => this.updateTilePlane(null));
-        this.updateTilePlane(null);
+        this.canvasStack.kvo.canvasDeviceSize.addObserver(this, () => this.updateTilePlane(null, false));
+        this.updateTilePlane(null, false);
     }
 
     // tiles wide/high
     get mapSize() { return this.tilePlane.size; }
     set mapSize(value) {
         this.tilePlane.size = value;
-        this.updateTilePlane();
+        this.updateTilePlane(null, false);
         this.kvo.mapSize.notifyChanged();
     }
 
@@ -2535,10 +2537,16 @@ class CanvasTileViewport {
 
     get centerTile() { return this._centerTile; }
     set centerTile(value) {
-        this.updateTilePlane(value);
+        this.updateTilePlane(value, true);
     }
 
     getContext(index, isOpaque) {
+        if (!!this._offsetEasing) {
+            this.tilePlane.offset = new Point(this._offsetEasing.x.value, this._offsetEasing.y.value);
+            this.kvo.visibleModelRect.notifyChanged();
+            // debugLog(`Eased to ${this.tilePlane.offset}`);
+            if (this._offsetEasing.x.isComplete) this._offsetEasing = null;
+        }
         return new TileRenderContext({
             canvas: this.canvasStack.getCanvas(index),
             viewport: this,
@@ -2554,11 +2562,11 @@ class CanvasTileViewport {
         // To help with unit testing the logic, could have a method on class Rect or something 
         // to do a generic "constrain this rect within a larger rect" logic for any panning/zoom/resize
         // changes to make sure the viewport doesn't stray too far off the map edge.
-        this.updateTilePlane(null);
+        this.updateTilePlane(null, false);
         this.kvo.zoomLevel.notifyChanged();
     }
 
-    updateTilePlane(newCenterTile) {
+    updateTilePlane(newCenterTile, animated) {
         let log = false; //!!newCenterTile;
 
         this.tilePlane.tileWidth = this.zoomLevel.tileWidth * this.canvasStack.pixelScale;
@@ -2592,6 +2600,7 @@ class CanvasTileViewport {
             if (log) debugLog("Map smaller than viewport vertically.");
         }
         if (log) debugLog(`updateTilePlane(${newCenterTile ? newCenterTile.debugDescription : "null"}): offset ${this.tilePlane.offset.debugDescription} => ${newOffset.debugDescription}`);
+        let startOffset = this.tilePlane.offset;
         this.tilePlane.offset = newOffset;
 
         // Don't stray horizontally/vertically beyond margins
@@ -2621,6 +2630,15 @@ class CanvasTileViewport {
             }
             if (!newOffset.isEqual(this.tilePlane.offset))
                 this.tilePlane.offset = newOffset;
+        }
+
+        if (animated && !this.tilePlane.offset.isEqual(startOffset)) {
+            let targetOffset = this.tilePlane.offset;
+            this.tilePlane.offset = startOffset;
+            this._offsetEasing = {
+                x: new Easing(0.2, { min: startOffset.x, max: targetOffset.x }, Easing.smoothCurve).start(),
+                y: new Easing(0.2, { min: startOffset.y, max: targetOffset.y }, Easing.smoothCurve).start()
+            };
         }
 
         this._centerTile = this.tilePlane.visibleModelRect.center.integral();
