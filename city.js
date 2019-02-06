@@ -2510,6 +2510,7 @@ class CanvasTileViewport {
         this.zoomSelection.setSelectedIndex(initialZoomLevel.index);
 
         this.canvasStack = new CanvasStack(config.containerElem, config.layerCount);
+        this.inputController = new CanvasInputController({ viewport: this });
         this.tilePlane = new TilePlane(config.mapSize, this.zoomLevel.tileWidth * this.canvasStack.pixelScale);
         this._centerTile = new Point(this.tilePlane.size.width * 0.5, this.tilePlane.size.height * 0.5).integral();
         this._offsetEasing = null;
@@ -2552,6 +2553,12 @@ class CanvasTileViewport {
             viewport: this,
             isOpaque: isOpaque
         });
+    }
+
+    infoForCanvasEvent(evt) {
+        let point = new Point(evt.offsetX * this.canvasStack.pixelScale, evt.offsetY * this.canvasStack.pixelScale);
+        let tile = this.tilePlane.modelTileForScreenPoint(point);
+        return { evt: evt, viewport: this, point: point, tile: tile };
     }
 
     zoomLevelActivated(value) {
@@ -2645,6 +2652,64 @@ class CanvasTileViewport {
         this.kvo.visibleModelRect.notifyChanged();
     }
 }
+
+class CanvasInputController {
+    constructor(config) {
+        this.viewport = config.viewport;
+        this.domEvents = new Set();
+        this.selectListeners = [];
+        this.movementListeners = [];
+    }
+
+    // options:
+    // repetitions: <Int>, required number of clicks/touches. 1 for single, 2 for double, etc. If specified, ignores all other events
+    addSelectionListener(options, callback) {
+        let canvas = this.shouldAddDomEvent("click");
+        if (canvas) canvas.addEventListener("click", evt => this.handleSelect(evt));
+        this.selectListeners.push({ options: options, callback: callback });
+    }
+
+    addMovementListener(options, callback) {
+        let canvas = this.shouldAddDomEvent("mousemove");
+        if (canvas) canvas.addEventListener("mousemove", evt => this.handleMovement(evt));
+        this.movementListeners.push({ options: options, callback: callback });
+    }
+
+    shouldAddDomEvent(type) {
+        if (this.domEvents.has(type)) return null;
+        let canvas = this.viewport.canvasStack.topCanvas;
+        if (!canvas) {
+            debugWarn("CanvasInputController: no canvas available.");
+            return null;
+        }
+        this.domEvents.add(type);
+        return canvas;
+    }
+
+    handleSelect(evt) {
+        let info = this.viewport.infoForCanvasEvent(evt);
+        this.selectListeners.forEach(item => {
+            if ((typeof(item.options.repetitions) != 'undefined') && (item.options.repetitions != evt.detail))
+                return;
+            item.callback(info);
+        });
+    }
+
+    handleMovement(evt) {
+        let info = this.viewport.infoForCanvasEvent(evt);
+        for (let i = 0; i < this.movementListeners.length; i += 1) {
+            // TODO check options
+            this.movementListeners[i].callback(info);
+        }
+    }
+}
+// eg addSelectListener({ shiftKey: CanvasInputOption.required }, info => doStuff(info)) to listen specifically to shift-click
+// eg addMoveListener({ button1: CanvasInputOption.required }, info => doStuff()) for drag events
+let CanvasInputOption = {
+    optional: 0,
+    required: 1,
+    prohibited: 2
+};
 
 class SpriteTileModel extends MapTile {
     constructor(point, layer) {
@@ -3739,6 +3804,8 @@ return {
     AnimationState: AnimationState,
     BorderPainter: BorderPainter,
     Budget: Budget,
+    CanvasInputController: CanvasInputController,
+    CanvasInputOption: CanvasInputOption,
     CanvasTileViewport: CanvasTileViewport,
     City: City,
     CityMap: CityMap,

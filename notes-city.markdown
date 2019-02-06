@@ -13,41 +13,7 @@ Auto generate help dialog text for keyboard commands.
 Game-specific fonts for zones, maps, controls, etc.
 JS: modules/import
 
-## Viewports, tile planes, and canvas grids
-
-i guess the canvas grid owns the TilePlane and Viewport.
-because the offset, flipping, etc., is an artifact of that specific physical representation of the view.
-the model should remain as pure as possible.
-
-clicking to center the map: it just moves the offset by `(event.clientY - 0.5*canvas.clientHeight)`, etc.
-
-Viewport's offset is defined in device pixels, not model tiles, to make arbitrary smooth panning easy.
-Viewport owns the zoom scale also.
-
-
-painting:
-instead of GameMap.visitEachPlot, it's FlexCanvasGrid.visitEachVisibleTile
-It goes top left to bottom right of the screen, which means minX/maxY to maxY/minY model coords.
-The callback gives you a model tile coordinate
-For each tile coordinate, you look at that Tile in the GameMap and see what Map Objects are present at that tile.
-A 3x3 zone will be present on 9 Tiles.
-But only the bottom right Tile is the Paint Origin for that tile.
-So the Tile's list of map objects has a flag for whether it's the Paint Origin.
-So look at the Tile on the map and fetch all object for a given layer with the Paint Origin flag.
-And you paint them.
-
-But objects more than 1x1 tiles will not be painted if their Paint Origins are off screen (e.g. bottom and right edges of the screen).
-The visitEachVisibleTile has padding of N-1 tiles in each direction beyond the actual visible rect, where N is the largest paintable map object size (e.g. 6 for airport).
-So when you look up objects to paint for a tile, you check the Paint Origin flag, and you also check whether that object's full tile rect is actually visible within the viewport (because most of the ones in the padding area will not be visible, e.g. a 1x1 object that's 3 tiles into the padding). Thus only a small fraction of the objects in the padding area are actually painted, maintaining performance.
-
-The first row of tiles outside the map bounds can be painted like a picture frame. Detect which these are via TilePlane.isBorderTile (and TilePlane.isEdgeTile would be the tiles just inside the bounds).
-Then beyond that is just black.
-Or maybe make it look like the whole city is a miniature model sitting on a drafting table. So outside the map bounds draw an extra large lifelike table thing with some random pens/pencils/paper/coffee/tape/etc.
-
-Animation
-Each painter has two properties: frame interval, and frame count.
-Frame interval is # of milliseconds each frame lasts. Frame count is number of frames in the entire loop.
-At the start of each animation frame, take the timestamp and integer-divide by frame interval to determine the time counter specific to that animation. And then mod the time counter by the frame count to determine which specific animation frame to render.
+a.toolButton: shows unnecessary URLs in browser status bar. Switch to using non-hyperlink DOM elements to prevent this.
 
 ### requestAnimationFrame
 

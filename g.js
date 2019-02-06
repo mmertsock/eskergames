@@ -1543,6 +1543,8 @@ class CanvasStack {
     // index 0 == bottom in drawing order
     getCanvas(index) { return this.canvases[index]; }
 
+    get topCanvas() { return this.canvases.length > 0 ? this.canvases[this.canvases.length - 1] : null; }
+
     addCanvas() {
         let canvas = document.createElement("canvas");
         this.containerElem.append(canvas);

@@ -46,6 +46,7 @@ const UndoStack = Gaming.UndoStack;
 const Vector = Gaming.Vector;
 
 const AnimationState = CitySim.AnimationState;
+const CanvasInputController = CitySim.CanvasInputController;
 const CanvasTileViewport = CitySim.CanvasTileViewport;
 const CityMap = CitySim.CityMap;
 const GameContent = CitySimContent.GameContent;
@@ -817,18 +818,11 @@ class TerrainView {
         this.model.kvo.layers.addObserver(this, () => this.resetLayers());
         this.runLoop.addDelegate(this);
 
-        this.viewport.canvasStack.getCanvas(this.viewport.canvasStack.length - 1).addEventListener("click", evt => {
-            evt.preventDefault();
-            let point = new Point(evt.offsetX * this.viewport.canvasStack.pixelScale, evt.offsetY * this.viewport.canvasStack.pixelScale);
-            let tile = this.viewport.tilePlane.modelTileForScreenPoint(point);
-            if (!tile) return;
-            // debugLog(`map click: evt (${evt.offsetX},${evt.offsetY}), point ${point.debugDescription}, tile ${tile.debugDescription}`);
-            this.viewport.centerTile = tile;
+        this.viewport.inputController.addSelectionListener({ repetitions: 1 }, info => {
+            if (info.tile) info.viewport.centerTile = info.tile;
         });
-        this.viewport.canvasStack.getCanvas(this.viewport.canvasStack.length - 1).addEventListener("mousemove", evt => {
-            let point = new Point(evt.offsetX * this.viewport.canvasStack.pixelScale, evt.offsetY * this.viewport.canvasStack.pixelScale);
-            let tile = this.viewport.tilePlane.modelTileForScreenPoint(point);
-            let modelTile = tile ? this.model.map.terrainLayer.getTileAtPoint(tile) : null;
+        this.viewport.inputController.addMovementListener({}, info => {
+            let modelTile = info.tile ? this.model.map.terrainLayer.getTileAtPoint(info.tile) : null;
             this.model.session.tileInspectionTarget = modelTile;
         });
     }
