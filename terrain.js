@@ -551,7 +551,7 @@ class ReplaceMapAction {
 }
 
 class EditSession {
-    static Kvo() { return { "changeToken": "changeToken" }; }
+    static Kvo() { return { "changeToken": "changeToken", "tileInspectionTarget": "_tileInspectionTarget" }; }
 
     static quit(prompt) {
         if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
@@ -562,12 +562,19 @@ class EditSession {
     constructor(config) {
         this.terrain = config.terrain;
         this.changeToken = 0;
+        this._tileInspectionTarget = null;
         this.kvo = new Kvo(this);
         this.undoStack = new UndoStack();
     }
 
     get map() { return this.terrain.map; }
     get debugDescription() { return this.map.debugDescription; }
+
+    get tileInspectionTarget() { return this._tileInspectionTarget; }
+    set tileInspectionTarget(value) {
+        if (value != this._tileInspectionTarget)
+            this.kvo.tileInspectionTarget.setValue(value);
+    }
 
     replaceMap(newMap, skipUndo) {
         if (!skipUndo) {
@@ -818,6 +825,12 @@ class TerrainView {
             // debugLog(`map click: evt (${evt.offsetX},${evt.offsetY}), point ${point.debugDescription}, tile ${tile.debugDescription}`);
             this.viewport.centerTile = tile;
         });
+        this.viewport.canvasStack.getCanvas(this.viewport.canvasStack.length - 1).addEventListener("mousemove", evt => {
+            let point = new Point(evt.offsetX * this.viewport.canvasStack.pixelScale, evt.offsetY * this.viewport.canvasStack.pixelScale);
+            let tile = this.viewport.tilePlane.modelTileForScreenPoint(point);
+            let modelTile = tile ? this.model.map.terrainLayer.getTileAtPoint(tile) : null;
+            this.model.session.tileInspectionTarget = modelTile;
+        });
     }
 
     resetLayers() {
@@ -846,11 +859,12 @@ class TerrainView {
 }
 
 class ControlsView {
-    static Kvo() { return { "fpsInfo": "fpsInfo" }; }
+    static Kvo() { return { "fpsInfo": "fpsInfo", "tileInfoText": "tileInfoText" }; }
 
     constructor() {
         this.session = null;
         this.fpsInfo = { timestamp: 0, value: null, load: null };
+        this.tileInfoText = "";
         this._dirty = true;
         this.kvo = new Kvo(this);
 
@@ -880,6 +894,13 @@ class ControlsView {
             clickScript: "zoomIn"
         }));
 
+        this.tileInfoView = new TextLineView({
+            parent: viewBlock,
+            binding: {
+                source: this.kvo.tileInfoText
+            }
+        });
+
         this.fpsView = new TextLineView({
             parent: viewBlock,
             binding: {
@@ -895,6 +916,7 @@ class ControlsView {
     setUp(session) {
         this.session = session;
         this.session.kvo.changeToken.addObserver(this, () => { this._dirty = true; });
+        this.session.kvo.tileInspectionTarget.addObserver(this, () => this.updateTileInspection());
         this._dirty = true;
     }
 
@@ -926,6 +948,23 @@ class ControlsView {
         this._dirty = false;
         this.undoButton.isEnabled = !!this.session && this.session.undoStack.canUndo;
         this.redoButton.isEnabled = !!this.session && this.session.undoStack.canRedo;
+    }
+
+    updateTileInspection() {
+        let tile = this.session.tileInspectionTarget;
+        if (!tile) {
+            this.kvo.tileInfoText.setValue("");
+        } else {
+            let typeAnnotation = "";
+            if (tile.type.isFreshwater) {
+                typeAnnotation = " (freshwater)" ;
+            } else if (tile.type.isSaltwater) {
+                typeAnnotation = " (saltwater)";
+            } else if (tile.type.has(TerrainType.flags.trees)) {
+                typeAnnotation = " (forest)"
+            }
+            this.kvo.tileInfoText.setValue(`${tile.point.x}, ${tile.point.y}${typeAnnotation}`);
+        }
     }
 
     _configureCommmands() {
