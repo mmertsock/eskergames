@@ -802,7 +802,6 @@ class TerrainView {
         this.session = null;
         this.viewport = null;
         this.layerViews = [];
-        this._configureCommmands();
     }
 
     setUp(session) {
@@ -827,6 +826,7 @@ class TerrainView {
             let modelTile = info.tile ? this.model.map.terrainLayer.getTileAtPoint(info.tile) : null;
             this.model.session.tileInspectionTarget = modelTile;
         });
+        this._configureCommmands();
     }
 
     resetLayers() {
@@ -847,11 +847,23 @@ class TerrainView {
         this.layerViews.forEach(view => view.render());
     }
 
+    centerUnderPointer() {
+        if (this.viewport.inputController.lastEvent) {
+            // Recalculate rather than trust the latest tileInspectionTarget 
+            // because it's stale with after center commands without moving the porter.
+            let tile = this.viewport.tilePlane.modelTileForScreenPoint(this.viewport.inputController.lastEvent.point);
+            if (tile) this.viewport.centerTile = tile;
+        }
+    }
+
     _configureCommmands() {
         let gse = GameScriptEngine.shared;
-        gse.registerCommand("zoomIn", () => { if (this.viewport) this.viewport.zoomIn(); });
-        gse.registerCommand("zoomOut", () => { if (this.viewport) this.viewport.zoomOut(); });
-        gse.registerCommand("setZoomLevel", index => { if (this.viewport) this.viewport.setZoomLevelIndex(index); })
+        gse.registerCommand("zoomIn", () => this.viewport.zoomIn());
+        gse.registerCommand("zoomOut", () => this.viewport.zoomOut());
+        gse.registerCommand("setZoomLevel", index => this.viewport.setZoomLevelIndex(index));
+        gse.registerCommand("panMap", direction => this.viewport.pan(direction, false));
+        gse.registerCommand("panMapLarge", direction => this.viewport.pan(direction, true));
+        gse.registerCommand("centerUnderPointer", () => this.centerUnderPointer());
     }
 }
 

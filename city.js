@@ -2665,6 +2665,14 @@ class CanvasTileViewport {
         this.updateTilePlane(value, true);
     }
 
+    pan(direction, large) {
+        let unit = Vector.manhattanUnits[direction];
+        if (!unit) return;
+        let factor = large ? 5 : 1;
+        let newOffset = unit.offsettingPosition(this.tilePlane.offset, this.zoomLevel.panTiles * this.tilePlane.tileWidth * factor);
+        this.updateOffset(newOffset, true, false);
+    }
+
     getContext(index, isOpaque) {
         if (!!this._offsetEasing) {
             this.tilePlane.offset = new Point(this._offsetEasing.x.value, this._offsetEasing.y.value);
@@ -2697,8 +2705,8 @@ class CanvasTileViewport {
         this.kvo.zoomLevel.notifyChanged();
     }
 
-    updateTilePlane(newCenterTile, animated) {
-        let log = false; //!!newCenterTile;
+    updateTilePlane(newCenterTile, animated, log) {
+        log = !!log;
 
         this.tilePlane.tileWidth = this.zoomLevel.tileWidth * this.canvasStack.pixelScale;
         this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
@@ -2706,7 +2714,7 @@ class CanvasTileViewport {
         if (newCenterTile) this._centerTile = mapModelRect.clampedPoint(newCenterTile).integral();
         // Change in mapSize can make centerTile invalid
         if (log) {
-            debugLog(["newCenterTile", newCenterTile, "mapModelRect", mapModelRect, "centerCandidate", this._centerTile, "contains", modelBounds.containsTile(this._centerTile)]);
+            debugLog(["newCenterTile", newCenterTile, "mapModelRect", mapModelRect, "centerCandidate", this._centerTile, "contains", mapModelRect.containsTile(this._centerTile), "tileWidth", this.tilePlane.tileWidth]);
         }
         if (!mapModelRect.containsTile(this._centerTile))
             this._centerTile = mapModelRect.center.integral();
@@ -2716,6 +2724,17 @@ class CanvasTileViewport {
         let currentCenterPoint = this.tilePlane.screenRectForModelTile(this._centerTile).center;
         let targetCenterPoint = viewportScreenBounds.center;
         let newOffset = this.tilePlane.offset.adding(targetCenterPoint.x - currentCenterPoint.x, targetCenterPoint.y - currentCenterPoint.y);
+        if (log) {
+            debugLog(["newOffset", newOffset, "viewportScreenBounds", viewportScreenBounds, "currentCenterPoint", currentCenterPoint, "targetCenterPoint", targetCenterPoint]);
+        }
+
+        this.updateOffset(newOffset, animated, log);
+    }
+
+    updateOffset(newOffset, animated, log) {
+        log = !!log;
+        let viewportScreenBounds = this.tilePlane.viewportScreenBounds;
+        let mapModelRect = new Rect(0, 0, this.tilePlane.size.width, this.tilePlane.size.height);
 
         // Force center horizontally/vertically if map is smaller than viewport
         let checkMargins = { width: true, height: true };
@@ -2730,7 +2749,7 @@ class CanvasTileViewport {
             checkMargins.height = false;
             if (log) debugLog("Map smaller than viewport vertically.");
         }
-        if (log) debugLog(`updateTilePlane(${newCenterTile ? newCenterTile.debugDescription : "null"}): offset ${this.tilePlane.offset.debugDescription} => ${newOffset.debugDescription}`);
+        if (log) debugLog(`updateOffset(${newOffset.debugDescription}): offset ${this.tilePlane.offset.debugDescription} => ${newOffset.debugDescription}`);
         let startOffset = this.tilePlane.offset;
         this.tilePlane.offset = newOffset;
 
@@ -2738,7 +2757,7 @@ class CanvasTileViewport {
         if (checkMargins.width || checkMargins.height) {
             newOffset = this.tilePlane.offset;
             let viewportExtremes = viewportScreenBounds.extremes;
-            let marginExtremes = this.tilePlane.screenRectForModelRect(mapModelRect.inset(-2 * this.marginSize.width, -2 * this.marginSize.height)).extremes;
+            let marginExtremes = this.tilePlane.screenRectForModelRect(mapModelRect.inset(-1 * this.marginSize.width, -1 * this.marginSize.height)).extremes;
             if (checkMargins.width) {
                 // Since we don't check a given direction if the map was smaller than the screen,
                 // we know we would only need to adjust left or right but not both ways.
@@ -2783,6 +2802,7 @@ class CanvasInputController {
         this.domEvents = new Set();
         this.selectListeners = [];
         this.movementListeners = [];
+        this.lastEvent = null;
     }
 
     // options:
@@ -2812,6 +2832,7 @@ class CanvasInputController {
 
     handleSelect(evt) {
         let info = this.viewport.infoForCanvasEvent(evt);
+        this.lastEvent = info;
         this.selectListeners.forEach(item => {
             if ((typeof(item.options.repetitions) != 'undefined') && (item.options.repetitions != evt.detail))
                 return;
@@ -2821,6 +2842,7 @@ class CanvasInputController {
 
     handleMovement(evt) {
         let info = this.viewport.infoForCanvasEvent(evt);
+        this.lastEvent = info;
         for (let i = 0; i < this.movementListeners.length; i += 1) {
             // TODO check options
             this.movementListeners[i].callback(info);

@@ -108,6 +108,15 @@ keyboard:
       - [Digit3, setZoomLevel, 2]
       - [Digit4, setZoomLevel, 3]
       - [Digit5, setZoomLevel, 4]
+      - [ArrowUp, panMap, 0]
+      - [Shift+ArrowUp, panMapLarge, 0]
+      - [ArrowRight, panMap, 6]
+      - [Shift+ArrowRight, panMapLarge, 6]
+      - [ArrowDown, panMap, 4]
+      - [Shift+ArrowDown, panMapLarge, 4]
+      - [ArrowLeft, panMap, 2]
+      - [Shift+ArrowLeft, panMapLarge, 2]
+      - [Space, centerUnderPointer]
 
 pointInputController:
     singleClickMovementTolerance: 3
@@ -209,23 +218,28 @@ mainMapView:
     allowGrid: false
     allowAnimation: false
     allowBorder: false
+    panTiles: 12
   - tileWidth: 3
     allowGrid: false
     allowAnimation: false
     allowBorder: false
+    panTiles: 12
   - tileWidth: 6
     allowGrid: true
     allowAnimation: true
     allowBorder: true
+    panTiles: 6
   - tileWidth: 12
     isDefault: true
     allowGrid: true
     allowAnimation: true
     allowBorder: true
+    panTiles: 3
   - tileWidth: 24
     allowGrid: true
     allowAnimation: true
     allowBorder: true
+    panTiles: 2
 
 controlPanelView:
   fillStyle: *PANELFILL
