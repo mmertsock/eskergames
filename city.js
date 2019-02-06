@@ -2563,14 +2563,14 @@ class CanvasTileViewport {
 
         this.tilePlane.tileWidth = this.zoomLevel.tileWidth * this.canvasStack.pixelScale;
         this.tilePlane.viewportSize = this.canvasStack.canvasDeviceSize;
-        let modelBounds = new Rect(new Point(0, 0), this.tilePlane.size);
-        if (newCenterTile) this._centerTile = modelBounds.clampedPoint(newCenterTile).integral();
+        let mapModelRect = new Rect(0, 0, this.tilePlane.size.width, this.tilePlane.size.height);
+        if (newCenterTile) this._centerTile = mapModelRect.clampedPoint(newCenterTile).integral();
         // Change in mapSize can make centerTile invalid
         if (log) {
-            debugLog(["newCenterTile", newCenterTile, "modelBounds", modelBounds, "centerCandidate", this._centerTile, "contains", modelBounds.containsTile(this._centerTile)]);
+            debugLog(["newCenterTile", newCenterTile, "mapModelRect", mapModelRect, "centerCandidate", this._centerTile, "contains", modelBounds.containsTile(this._centerTile)]);
         }
-        if (!modelBounds.containsTile(this._centerTile))
-            this._centerTile = modelBounds.center.integral();
+        if (!mapModelRect.containsTile(this._centerTile))
+            this._centerTile = mapModelRect.center.integral();
 
         // Try to preserve _centerTile
         let viewportScreenBounds = this.tilePlane.viewportScreenBounds;
@@ -2580,7 +2580,6 @@ class CanvasTileViewport {
 
         // Force center horizontally/vertically if map is smaller than viewport
         let checkMargins = { width: true, height: true };
-        let mapModelRect = new Rect(0, 0, this.tilePlane.size.width, this.tilePlane.size.height);
         let mapScreenSize = this.tilePlane.screenRectForModelRect(mapModelRect).size;
         if (mapScreenSize.width < viewportScreenBounds.width) {
             newOffset.x = 0.5 * (viewportScreenBounds.width - mapScreenSize.width);
