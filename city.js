@@ -1284,54 +1284,177 @@ class PointInputController {
     }
 }
 
-class KeyInputController {
-    constructor() {
-        this.game = null;
-        this.keyboardState = new Gaming.KeyboardState({ runLoop: uiRunLoop });
-        var settings = GameContent.shared.keyInputController;
-        this.keyPressEvents = settings.keyPressEvents;
-        this.continuousKeyEvents = settings.continuousKeyEvents;
-        this.keyboardState.addDelegate(this);
+class KeyInputShortcut {
+    constructor(config) {
+        this.code = config.code;
+        this.shift = config.shift;
+        this.callbacks = [];
+        this.fired = false;
+        this.score = this.shift ? 2 : 1;
     }
 
-    initialize(game) {
-        this.game = game;
+    get debugDescription() {
+        return `<KeyInputShortcut${this.score} ${this.shift ? "Shift+" : ""}${this.code}${this.fired ? " (fired)" : ""}>`;
     }
 
-    get keyboardCommandsActive() {
-        return this.game != null;
+    addCallback(callback) { this.callbacks.push(callback); }
+
+    handlesConfig(config) {
+        return this.code == config.code
+            && this.shift == config.shift;
     }
 
-    getKeyAction(lookup) {
-        var action = lookup.find(a => this.keyboardState.areKeyCodesDown(a[0], true));
-        return action ? { command: action[1], subject: action[2] } : null;
+    isReady(controller) {
+        return !this.fired && this.isMatch(controller);
     }
 
-    keyboardStateDidChange(kc, eventType) {
-        if (!this.keyboardCommandsActive) { return; }
-        if (!this._executeCommandForCurrentKeys(this.keyPressEvents)) {
-            if (!this._executeCommandForCurrentKeys(this.continuousKeyEvents)) {
-                this._logUnhandledKeys();
-            }
-        }
-    }
-
-    keyboardStateContinuing(kc) {
-        this._executeCommandForCurrentKeys(this.continuousKeyEvents);
-    }
-
-    _executeCommandForCurrentKeys(lookup) {
-        var action = this.getKeyAction(lookup);
-        if (!action) { return false; }
-        GameScriptEngine.shared.execute(action.command, action.subject);
+    isMatch(controller) {
+        if (!controller.isCodeActive(this.code)) return false;
+        if (this.shift && !controller.isCodeActive(KeyInputController.Codes.anyShift)) return false;
         return true;
     }
 
-    _logUnhandledKeys() {
-        var codes = Array.from(this.keyboardState.keyCodesCurrentlyDown).join(",");
-        once("_logUnhandledKeys:" + codes, () => debugLog("KeyInputController: unhandled key codes: " + codes));
+    reset() { this.fired = false; }
+
+    resetIfNotMatch(controller) {
+        if (!this.isMatch(controller))
+            this.reset();
+    }
+
+    fire(controller, evt) {
+        this.fired = true;
+        this.callbacks.forEach(item => item(controller, this, evt));
+    }
+
+    blockIfSupersededBy(shortcut) {
+        if (this != shortcut && shortcut.code == this.code) {
+            this.fired = true;
+        }
     }
 }
+
+class KeyInputController {
+    constructor() {
+        document.addEventListener("keydown", e => this.keydown(e));
+        document.addEventListener("keyup", e => this.keyup(e));
+        window.addEventListener("blur", e => this.stop(e));
+        window.addEventListener("focus", e => this.start(e));
+        this.codeState = {}; // code => keydown timestamp
+        // this.currentCodes = new Set();
+        this.shortcuts = [];
+        this.isActive = true;
+    }
+
+    get activeCodes() { return Object.getOwnPropertyNames(this.codeState); }
+
+    isCodeActive(code) { return this.codeState.hasOwnProperty(code); }
+
+    timeSinceFirstCode(codes, evt) {
+        let min = codes
+            .map(code => this.isCodeActive(code) ? this.codeState[code] : Number.MAX_SAFE_INTEGER)
+            .reduce((i, j) => Math.min(i, j), evt.timeStamp);
+        let value = evt.timeStamp - min;
+        return value > 0 ? value : 0;
+    }
+
+    addShortcutsFromSettings(settings) {
+        settings.keyPressShortcuts.forEach(item => {
+            item = Array.from(item);
+            let tokens = item.shift().split("+");
+            let script = item[0], subject = item[1];
+            if (tokens.length == 2) {
+                if (tokens[0] == "Shift") {
+                    this.addGameScriptShortcut(tokens[1], true, script, subject);
+                } else {
+                    debugWarn(`Unhandled shortcut config ${tokens[0]}+${tokens[1]}`);
+                }
+            } else {
+                this.addGameScriptShortcut(tokens[0], false, script, subject);
+            }
+        });
+    }
+
+    addGameScriptShortcut(code, shift, script, subject) {
+        // TODO build a help menu automatically
+        this.addShortcutListener({ code: code, shift: shift }, (controller, shortcut, evt) => {
+            GameScriptEngine.shared.execute(script, subject);
+        });
+    }
+
+    addShortcutListener(options, callback) {
+        let shortcut = this.shortcuts.find(item => item.handlesConfig(options));
+        if (!shortcut) {
+            shortcut = new KeyInputShortcut(options);
+            this.shortcuts.push(shortcut);
+            // Higher-scored shortcuts take priority
+            this.shortcuts.sort((a, b) => b.score - a.score);
+        }
+        return shortcut.addCallback(callback);
+    }
+
+    codesFromEvent(evt) {
+        let codes = [evt.code];
+        switch (evt.code) {
+            case "ShiftLeft":
+            case "ShiftRight":
+                codes.push(KeyInputController.Codes.anyShift); break;
+        }
+        return codes;
+    }
+
+    keydown(evt) {
+        if (!this.isActive) return;
+        let codes = this.codesFromEvent(evt);
+        // codes.forEach(code => this.currentCodes.add(code));
+        codes.forEach(code => {
+            if (!this.isCodeActive(code)) this.codeState[code] = evt.timeStamp;
+        });
+        this.forEachDelegate(delegate => {
+            delegate.keyStateDidChange(this, { evt: evt, down: codes, up: [] });
+        });
+
+        let shortcut = this.shortcuts.find(item => item.isReady(this));
+        if (shortcut) {
+            shortcut.fire(this, evt);
+            this.shortcuts.forEach(item => item.blockIfSupersededBy(shortcut));
+        }
+    }
+
+    keyup(evt) {
+        if (!this.isActive) return;
+        let codes = this.codesFromEvent(evt);
+        // codes.forEach(code => this.currentCodes.delete(code));
+        codes.forEach(code => { delete this.codeState[code]; });
+        this.forEachDelegate(delegate => {
+            delegate.keyStateDidChange(this, { evt: evt, down: [], up: codes });
+        });
+
+        this.shortcuts.forEach(item => item.resetIfNotMatch(this));
+    }
+
+    start(evt) {
+        this.isActive = true;
+    }
+
+    stop(evt) {
+        this.isActive = false;
+        this.clear(evt);
+    }
+
+    clear(evt) {
+        let codes = this.activeCodes;
+        this.codeState = {};
+        // this.currentCodes.clear();
+        this.forEachDelegate(delegate => {
+            delegate.keyStateDidChange(this, { evt: evt, down: [], up: codes });
+        });
+        this.shortcuts.forEach(item => item.reset());
+    }
+}
+KeyInputController.Codes = {
+    anyShift: "*Shift"
+};
+Mixins.Gaming.DelegateSet(KeyInputController);
 
 // ##################### MAP TOOLS ######################
 
@@ -2535,6 +2658,7 @@ class CanvasTileViewport {
     get zoomLevel() { return this.zoomSelection.selectedItem.value; }
     zoomIn() { this.zoomSelection.selectNext(); }
     zoomOut() { this.zoomSelection.selectPrevious(); }
+    setZoomLevelIndex(index) { this.zoomSelection.setSelectedIndex(index); }
 
     get centerTile() { return this._centerTile; }
     set centerTile(value) {
@@ -3805,7 +3929,6 @@ return {
     BorderPainter: BorderPainter,
     Budget: Budget,
     CanvasInputController: CanvasInputController,
-    CanvasInputOption: CanvasInputOption,
     CanvasTileViewport: CanvasTileViewport,
     City: City,
     CityMap: CityMap,

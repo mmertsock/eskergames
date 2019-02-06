@@ -54,6 +54,7 @@ const GameDialog = CitySim.GameDialog;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
 const InputView = CitySim.InputView;
+const KeyInputController = CitySim.KeyInputController;
 const MapLayer = CitySim.MapLayer;
 const MapLayerViewModel = CitySim.MapLayerViewModel;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
@@ -617,6 +618,7 @@ class RootView {
         this.session = session;
         debugLog(`Setting up session with ${this.session.debugDescription}`);
         this.views.forEach(view => view.setUp(session));
+        KeyInputController.shared.addShortcutsFromSettings(GameContent.shared.keyboard.terrainEditor);
     }
 
     saveCurrentTerrain() {
@@ -849,6 +851,7 @@ class TerrainView {
         let gse = GameScriptEngine.shared;
         gse.registerCommand("zoomIn", () => { if (this.viewport) this.viewport.zoomIn(); });
         gse.registerCommand("zoomOut", () => { if (this.viewport) this.viewport.zoomOut(); });
+        gse.registerCommand("setZoomLevel", index => { if (this.viewport) this.viewport.setZoomLevelIndex(index); })
     }
 }
 
@@ -969,6 +972,7 @@ class ControlsView {
 let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });
     GameScriptEngine.shared = new GameScriptEngine();
+    KeyInputController.shared = new KeyInputController();
     CitySimTerrain.view = new RootView();
     CitySimTerrain.uiRunLoop.resume();
     debugLog("Ready.");

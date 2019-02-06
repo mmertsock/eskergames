@@ -84,6 +84,31 @@ buildings:
 
 ################## INPUTS #################
 
+keyboard:
+  game:
+    keyPressShortcuts:
+      - [Digit0, pauseResume]
+      - [Digit1, setEngineSpeed, 0]
+      - [Digit2, setEngineSpeed, 1]
+      - [Digit3, setEngineSpeed, 2]
+      - [Digit4, setEngineSpeed, 3]
+      - [Minus, zoomOut]
+      - [Equal, zoomIn]
+      - [Shift+Digit1, setZoomLevel, 0]
+      - [Shift+Digit2, setZoomLevel, 1]
+      - [Shift+Digit3, setZoomLevel, 2]
+      - [Shift+Digit4, setZoomLevel, 3]
+      - [Shift+Digit5, setZoomLevel, 4]
+  terrainEditor:
+    keyPressShortcuts:
+      - [Minus, zoomOut]
+      - [Equal, zoomIn]
+      - [Digit1, setZoomLevel, 0]
+      - [Digit2, setZoomLevel, 1]
+      - [Digit3, setZoomLevel, 2]
+      - [Digit4, setZoomLevel, 3]
+      - [Digit5, setZoomLevel, 4]
+
 pointInputController:
     singleClickMovementTolerance: 3
 keyInputController:
