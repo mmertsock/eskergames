@@ -619,12 +619,21 @@ class TerrainEditor {
 
     canPaint(tile, tool) {
         if (!tile) return false;
+        if (tool.flag.has(TerrainType.flags.trees) && !tile.type.isLand) return false;
         return true;
     }
 
+    allBrushTiles(tile, tool) {
+        return tool.brush.tilesCenteredAt(tile, this.session.map.terrainLayer);
+    }
+
+    validPaintTiles(tile, tool) {
+        return tool.brush.tilesCenteredAt(tile, this.session.map.terrainLayer)
+            .filter(item => this.canPaint(item, tool));
+    }
+
     addPaintToChangeset(tile, tool) {
-        let tiles = tool.brush.tilesCenteredAt(tile, this.session.map.terrainLayer)
-            .filter(item => this.canPaint(item, tool))
+        let tiles = this.validPaintTiles(tile, tool)
             .map(item => { return {point: item.point, type: tool.flag}; });
         this._addTilesToChangeset(tiles);
     }
@@ -1121,6 +1130,7 @@ class HoverInfoInteraction {
     }
 
     get renderOrder() { return 0; }
+    get needsRender() { return false; }
 
     didMove(info) {
         this.model.session.tileInspectionTarget = this.model.terrainTileFromInput(info);
@@ -1137,7 +1147,7 @@ class TerrainToolController {
         this.model = config.model; // TerrainMapViewModel
         this.interactionView = config.interactionView;
         this.interactionView.inputController.addSelectionListener({ repetitions: 1 }, info => this.didSelectTile(info));
-        this.interactionView.inputController.addMovementListener({ repetitions: 0 }, info => this.didMove(info));
+        this.interactionView.inputController.addMovementListener({ }, info => this.didMove(info));
         this.interactionView.inputController.addMovementListener({ buttons: 1 }, info => this.didDrag(info));
         this.interactionView.inputController.addMovementEndListener({ }, info => this.didCompleteDrag(info));
         this._configureCommmands();
@@ -1145,10 +1155,13 @@ class TerrainToolController {
         this.selectToolWithID(this.factory.defaultToolID);
         this.isDragging = false;
         this.lastDrag = null;
+        this.lastHover = null;
+        this._dirty = true;
     }
 
     get renderOrder() { return 0; }
     get brush() { return this.tool ? this.tool.brush : this.factory.getBrush(-1); }
+    get needsRender() { return this._dirty || this.tool.needsRender; }
 
     setBrushSize(index) {
         if (index == this.tool.brush.index) return;
@@ -1168,6 +1181,7 @@ class TerrainToolController {
     }
 
     didMove(info) {
+        this.lastHover = info;
         if (this.isDragging) return;
         this.handleInputResult(this.tool.didMove(info));
     }
@@ -1195,11 +1209,15 @@ class TerrainToolController {
     selectTool(tool) {
         if (tool != null && tool != this.tool) {
             this.kvo.tool.setValue(tool);
+            this._dirty = true;
         }
     }
 
     render(context, rl) {
-        this.tool.render(context);
+        this._dirty = false;
+        let lastHover = this.lastHover;
+        if (lastHover && Math.abs(Date.now() - lastHover.timestamp) > 500) lastHover = null;
+        this.tool.render(context, this.lastHover);
     }
 
     _configureCommmands() {
@@ -1260,6 +1278,8 @@ class NavigateMapTool {
         this.model = new InteractionModel({ viewModel: toolController.model });
     }
 
+    get needsRender() { return false; }
+
     didSelectTile(info) {
         if (info.tile) info.viewport.centerTile = info.tile;
         return null;
@@ -1269,7 +1289,7 @@ class NavigateMapTool {
     didMove() { return null; }
     didDrag() { return null; }
     didCompleteDrag() { return null; }
-    render(context) { }
+    render(context, lastHover) { }
 }
 
 class PaintTerrainTypeTool {
@@ -1278,7 +1298,11 @@ class PaintTerrainTypeTool {
         this.brush = brush;
         this.model = new InteractionModel({ viewModel: toolController.model });
         this.flag = TerrainType[config.key];
+        this.validHoverFillStyle = toolController.factory.settings.validHoverFillStyle;
+        this.notAllowedHoverFillStyle = toolController.factory.settings.notAllowedHoverFillStyle;
     }
+
+    get needsRender() { return true; }
 
     didSelectTile(info) {
         if (this.tryPaint(info)) {
@@ -1303,8 +1327,16 @@ class PaintTerrainTypeTool {
         return null;
     }
 
-    render(context) {
-        // render selection stuff
+    render(context, lastHover) {
+        if (!lastHover) return;
+        let tile = this.model.terrainTileFromInput(lastHover);
+        if (!tile) return;
+        let tiles = tile ? this.model.editor.allBrushTiles(tile, this) : [];
+        if (tiles.length == 0) return;
+        context.ctx.fillStyle = this.model.editor.canPaint(tile, this) ? this.validHoverFillStyle : this.notAllowedHoverFillStyle;
+        tiles.forEach(neighbor => {
+            context.ctx.rectFill(context.tilePlane.screenRectForModelTile(neighbor.point));
+        });
     }
 
     tryPaint(info) {

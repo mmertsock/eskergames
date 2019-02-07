@@ -169,6 +169,8 @@ terrainEditorTools:
       paletteTitle: "####"
     - radius: 5.3
       paletteTitle: "#####"
+  validHoverFillStyle: "hsla(120, 50%, 50%, 0.3)"
+  notAllowedHoverFillStyle: "hsla(0, 50%, 75%, 0.3)"
   definitions:
     map-navigate:
       isDefault: true

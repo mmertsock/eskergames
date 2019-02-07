@@ -2803,12 +2803,14 @@ class RealtimeInteractionView {
         this.viewport = config.viewport;
         this.inputController = config.viewport.inputController;
         this.interactions = [];
+        this._dirty = false;
         config.runLoop.addDelegate(this);
     }
 
     addInteraction(interaction) {
         this.interactions.push(interaction);
         this.interactions.sort((a, b) => a.renderOrder - b.renderOrder);
+        this._dirty = true;
     }
 
     removeInteraction(interaction) {
@@ -2817,7 +2819,11 @@ class RealtimeInteractionView {
     }
 
     processFrame(rl) {
+        let needsRender = this._dirty || this.interactions.find(i => i.needsRender);
+        if (!needsRender) return;
+        this._dirty = true;
         let context = this.viewport.getContext(this.viewport.canvasStack.topCanvasIndex, false);
+        context.ctx.rectClear(context.tilePlane.viewportScreenBounds);
         this.interactions.forEach(i => i.render(context, rl));
     }
 }
