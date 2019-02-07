@@ -532,7 +532,6 @@ class EditTilesAction {
     }
     addTiles(tiles) {
         tiles.forEach(tile => {
-            debugLog(tile);
             let oldTile = this.oldLayer.getTileAtPoint(tile.point);
             if (oldTile.type == null) oldTile.type = this.session.map.terrainLayer.getTileAtPoint(tile.point).type;
             let newTile = this.newLayer.getTileAtPoint(tile.point);
@@ -1107,10 +1106,14 @@ class TerrainToolController {
         this.model = config.model; // TerrainMapViewModel
         this.interactionView = config.interactionView;
         this.interactionView.inputController.addSelectionListener({ repetitions: 1 }, info => this.didSelectTile(info));
-        this.interactionView.inputController.addMovementListener({}, info => this.didMove(info));
+        this.interactionView.inputController.addMovementListener({ repetitions: 0 }, info => this.didMove(info));
+        this.interactionView.inputController.addMovementListener({ buttons: 1 }, info => this.didDrag(info));
+        this.interactionView.inputController.addMovementEndListener({ }, info => this.didCompleteDrag(info));
         this._configureCommmands();
         this.kvo = new Kvo(this);
         this.selectToolWithID(this.factory.defaultToolID);
+        this.isDragging = false;
+        this.lastDrag = null;
     }
 
     get renderOrder() { return 0; }
@@ -1120,11 +1123,31 @@ class TerrainToolController {
     }
 
     didSelectTile(info) {
+        if (this.isDragging) return;
+        if (this.lastDrag && (info.timestamp - this.lastDrag.timestamp) < 10) return;
+        // debugLog(`${info.timestamp} didSelectTile: ${info.point.debugDescription}. isDragging? ${this.isDragging}`);
         this.handleInputResult(this.tool.didSelectTile(info));
     }
 
     didMove(info) {
+        if (this.isDragging) return;
         this.handleInputResult(this.tool.didMove(info));
+    }
+
+    didDrag(info) {
+        let isStart = !this.isDragging;
+        this.isDragging = true;
+        this.lastDrag = info;
+        // if (isStart) debugLog(`${info.timestamp} didDrag isStart: ${info.point.debugDescription}`);
+        this.handleInputResult(this.tool.didDrag(info, isStart));
+    }
+
+    didCompleteDrag(info) {
+        if (!this.isDragging) return;
+        this.lastDrag = info;
+        // debugLog(`${info.timestamp} didCompleteDrag: ${info.point.debugDescription}`);
+        this.handleInputResult(this.tool.didCompleteDrag(info));
+        this.isDragging = false;
     }
 
     handleInputResult(newTool) {
@@ -1182,9 +1205,11 @@ class NavigateMapTool {
         return null;
     }
 
-    didMove(info) { return null; }
-
-    render(context) { } // noop
+    // noops
+    didMove() { return null; }
+    didDrag() { return null; }
+    didCompleteDrag() { return null; }
+    render(context) { }
 }
 
 class PaintTerrainTypeTool {
@@ -1206,13 +1231,14 @@ class PaintTerrainTypeTool {
         return null;
     }
 
-    didDrag(info) {
+    didDrag(info, isStart) {
+        if (isStart) this.model.editor.commitChangeset();
         this.tryPaint(info);
         return null;
     }
 
     didCompleteDrag(info) {
-        this.editor.commitChangeset();
+        this.model.editor.commitChangeset();
         return null;
     }
 

@@ -2692,7 +2692,7 @@ class CanvasTileViewport {
     infoForCanvasEvent(evt) {
         let point = new Point(evt.offsetX * this.canvasStack.pixelScale, evt.offsetY * this.canvasStack.pixelScale);
         let tile = this.tilePlane.modelTileForScreenPoint(point);
-        return { evt: evt, viewport: this, point: point, tile: tile };
+        return { evt: evt, viewport: this, point: point, tile: tile, timestamp: Date.now() };
     }
 
     zoomLevelActivated(value) {
@@ -2837,6 +2837,7 @@ class CanvasInputController {
         this.domEvents = new Set();
         this.selectListeners = [];
         this.movementListeners = [];
+        this.movementEndListeners = [];
         this.lastEvent = null;
     }
 
@@ -2854,6 +2855,12 @@ class CanvasInputController {
         this.movementListeners.push({ options: options, callback: callback });
     }
 
+    addMovementEndListener(options, callback) {
+        let canvas = this.shouldAddDomEvent("mouseup");
+        if (canvas) canvas.addEventListener("mouseup", evt => this.handleMovementEnd(evt));
+        this.movementEndListeners.push({ options: options, callback: callback });
+    }
+
     shouldAddDomEvent(type) {
         if (this.domEvents.has(type)) return null;
         let canvas = this.viewport.canvasStack.topCanvas;
@@ -2868,20 +2875,34 @@ class CanvasInputController {
     handleSelect(evt) {
         let info = this.viewport.infoForCanvasEvent(evt);
         this.lastEvent = info;
-        this.selectListeners.forEach(item => {
-            if ((typeof(item.options.repetitions) != 'undefined') && (item.options.repetitions != evt.detail))
-                return;
-            item.callback(info);
-        });
+        this.invokeCallbacks(this.selectListeners, info);
     }
 
     handleMovement(evt) {
         let info = this.viewport.infoForCanvasEvent(evt);
         this.lastEvent = info;
-        for (let i = 0; i < this.movementListeners.length; i += 1) {
-            // TODO check options
-            this.movementListeners[i].callback(info);
+        this.invokeCallbacks(this.movementListeners, info);
+    }
+
+    handleMovementEnd(evt) {
+        let info = this.viewport.infoForCanvasEvent(evt);
+        this.lastEvent = info;
+        this.invokeCallbacks(this.movementEndListeners, info);
+    }
+
+    invokeCallbacks(listeners, info) {
+        for (let i = 0; i < listeners.length; i += 1) {
+            if (this.isEventValid(info.evt, listeners[i].options))
+                listeners[i].callback(info);
         }
+    }
+
+    isEventValid(evt, options) {
+        if ((typeof(options.repetitions) != 'undefined') && (evt.detail != options.repetitions))
+            return false;
+        if ((typeof(options.buttons) != 'undefined') && (evt.buttons != options.buttons))
+            return false;
+        return true;
     }
 }
 
