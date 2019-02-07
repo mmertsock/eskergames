@@ -793,7 +793,9 @@ class CityMap {
 
     modifyTerrain(tiles) {
         tiles.forEachFlat(tile => {
-            this.terrainLayer.getTileAtPoint(tile.point).type = tile.type;
+            if (!!tile.type) {
+                this.terrainLayer.getTileAtPoint(tile.point).type = tile.type;
+            }
         });
     }
 
@@ -2796,6 +2798,39 @@ class CanvasTileViewport {
     }
 }
 
+class RealtimeInteractionView {
+    constructor(config) {
+        this.viewport = config.viewport;
+        this.inputController = config.viewport.inputController;
+        this.interactions = [];
+        config.runLoop.addDelegate(this);
+    }
+
+    addInteraction(interaction) {
+        this.interactions.push(interaction);
+        this.interactions.sort((a, b) => a.renderOrder - b.renderOrder);
+    }
+
+    removeInteraction(interaction) {
+        let index = this.interactions.indexOf(interaction);
+        if (index >= 0) this.interactions.removeItemAtIndex(index);
+    }
+
+    processFrame(rl) {
+        let context = this.viewport.getContext(this.viewport.canvasStack.topCanvasIndex, false);
+        this.interactions.forEach(i => i.render(context, rl));
+    }
+}
+
+// eg addSelectListener({ shiftKey: InputOption.required }, info => doStuff(info)) to listen specifically to shift-click
+// eg addMoveListener({ button1: InputOption.required }, info => doStuff()) for drag events
+let InputOption = {
+    optional: 0,
+    required: 1,
+    prohibited: 2
+};
+
+// TODO consider using the "pointer" events as they may encapsulate both mouse and touch? eg pointermove
 class CanvasInputController {
     constructor(config) {
         this.viewport = config.viewport;
@@ -2849,13 +2884,6 @@ class CanvasInputController {
         }
     }
 }
-// eg addSelectListener({ shiftKey: CanvasInputOption.required }, info => doStuff(info)) to listen specifically to shift-click
-// eg addMoveListener({ button1: CanvasInputOption.required }, info => doStuff()) for drag events
-let CanvasInputOption = {
-    optional: 0,
-    required: 1,
-    prohibited: 2
-};
 
 class SpriteTileModel extends MapTile {
     constructor(point, layer) {
@@ -3958,6 +3986,7 @@ return {
     GameDialog: GameDialog,
     GameStorage: GameStorage,
     GridPainter: GridPainter,
+    InputOption: InputOption,
     InputView: InputView,
     KeyInputController: KeyInputController,
     MapLayer: MapLayer,
@@ -3965,6 +3994,7 @@ return {
     MapTile: MapTile,
     Plot: Plot,
     RCIValue: RCIValue,
+    RealtimeInteractionView: RealtimeInteractionView,
     ScriptPainter: ScriptPainter,
     ScriptPainterCollection: ScriptPainterCollection,
     ScriptPainterSession: ScriptPainterSession,

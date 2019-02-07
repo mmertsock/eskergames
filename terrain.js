@@ -8,10 +8,6 @@ TODOs
   over the tile plane and set any tile to water if its coord is between the two banks in the ideal space.
   - Could do a similar thing with random blob generator: generate one large ellipse for the overall blob shape,
     then a collection of smaller random ellpises with centers along the perimeter of the main ellipse.
-- Whenever regenerating, encode the raw parameters + RNG seed into a hex value, store that 
-  with the terrain, so you can use that key to recreate the random map.
-    https://github.com/davidbau/seedrandom#saving-and-restoring-prng-state
-
 
 Preserving salt water after edits:
 When generating an ocean we pick a
@@ -57,6 +53,7 @@ const InputView = CitySim.InputView;
 const KeyInputController = CitySim.KeyInputController;
 const MapLayer = CitySim.MapLayer;
 const MapLayerViewModel = CitySim.MapLayerViewModel;
+const RealtimeInteractionView = CitySim.RealtimeInteractionView;
 const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
 const Sprite = CitySim.Sprite;
 const SpriteMapLayerView = CitySim.SpriteMapLayerView;
@@ -525,18 +522,29 @@ class TerrainGenerator {
 }
 
 class EditTilesAction {
-    // 2d arrays. any tiles untouched should have value undefined
     constructor(config) {
         this.title = config.title;
         this.session = config.session;
-        this.tiles = config.tiles;
-        this.oldTiles = config.oldTiles;
+        this.oldLayer = new MapLayer({ map: config.session.map, id: "EditTilesAction-Old", tileClass: TerrainTile });
+        this.newLayer = new MapLayer({ map: config.session.map, id: "EditTilesAction-New", tileClass: TerrainTile });
+        this.oldLayer.visitTiles(null, tile => tile.type = null);
+        this.newLayer.visitTiles(null, tile => tile.type = null);
+    }
+    addTiles(tiles) {
+        tiles.forEach(tile => {
+            debugLog(tile);
+            let oldTile = this.oldLayer.getTileAtPoint(tile.point);
+            if (oldTile.type == null) oldTile.type = this.session.map.terrainLayer.getTileAtPoint(tile.point).type;
+            let newTile = this.newLayer.getTileAtPoint(tile.point);
+            newTile.type = tile.type;
+        });
+        this.session.replaceTiles(this.newLayer, this);
     }
     undo() {
-        this.session.replaceTiles(this.oldTiles, false);
+        this.session.replaceTiles(this.oldLayer, null);
     }
     redo() {
-        this.session.replaceTiles(this.tiles, false);
+        this.session.replaceTiles(this.newLayer, null);
     }
 }
 
@@ -567,6 +575,7 @@ class EditSession {
         this._tileInspectionTarget = null;
         this.kvo = new Kvo(this);
         this.undoStack = new UndoStack();
+        this.editor = new TerrainEditor(this);
     }
 
     get map() { return this.terrain.map; }
@@ -590,9 +599,51 @@ class EditSession {
         this.kvo.changeToken.setValue(this.changeToken + 1);
     }
 
-    // 2d array. Only performs changes for non-undefined tiles
-    replaceTiles(tiles, addToUndoStack) {
-        // TODO
+    replaceTiles(newLayer, undoActionToAdd) {
+        this.terrain.map.modifyTerrain(newLayer._tiles);
+        this.kvo.changeToken.setValue(this.changeToken + 1);
+        if (undoActionToAdd && (this.undoStack.nextUndoItem != undoActionToAdd)) {
+            this.undoStack.push(undoActionToAdd);
+        }
+    }
+}
+
+class TerrainEditor {
+    constructor(session) {
+        this.session = session;
+        this.changeset = null;
+    }
+
+    // More generic:
+    // proposeXyzOperation(tile, arg1, arg2): return Operation object if valid, otherwise null
+    // addToChangeset(operation)
+
+    canPaint(tile, flag) {
+        // TODO rules for different types
+        return true;
+    }
+
+    addPaintToChangeset(tile, flag) {
+        if (!this.canPaint(tile, flag)) return;
+        this._addTilesToChangeset([{ point: tile.point, type: flag }]);
+    }
+
+    _addTilesToChangeset(tiles) {
+        this._beginChangesetIfNeeded();
+        this.changeset.addTiles(tiles);
+    }
+
+    _beginChangesetIfNeeded() {
+        if (!this.changeset) {
+            this.changeset = new EditTilesAction({
+                title: "Edit Map",
+                session: this.session
+            });
+        }
+    }
+
+    commitChangeset() {
+        this.changeset = null;
     }
 }
 
@@ -808,7 +859,7 @@ class TerrainView {
         this.model = new TerrainMapViewModel({ session: session });
         this.viewport = new CanvasTileViewport({
             mapSize: this.model.map.size,
-            layerCount: this.model.layers.length,
+            layerCount: this.model.layers.length + 1,
             initialZoomLevel: GameContent.shared.mainMapView.zoomLevels[2],
             containerElem: this.elem,
             animation: new AnimationState(this.runLoop),
@@ -817,15 +868,24 @@ class TerrainView {
 
         this.resetLayers();
         this.model.kvo.layers.addObserver(this, () => this.resetLayers());
-        this.runLoop.addDelegate(this);
 
-        this.viewport.inputController.addSelectionListener({ repetitions: 1 }, info => {
-            if (info.tile) info.viewport.centerTile = info.tile;
+        this.interactionView = new RealtimeInteractionView({
+            viewport: this.viewport,
+            runLoop: this.runLoop
         });
-        this.viewport.inputController.addMovementListener({}, info => {
-            let modelTile = info.tile ? this.model.map.terrainLayer.getTileAtPoint(info.tile) : null;
-            this.model.session.tileInspectionTarget = modelTile;
+        this.toolController = new TerrainToolController({
+            factory: ToolFactory.shared,
+            model: this.model,
+            interactionView: this.interactionView
         });
+        this.model.session.toolController = this.toolController;
+        this.interactionView.addInteraction(this.toolController);
+        this.interactionView.addInteraction(new HoverInfoInteraction({
+            interactionView: this.interactionView,
+            model: this.model
+        }));
+
+        this.runLoop.addDelegate(this);
         this._configureCommmands();
     }
 
@@ -881,8 +941,6 @@ class ControlsView {
         this.buttons = [];
 
         let globalBlock = this.root.querySelector("#global-controls");
-        let viewBlock = this.root.querySelector("#view");
-
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("regenTerrainButtonLabel"), clickScript: "regenerate"}));
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("optionsButtonLabel"), clickScript: "showFileMenu"}));
         this.undoButton = new ToolButton({parent: globalBlock, title: Strings.str("undoButtonLabel"), clickScript: "terrainUndo"});
@@ -891,6 +949,7 @@ class ControlsView {
         this.buttons.push(this.redoButton);
         this.buttons.push(new ToolButton({parent: globalBlock, title: Strings.str("helpButtonLabel"), clickScript: "showGameHelp"}));
 
+        let viewBlock = this.root.querySelector("#view");
         let zoomElem = this.root.querySelector("zoom");
         this.buttons.push(new ToolButton({
             parent: zoomElem,
@@ -924,8 +983,13 @@ class ControlsView {
 
     setUp(session) {
         this.session = session;
-        this.session.kvo.changeToken.addObserver(this, () => { this._dirty = true; });
+        this.session.kvo.changeToken.addObserver(this, () => this._dirty = true);
         this.session.kvo.tileInspectionTarget.addObserver(this, () => this.updateTileInspection());
+        this.microPalette = new ToolPaletteView({
+            toolController: this.session.toolController,
+            elem: this.root.querySelector("#micro-controls"),
+            palette: this.session.toolController.factory.settings.microPalette
+        });
         this._dirty = true;
     }
 
@@ -977,7 +1041,191 @@ class ControlsView {
     }
 
     _configureCommmands() {
-        GameScriptEngine.shared.registerCommand("showFileMenu", () => this.showFileMenu());
+        const gse = GameScriptEngine.shared;
+        gse.registerCommand("showFileMenu", () => this.showFileMenu());
+    }
+}
+
+class ToolPaletteView {
+    constructor(config) {
+        this.buttons = config.palette.map(id => {
+            let settings = config.toolController.factory.getDefinition(id);
+            return new ToolButton({
+                id: id,
+                parent: config.elem,
+                title: settings.paletteTitle,
+                clickScript: "selectTool",
+                clickScriptSubject: id
+            });
+        });
+
+        config.toolController.kvo.tool.addObserver(this, toolController => this.update(toolController));
+        this.update(config.toolController);
+    }
+
+    update(toolController) {
+        this.buttons.forEach(item => {
+            item.isSelected = (item.id == toolController.tool.id);
+        });
+    }
+}
+
+class InteractionModel {
+    constructor(config) {
+        this.viewModel = config.viewModel;
+    }
+
+    get session() { return this.viewModel.session; }
+    get editor() { return this.viewModel.session.editor; }
+
+    terrainTileFromInput(info) {
+        return info.tile ? this.viewModel.map.terrainLayer.getTileAtPoint(info.tile) : null;
+    }
+}
+
+class HoverInfoInteraction {
+    constructor(config) {
+        this.interactionView = config.interactionView;
+        this.model = new InteractionModel({ viewModel: config.model });
+        this.interactionView.inputController.addMovementListener({}, info => this.didMove(info));
+    }
+
+    get renderOrder() { return 0; }
+
+    didMove(info) {
+        this.model.session.tileInspectionTarget = this.model.terrainTileFromInput(info);
+    }
+
+    render(context, rl) { } // noop
+}
+
+class TerrainToolController {
+    static Kvo() { return {"tool": "tool"}; }
+
+    constructor(config) {
+        this.factory = config.factory;
+        this.model = config.model; // TerrainMapViewModel
+        this.interactionView = config.interactionView;
+        this.interactionView.inputController.addSelectionListener({ repetitions: 1 }, info => this.didSelectTile(info));
+        this.interactionView.inputController.addMovementListener({}, info => this.didMove(info));
+        this._configureCommmands();
+        this.kvo = new Kvo(this);
+        this.selectToolWithID(this.factory.defaultToolID);
+    }
+
+    get renderOrder() { return 0; }
+
+    selectToolWithID(id) {
+        this.selectTool(this.factory.toolWithID(id, this));
+    }
+
+    didSelectTile(info) {
+        this.handleInputResult(this.tool.didSelectTile(info));
+    }
+
+    didMove(info) {
+        this.handleInputResult(this.tool.didMove(info));
+    }
+
+    handleInputResult(newTool) {
+        this.selectTool(newTool);
+    }
+
+    selectTool(tool) {
+        if (tool != null && tool != this.tool) {
+            this.kvo.tool.setValue(tool);
+        }
+    }
+
+    render(context, rl) {
+        this.tool.render(context);
+    }
+
+    _configureCommmands() {
+        let gse = GameScriptEngine.shared;
+        gse.registerCommand("escapePressed", () => this.selectToolWithID(this.factory.defaultToolID));
+        gse.registerCommand("selectTool", id => this.selectToolWithID(id));
+    }
+}
+
+class ToolFactory {
+    constructor(settings, namespace) {
+        this.settings = settings;
+        this.namespace = namespace;
+    }
+
+    get defaultToolID() {
+        return GameContent.defaultItemFromDictionary(this.settings.definitions).id;
+    }
+
+    toolWithID(id, toolController) {
+        let config = this.getDefinition(id);
+        if (!config) {
+            debugWarn(`Can't find tool config for ${id}`);
+            return null;
+        }
+        let type = this.namespace[config.constructor];
+        return new type(toolController, config);
+    }
+
+    getDefinition(id) { return this.settings.definitions[id]; }
+}
+
+class NavigateMapTool {
+    constructor(toolController, config) {
+        this.id = config.id;
+        this.model = new InteractionModel({ viewModel: toolController.model });
+    }
+
+    didSelectTile(info) {
+        if (info.tile) info.viewport.centerTile = info.tile;
+        return null;
+    }
+
+    didMove(info) { return null; }
+
+    render(context) { } // noop
+}
+
+class PaintTerrainTypeTool {
+    constructor(toolController, config) {
+        this.id = config.id;
+        this.model = new InteractionModel({ viewModel: toolController.model });
+        this.flag = TerrainType[config.key];
+    }
+
+    didSelectTile(info) {
+        if (this.tryPaint(info)) {
+            this.model.editor.commitChangeset();
+        }
+        return null;
+    }
+
+    didMove(info) {
+        // store cursor location for rendering selection reticle
+        return null;
+    }
+
+    didDrag(info) {
+        this.tryPaint(info);
+        return null;
+    }
+
+    didCompleteDrag(info) {
+        this.editor.commitChangeset();
+        return null;
+    }
+
+    render(context) {
+        // render selection stuff
+    }
+
+    tryPaint(info) {
+        let tile = this.model.terrainTileFromInput(info);
+        if (!tile) return false;
+        if (!this.model.editor.canPaint(tile, this.flag)) return false;
+        this.model.editor.addPaintToChangeset(tile, this.flag);
+        return true;
     }
 }
 
@@ -985,10 +1233,14 @@ let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });
     GameScriptEngine.shared = new GameScriptEngine();
     KeyInputController.shared = new KeyInputController();
+    ToolFactory.shared = new ToolFactory(GameContent.shared.terrainEditorTools, {
+        NavigateMapTool: NavigateMapTool,
+        PaintTerrainTypeTool: PaintTerrainTypeTool
+    });
     CitySimTerrain.view = new RootView();
     CitySimTerrain.uiRunLoop.resume();
     debugLog("Ready.");
-}
+};
 
 return {
     initialize: initialize

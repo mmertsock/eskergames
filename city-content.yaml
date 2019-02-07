@@ -117,6 +117,7 @@ keyboard:
       - [ArrowLeft, panMap, 2]
       - [Shift+ArrowLeft, panMapLarge, 2]
       - [Space, centerUnderPointer]
+      - [Escape, escapePressed]
 
 pointInputController:
     singleClickMovementTolerance: 3
@@ -148,6 +149,26 @@ keyInputController:
     - [[ArrowUp,ArrowRight], panMap, NE]
 
 ################# MAP TOOLS ###############
+
+terrainEditorTools:
+  microPalette: [map-navigate, brush-land, brush-water, brush-trees]
+  definitions:
+    map-navigate:
+      isDefault: true
+      constructor: NavigateMapTool
+      paletteTitle: Navigate
+    brush-land:
+      constructor: PaintTerrainTypeTool
+      paletteTitle: Land
+      key: dirt
+    brush-water:
+      constructor: PaintTerrainTypeTool
+      paletteTitle: Water
+      key: water
+    brush-trees:
+      constructor: PaintTerrainTypeTool
+      paletteTitle: Forest
+      key: trees
 
 mapTools:
   defaultPalette: [pointer, query, bulldozer, rZone, cZone, iZone, tree]

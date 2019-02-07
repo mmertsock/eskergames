@@ -87,6 +87,9 @@ class GameContent {
             GameContent.addIndexToItemsInArray(content.gameRules.speeds);
             GameContent.addIndexToItemsInArray(content.gameRules.difficulties);
         }
+        if (content.terrainEditorTools) {
+            GameContent.addIdToItemsInDictionary(content.terrainEditorTools.definitions);
+        }
         if (content.mapTools) {
             GameContent.addIdToItemsInDictionary(content.mapTools.definitions);
         }
@@ -132,9 +135,11 @@ class GameContent {
     }
 
     static defaultItemFromDictionary(items) {
+        let item = null;
         Object.getOwnPropertyNames(items).forEach(id => {
-            if (!!items[id].isDefault) { return items[id]; }
+            if (!!items[id].isDefault) item = items[id];
         });
+        return item;
     }
 }
 GameContent.cachePolicies = {
