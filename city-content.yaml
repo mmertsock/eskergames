@@ -160,10 +160,15 @@ terrainEditorTools:
   brushes:
     - radius: 0.9
       isDefault: true
-    - radius: 1.4
-    - radius: 2.1
+      paletteTitle: "#"
+    - radius: 2.0
+      paletteTitle: "##"
+    - radius: 2.3
+      paletteTitle: "###"
     - radius: 3.5
-    - radius: 4.3
+      paletteTitle: "####"
+    - radius: 5.3
+      paletteTitle: "#####"
   definitions:
     map-navigate:
       isDefault: true

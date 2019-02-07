@@ -992,6 +992,11 @@ class ControlsView {
             elem: this.root.querySelector("#micro-controls"),
             palette: this.session.toolController.factory.settings.microPalette
         });
+        this.brushes = new ToolBrushView({
+            toolController: this.session.toolController,
+            elem: this.root.querySelector("#brush-controls"),
+            brushes: this.session.toolController.factory.settings.brushes
+        });
         this._dirty = true;
     }
 
@@ -1061,13 +1066,36 @@ class ToolPaletteView {
             });
         });
 
-        config.toolController.kvo.tool.addObserver(this, toolController => this.update(toolController));
+        config.toolController.kvo.addObserver(this, toolController => this.update(toolController));
         this.update(config.toolController);
     }
 
     update(toolController) {
         this.buttons.forEach(item => {
             item.isSelected = (item.id == toolController.tool.id);
+        });
+    }
+}
+
+class ToolBrushView {
+    constructor(config) {
+        this.buttons = config.brushes.map(brush => {
+            return new ToolButton({
+                id: brush.index,
+                parent: config.elem,
+                title: brush.paletteTitle,
+                clickScript: "setBrushSize",
+                clickScriptSubject: brush.index
+            });
+        });
+
+        config.toolController.kvo.addObserver(this, toolController => this.update(toolController));
+        this.update(config.toolController);
+    }
+
+    update(toolController) {
+        this.buttons.forEach(item => {
+            item.isSelected = (item.id == toolController.brush.index);
         });
     }
 }
@@ -1102,7 +1130,7 @@ class HoverInfoInteraction {
 }
 
 class TerrainToolController {
-    static Kvo() { return {"tool": "tool"}; }
+    static Kvo() { return {"tool": "tool", "brush": "brush"}; }
 
     constructor(config) {
         this.factory = config.factory;
@@ -1123,8 +1151,9 @@ class TerrainToolController {
     get brush() { return this.tool ? this.tool.brush : this.factory.getBrush(-1); }
 
     setBrushSize(index) {
+        if (index == this.tool.brush.index) return;
         this.tool.brush = this.factory.getBrush(index);
-        debugLog(this.tool.brush);
+        this.kvo.brush.notifyChanged();
     }
 
     selectToolWithID(id) {
