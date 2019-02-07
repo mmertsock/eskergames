@@ -69,7 +69,7 @@ const ToolButton = CitySim.ToolButton;
 
 Point.tilesBetween = function(a, b, log) {
     var v = Vector.betweenPoints(a, b);
-    var m = v.magnitude();
+    var m = v.magnitude;
     if (m < 1) { return [a]; }
     v = v.unit();
     var tiles = [a];
@@ -617,17 +617,20 @@ class TerrainEditor {
     // proposeXyzOperation(tile, arg1, arg2): return Operation object if valid, otherwise null
     // addToChangeset(operation)
 
-    canPaint(tile, flag) {
-        // TODO rules for different types
+    canPaint(tile, tool) {
+        if (!tile) return false;
         return true;
     }
 
-    addPaintToChangeset(tile, flag) {
-        if (!this.canPaint(tile, flag)) return;
-        this._addTilesToChangeset([{ point: tile.point, type: flag }]);
+    addPaintToChangeset(tile, tool) {
+        let tiles = tool.brush.tilesCenteredAt(tile, this.session.map.terrainLayer)
+            .filter(item => this.canPaint(item, tool))
+            .map(item => { return {point: item.point, type: tool.flag}; });
+        this._addTilesToChangeset(tiles);
     }
 
     _addTilesToChangeset(tiles) {
+        if (tiles.length == 0) return;
         this._beginChangesetIfNeeded();
         this.changeset.addTiles(tiles);
     }
@@ -1117,9 +1120,15 @@ class TerrainToolController {
     }
 
     get renderOrder() { return 0; }
+    get brush() { return this.tool ? this.tool.brush : this.factory.getBrush(-1); }
+
+    setBrushSize(index) {
+        this.tool.brush = this.factory.getBrush(index);
+        debugLog(this.tool.brush);
+    }
 
     selectToolWithID(id) {
-        this.selectTool(this.factory.toolWithID(id, this));
+        this.selectTool(this.factory.toolWithID(id, this, this.brush));
     }
 
     didSelectTile(info) {
@@ -1168,6 +1177,7 @@ class TerrainToolController {
         let gse = GameScriptEngine.shared;
         gse.registerCommand("escapePressed", () => this.selectToolWithID(this.factory.defaultToolID));
         gse.registerCommand("selectTool", id => this.selectToolWithID(id));
+        gse.registerCommand("setBrushSize", index => this.setBrushSize(index));
     }
 }
 
@@ -1177,26 +1187,47 @@ class ToolFactory {
         this.namespace = namespace;
     }
 
-    get defaultToolID() {
-        return GameContent.defaultItemFromDictionary(this.settings.definitions).id;
-    }
+    get defaultToolID() { return GameContent.defaultItemFromDictionary(this.settings.definitions).id; }
 
-    toolWithID(id, toolController) {
+    toolWithID(id, toolController, brush) {
         let config = this.getDefinition(id);
         if (!config) {
             debugWarn(`Can't find tool config for ${id}`);
             return null;
         }
         let type = this.namespace[config.constructor];
-        return new type(toolController, config);
+        return new type(toolController, config, brush);
     }
 
     getDefinition(id) { return this.settings.definitions[id]; }
+
+    getBrush(index) {
+        return new ToolBrush(GameContent.itemOrDefaultFromArray(this.settings.brushes, index));
+    }
+}
+
+class ToolBrush {
+    constructor(config) {
+        this.index = config.index;
+        this.radius = config.radius;
+        let offset = -1 * Math.floor(this.radius), size = Math.ceil(2 * this.radius);
+        this.searchRectOriginOffset = new Vector(offset, offset);
+        this.searchRectSize = { width: size, height: size };
+    }
+
+    tilesCenteredAt(tile, layer) {
+        let rect = new Rect(this.searchRectOriginOffset.offsettingPosition(tile.point), this.searchRectSize);
+        let tiles = layer.filterTiles(rect, item => {
+            return Vector.betweenPoints(tile.point, item.point).magnitude < this.radius;
+        });
+        return tiles;
+    }
 }
 
 class NavigateMapTool {
-    constructor(toolController, config) {
+    constructor(toolController, config, brush) {
         this.id = config.id;
+        this.brush = brush;
         this.model = new InteractionModel({ viewModel: toolController.model });
     }
 
@@ -1213,8 +1244,9 @@ class NavigateMapTool {
 }
 
 class PaintTerrainTypeTool {
-    constructor(toolController, config) {
+    constructor(toolController, config, brush) {
         this.id = config.id;
+        this.brush = brush;
         this.model = new InteractionModel({ viewModel: toolController.model });
         this.flag = TerrainType[config.key];
     }
@@ -1249,8 +1281,8 @@ class PaintTerrainTypeTool {
     tryPaint(info) {
         let tile = this.model.terrainTileFromInput(info);
         if (!tile) return false;
-        if (!this.model.editor.canPaint(tile, this.flag)) return false;
-        this.model.editor.addPaintToChangeset(tile, this.flag);
+        if (!this.model.editor.canPaint(tile, this)) return false;
+        this.model.editor.addPaintToChangeset(tile, this);
         return true;
     }
 }

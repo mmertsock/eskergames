@@ -776,11 +776,11 @@ class Vector extends XYValue {
         if (scale === undefined) { scale = 1; }
         return position.adding(scale * this.x, scale * this.y);
     }
-    magnitude() {
+    get magnitude() {
         return Math.sqrt(this.x * this.x + this.y * this.y);
     }
     unit() {
-        var m = this.magnitude();
+        var m = this.magnitude;
         if (m < 0.01) { return null; }
         return this.scaled(1 / m);
     }

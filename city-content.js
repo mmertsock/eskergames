@@ -88,6 +88,7 @@ class GameContent {
             GameContent.addIndexToItemsInArray(content.gameRules.difficulties);
         }
         if (content.terrainEditorTools) {
+            GameContent.addIndexToItemsInArray(content.terrainEditorTools.brushes);
             GameContent.addIdToItemsInDictionary(content.terrainEditorTools.definitions);
         }
         if (content.mapTools) {

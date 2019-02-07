@@ -103,11 +103,16 @@ keyboard:
     keyPressShortcuts:
       - [Minus, zoomOut]
       - [Equal, zoomIn]
-      - [Digit1, setZoomLevel, 0]
-      - [Digit2, setZoomLevel, 1]
-      - [Digit3, setZoomLevel, 2]
-      - [Digit4, setZoomLevel, 3]
-      - [Digit5, setZoomLevel, 4]
+      - [Digit1, setBrushSize, 0]
+      - [Digit2, setBrushSize, 1]
+      - [Digit3, setBrushSize, 2]
+      - [Digit4, setBrushSize, 3]
+      - [Digit5, setBrushSize, 4]
+      - [Shift+Digit1, setZoomLevel, 0]
+      - [Shift+Digit2, setZoomLevel, 1]
+      - [Shift+Digit3, setZoomLevel, 2]
+      - [Shift+Digit4, setZoomLevel, 3]
+      - [Shift+Digit5, setZoomLevel, 4]
       - [ArrowUp, panMap, 0]
       - [Shift+ArrowUp, panMapLarge, 0]
       - [ArrowRight, panMap, 6]
@@ -152,6 +157,13 @@ keyInputController:
 
 terrainEditorTools:
   microPalette: [map-navigate, brush-land, brush-water, brush-trees]
+  brushes:
+    - radius: 0.9
+      isDefault: true
+    - radius: 1.4
+    - radius: 2.1
+    - radius: 3.5
+    - radius: 4.3
   definitions:
     map-navigate:
       isDefault: true
