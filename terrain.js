@@ -1376,8 +1376,9 @@ class PaintTerrainTypeTool {
         if (!tile) return;
         let tiles = tile ? this.model.editor.allBrushTiles(tile, this) : [];
         if (tiles.length == 0) return;
-        context.ctx.fillStyle = this.model.editor.canPaint(tile, this) ? this.validHoverFillStyle : this.notAllowedHoverFillStyle;
+        let isValid = this.model.editor.canPaint(tile, this);
         tiles.forEach(neighbor => {
+            context.ctx.fillStyle = (isValid && this.model.editor.canPaint(neighbor, this)) ? this.validHoverFillStyle : this.notAllowedHoverFillStyle;
             context.ctx.rectFill(context.tilePlane.screenRectForModelTile(neighbor.point));
         });
     }
