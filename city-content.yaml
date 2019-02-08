@@ -385,7 +385,7 @@ strings:
   saveButton: Save
   systemMenuTitle: System
   terrainMetricsTemplate: "<water> water, <trees> forest"
-  uiFpsLabel: "FPS:<value> Load:<load>"
+  uiFpsLabel: "<value>FPS <load> DPS:<medianDispatches>/<maxDispatches>"
   windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
   zoomInButtonGlyph: ➕
   zoomOutButtonGlyph: ➖

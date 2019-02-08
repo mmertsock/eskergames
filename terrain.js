@@ -29,6 +29,7 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAsser
 
 const Binding = Gaming.Binding;
 const BoolArray = Gaming.BoolArray;
+const CircularArray = Gaming.CircularArray;
 const Kvo = Gaming.Kvo;
 const PerfTimer = Gaming.PerfTimer;
 const Point = Gaming.Point;
@@ -658,10 +659,47 @@ class TerrainEditor {
     }
 }
 
+class PerfMonitor {
+    constructor(runLoop) {
+        this.history = new CircularArray(100);
+        runLoop.addDelegate(this);
+    }
+
+    get statistics() {
+        if (this.history.size < 5) return null;
+        let totalDispatches = [];
+        this.history.forEach(item => {
+            totalDispatches.push(item.totalDispatches);
+        });
+        totalDispatches.sort();
+
+        let info = {
+            dispatchesPerFrame: {
+                max: totalDispatches.reduce((i, j) => Math.max(i, j), Number.MIN_SAFE_INTEGER),
+                median: (totalDispatches.length % 2 == 0)
+                    ? (0.5 * (totalDispatches[totalDispatches.length / 2] + totalDispatches[totalDispatches.length / 2 - 1]))
+                    : totalDispatches[totalDispatches.length >> 1]
+            }
+        };
+
+        return info;
+    }
+
+    delegateOrder(rl) { return 1000; }
+
+    processFrame(rl) {
+        let item = {
+            totalDispatches: Gaming.Dispatch.shared.totalDispatches
+        };
+        Gaming.Dispatch.shared.totalDispatches = 0;
+        this.history.push(item);
+    }
+}
+
 class RootView {
-    constructor() {
+    constructor(config) {
         this.session = null;
-        this.views = [new TerrainView(), new ControlsView()];
+        this.views = [new TerrainView({ runLoop: config.runLoop }), new ControlsView({ runLoop: config.runLoop })];
         this._configureCommmands();
         
         let storage = GameStorage.shared;
@@ -681,21 +719,6 @@ class RootView {
         debugLog(`Setting up session with ${this.session.debugDescription}`);
         this.views.forEach(view => view.setUp(session));
         KeyInputController.shared.addShortcutsFromSettings(GameContent.shared.keyboard.terrainEditor);
-    }
-
-    saveCurrentTerrain() {
-        if (!this.session) { return; }
-        debugLog("TODO save stuff");
-    }
-
-    undo() {
-        if (!this.session) { return; }
-        this.session.undoStack.undo();
-    }
-
-    redo() {
-        if (!this.session) { return; }
-        this.session.undoStack.redo();
     }
 
     showGameHelp() {
@@ -726,9 +749,6 @@ class RootView {
     }
 
     _configureCommmands() {
-        GameScriptEngine.shared.registerCommand("saveCurrentTerrain", () => this.saveCurrentTerrain());
-        GameScriptEngine.shared.registerCommand("terrainUndo", () => this.undo());
-        GameScriptEngine.shared.registerCommand("terrainRedo", () => this.redo());
         GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
         GameScriptEngine.shared.registerCommand("regenerate", () => this.regenerate());
     }
@@ -858,8 +878,8 @@ class TerrainMapViewModel {
 }
 
 class TerrainView {
-    constructor() {
-        this.runLoop = CitySimTerrain.uiRunLoop;
+    constructor(config) {
+        this.runLoop = config.runLoop;
         this.elem = document.querySelector("map.mainMap");
         this.session = null;
         this.viewport = null;
@@ -939,11 +959,12 @@ class TerrainView {
 }
 
 class ControlsView {
-    static Kvo() { return { "fpsInfo": "fpsInfo", "tileInfoText": "tileInfoText" }; }
+    static Kvo() { return { "perfInfo": "perfInfo", "tileInfoText": "tileInfoText" }; }
 
-    constructor() {
+    constructor(config) {
         this.session = null;
-        this.fpsInfo = { timestamp: 0, value: null, load: null };
+        this.perf = new PerfMonitor(config.runLoop)
+        this.perfInfo = { timestamp: 0, value: null, load: null };
         this.tileInfoText = "";
         this._dirty = true;
         this.kvo = new Kvo(this);
@@ -983,13 +1004,13 @@ class ControlsView {
         this.fpsView = new TextLineView({
             parent: viewBlock,
             binding: {
-                source: this.kvo.fpsInfo,
+                source: this.kvo.perfInfo,
                 sourceFormatter: info => info.value ? Strings.template("uiFpsLabel", info) : null
             }
-        }).configure(view => view.elem.addRemClass("minor", true));;
+        }).configure(view => view.elem.addRemClass("minor", true));
 
         this._configureCommmands();
-        CitySimTerrain.uiRunLoop.addDelegate(this);
+        config.runLoop.addDelegate(this);
     }
 
     setUp(session) {
@@ -1022,14 +1043,20 @@ class ControlsView {
         }).show();
     }
 
+    undo() { if (this.session) this.session.undoStack.undo(); }
+    redo() { if (this.session) this.session.undoStack.redo(); }
+
     processFrame(rl) {
-        if (rl.latestFrameStartTimestamp() - this.fpsInfo.timestamp >= 2000) {
+        if (rl.latestFrameStartTimestamp() - this.perfInfo.timestamp >= 2000) {
             let value = rl.getRecentFramesPerSecond(), load = rl.getProcessingLoad();
-            let isValid = !isNaN(value) && !isNaN(load);
-            this.kvo.fpsInfo.setValue({ 
+            let statistics = this.perf.statistics;
+            let isValid = !isNaN(value) && !isNaN(load) && !!statistics;
+            this.kvo.perfInfo.setValue({ 
                 timestamp: rl.latestFrameStartTimestamp(),
                 value: isValid ? Number.uiInteger(Math.round(value)) : null,
-                load: isValid ? Number.uiPercent(load) : null
+                load: isValid ? Number.uiPercent(load) : null,
+                maxDispatches: isValid ? Number.uiInteger(statistics.dispatchesPerFrame.max) : null,
+                medianDispatches: isValid ? Number.uiFloat(statistics.dispatchesPerFrame.median) : null
             });
         }
 
@@ -1059,6 +1086,8 @@ class ControlsView {
     _configureCommmands() {
         const gse = GameScriptEngine.shared;
         gse.registerCommand("showFileMenu", () => this.showFileMenu());
+        gse.registerCommand("terrainUndo", () => this.undo());
+        gse.registerCommand("terrainRedo", () => this.redo());
     }
 }
 
@@ -1276,19 +1305,39 @@ class NavigateMapTool {
         this.id = config.id;
         this.brush = brush;
         this.model = new InteractionModel({ viewModel: toolController.model });
+        this.dragStartViewportOffset = null;
+        this.dragStartInfo = null;
     }
 
     get needsRender() { return false; }
 
     didSelectTile(info) {
         if (info.tile) info.viewport.centerTile = info.tile;
+        this.dragStartInfo = null;
+        this.dragStartViewportOffset = null;
+        return null;
+    }
+
+    didDrag(info, isStart) {
+        if (isStart) {
+            this.dragStartInfo = info;
+            this.dragStartViewportOffset = info.viewport.offset;
+            return;
+        }
+        if (this.dragStartInfo) {
+            let offset = Vector.betweenPoints(this.dragStartInfo.point, info.point);
+            info.viewport.setOffset(offset.offsettingPosition(this.dragStartViewportOffset), false);
+        }
+        return null;
+    }
+    didCompleteDrag(info) {
+        this.dragStartInfo = null;
+        this.dragStartViewportOffset = null;
         return null;
     }
 
     // noops
     didMove() { return null; }
-    didDrag() { return null; }
-    didCompleteDrag() { return null; }
     render(context, lastHover) { }
 }
 
@@ -1356,7 +1405,7 @@ let initialize = function() {
         NavigateMapTool: NavigateMapTool,
         PaintTerrainTypeTool: PaintTerrainTypeTool
     });
-    CitySimTerrain.view = new RootView();
+    CitySimTerrain.view = new RootView({ runLoop: CitySimTerrain.uiRunLoop });
     CitySimTerrain.uiRunLoop.resume();
     debugLog("Ready.");
 };

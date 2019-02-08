@@ -416,6 +416,12 @@ class CircularArray {
         return this.items[(this._oldestIndex + index) % this.maxLength];
     }
 
+    forEach(block) {
+        for (let i = 0; i < this.size; i += 1) {
+            block(this.getValue(i), i);
+        }
+    }
+
     reset() {
         this._nextIndex = 0;
         this._oldestIndex = -1;
@@ -1159,6 +1165,7 @@ class SaveStateItem {
 class Dispatch {
     constructor() {
         this._blocks = {};
+        this.totalDispatches = 0;
     }
 
     addTarget(id, eventName, block) {
@@ -1180,6 +1187,7 @@ class Dispatch {
         if (log) {
             debugLog(`Dispatch ${eventName}, targets notified: ${numNotified}`);
         }
+        this.totalDispatches += numNotified;
     }
 
     remove(targetOrID, eventName) {

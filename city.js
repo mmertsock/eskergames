@@ -111,6 +111,10 @@ Number.uiInteger = function(value) {
     return Number(value).toLocaleString();
 };
 
+Number.uiFloat = function(value) {
+    return Number(value).toLocaleString();
+};
+
 Number.uiPercent = function(ratio) {
     return Math.round(ratio * 100).toLocaleString() + "%";
 };
@@ -1001,6 +1005,11 @@ class GameStorage {
 
     get latestSavedGameID() {
         var valid = this.allSavedGames.filter(game => this.isSaveStateSummarySupported(game));
+        return valid.length > 0 ? valid[0].id : null;
+    }
+
+    get latestSavedTerrainID() {
+        let valid = this.allSavedTerrains.filter(item => this.isSaveStateSummarySupported(item));
         return valid.length > 0 ? valid[0].id : null;
     }
 
@@ -2667,6 +2676,9 @@ class CanvasTileViewport {
         this.updateTilePlane(value, true);
     }
 
+    get offset() { return this.tilePlane.offset; }
+    setOffset(value, animated) { this.updateOffset(value, animated, false); }
+
     pan(direction, large) {
         let unit = Vector.manhattanUnits[direction];
         if (!unit) return;
@@ -2775,7 +2787,7 @@ class CanvasTileViewport {
                 if (marginExtremes.min.y > viewportExtremes.min.y) {
                     newOffset.y -= (marginExtremes.min.y - viewportExtremes.min.y);
                     if (log) debugLog("Fix top margin");
-                } else if (marginExtremes.max.x < viewportExtremes.max.x) {
+                } else if (marginExtremes.max.y < viewportExtremes.max.y) {
                     newOffset.y += (viewportExtremes.max.y - marginExtremes.max.y);
                     if (log) debugLog("Fix bottom margin");
                 }

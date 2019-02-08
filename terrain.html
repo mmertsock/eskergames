@@ -37,11 +37,17 @@
         <map class="mainMap"></map>
     </div>
     <controls>
-        <row>
+        <row class="roomy">
             <block id="global-controls"></block>
+            <block class="filler"></block>
             <block id="macro-controls"></block>
-            <block id="micro-controls"></block>
-            <block id="brush-controls"></block>
+            <block class="vertical-container">
+                <h3>Brushes</h3>
+                <block id="micro-controls"></block>
+                <h3>Brush Size</h3>
+                <block id="brush-controls"></block>
+            </block>
+            <block class="filler"></block>
             <block id="view">
                 <nav>
                     <direction>

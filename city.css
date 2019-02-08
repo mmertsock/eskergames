@@ -95,8 +95,17 @@ block {
     padding: 2px;
 }
 
+.roomy > block {
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
 block.container {
     padding: 0px;
+}
+
+block.filler {
+    flex-grow: 1;
 }
 
 block#view {
@@ -106,9 +115,27 @@ block#view {
     flex-direction: column;
 }
 
-#view nav {
+#view nav, block.vertical-container {
     display: flex;
     flex-direction: column;
+}
+
+block.vertical-container > block {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    align-items: baseline;
+}
+
+block.vertical-container > h3 {
+    padding: 4px 2px 2px 2px;
+}
+
+block.vertical-container > block a.tool {
+    flex-basis: 0;
+    flex-grow: 1;
+    margin-left: 4px;
 }
 
 #view direction {
@@ -163,6 +190,19 @@ palette {
 
 controls {
     background-color: hsl(0, 0%, 75%);
+}
+
+block h3 {
+    margin: 0;
+    padding: 0;
+    text-align: center;
+    font-size: 8pt;
+    font-weight: 300;
+    text-transform: uppercase;
+}
+
+block.vertical-container block h3 {
+    text-align: left;
 }
 
 label.textLine {

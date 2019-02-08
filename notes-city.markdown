@@ -94,11 +94,20 @@ Adding game logic for zones to emit/consume/demand/avoid such environmental data
 
 Signposts or other ways to label the terrain, infrastructure, buildings.
 
-### Undo button
+## Transportation sprites
 
-This would be cool.
-Perhaps what you do is anything done between gameEngine frames goes into a queue or temporary state, and only gets committed fully when the run loop runs a frame?
-Or could just use the typical stack-of-functions approach; so plopping an R zone adds an undo function that destroys the R zone and refunds the money. hm since money is involved, and there can be side effects (eg auto-bulldozing terrain), is there really an effective/fair way to do this?
+16 road tiles, 16 rail tiles, 2 crossing tiles
+6 road bridge tiles, 6 rail bridge tiles (for each direction: 2 endpoints and a middle span)
+
+multiply all the above for various traffic levels? bc cars need to curve around corners and handle intersections
+
+for rail cars, a different system probably needed.
+
+especially if keeping the base road tiles unanimated, would be efficient to pack the 16 variants into like 4 rows.
+do this by adding a maxvariantcolumns config to the ruby scripts, so you 
+can have variants 0-3 in row 1, 4-7 in row 2, etc.
+
+either that or have a transport-specific spritesheet that's 16 columns wide.
 
 ## Further in the future
 
