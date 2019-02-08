@@ -123,6 +123,10 @@ keyboard:
       - [Shift+ArrowLeft, panMapLarge, 2]
       - [Space, centerUnderPointer]
       - [Escape, escapePressed]
+      - [KeyQ, selectTool, brush-land]
+      - [KeyA, selectTool, brush-forest]
+      - [KeyW, selectTool, brush-freshwater]
+      - [KeyS, selectTool, brush-saltwater]
 
 pointInputController:
     singleClickMovementTolerance: 3
@@ -156,19 +160,19 @@ keyInputController:
 ################# MAP TOOLS ###############
 
 terrainEditorTools:
-  microPalette: [map-navigate, brush-land, brush-freshwater, brush-saltwater, brush-trees]
+  microPalette: [map-navigate, brush-land, brush-forest, brush-freshwater, brush-saltwater]
   brushes:
     - radius: 0.9
       isDefault: true
-      paletteTitle: "#"
+      paletteTitle: "✏️"
     - radius: 2.0
-      paletteTitle: "##"
+      paletteTitle: "🧹"
     - radius: 2.3
-      paletteTitle: "###"
+      paletteTitle: "⛏"
     - radius: 3.5
-      paletteTitle: "####"
+      paletteTitle: "🚜"
     - radius: 5.3
-      paletteTitle: "#####"
+      paletteTitle: "🚚"
   validHoverFillStyle: "hsla(120, 50%, 50%, 0.3)"
   notAllowedHoverFillStyle: "hsla(0, 50%, 75%, 0.3)"
   definitions:
@@ -188,7 +192,7 @@ terrainEditorTools:
       constructor: PaintTerrainTypeTool
       paletteTitle: Ocean
       key: saltwater
-    brush-trees:
+    brush-forest:
       constructor: PaintTerrainTypeTool
       paletteTitle: Forest
       key: forest
@@ -372,6 +376,7 @@ strings:
   frameRateTokenSeparator: ". "
   gameProductTitle: CitySim
   genericCancelButton: Cancel
+  helpDialogTitle: Help
   helpButtonLabel: Help
   undoButtonLabel: Undo
   redoButtonLabel: Redo

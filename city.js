@@ -2136,16 +2136,8 @@ class RootView {
         }).show();
     }
 
-    showGameHelp() {
-        var helpSource = this.root.querySelector("help");
-        new Gaming.Prompt({
-            customContent: helpSource.cloneNode(true).addRemClass("hidden", false),
-            buttons: [ {label: Strings.str("helpDismiss")} ]
-        }).show();
-    }
-
     _configureCommmands() {
-        GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
+        GameScriptEngine.shared.registerCommand("showGameHelp", () => new HelpDialog().show());
     }
 }
 
@@ -3946,6 +3938,24 @@ class NewGameDialog extends GameDialog {
     }
 }
 
+class HelpDialog extends GameDialog {
+    constructor() {
+        super();
+        this.contentElem = GameDialog.createContentElem();
+        let elem = document.querySelector("body > help")
+            .cloneNode(true).addRemClass("hidden", false);
+        this.contentElem.append(elem);
+        this.x = new ToolButton({
+            title: Strings.str("helpDismiss"),
+            click: () => this.dismiss()
+        });
+    }
+
+    get isModal() { return false; }
+    get title() { return Strings.str("helpDialogTitle"); }
+    get dialogButtons() { return [this.x.elem]; }
+}
+
 // ########################### INIT #######################
 
 let citySimInitOptions = window.citySimInitOptions ? window.citySimInitOptions : { initGame: true };
@@ -4017,6 +4027,7 @@ return {
     GameDialog: GameDialog,
     GameStorage: GameStorage,
     GridPainter: GridPainter,
+    HelpDialog: HelpDialog,
     InputOption: InputOption,
     InputView: InputView,
     KeyInputController: KeyInputController,

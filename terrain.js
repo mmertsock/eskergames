@@ -50,6 +50,7 @@ const GameContent = CitySimContent.GameContent;
 const GameDialog = CitySim.GameDialog;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
+const HelpDialog = CitySim.HelpDialog;
 const InputView = CitySim.InputView;
 const KeyInputController = CitySim.KeyInputController;
 const MapLayer = CitySim.MapLayer;
@@ -721,10 +722,6 @@ class RootView {
         KeyInputController.shared.addShortcutsFromSettings(GameContent.shared.keyboard.terrainEditor);
     }
 
-    showGameHelp() {
-
-    }
-
     regenerate() {
         new NewTerrainDialog(this.session).show();
     }
@@ -749,7 +746,6 @@ class RootView {
     }
 
     _configureCommmands() {
-        GameScriptEngine.shared.registerCommand("showGameHelp", () => this.showGameHelp());
         GameScriptEngine.shared.registerCommand("regenerate", () => this.regenerate());
     }
 }
@@ -1086,6 +1082,7 @@ class ControlsView {
     _configureCommmands() {
         const gse = GameScriptEngine.shared;
         gse.registerCommand("showFileMenu", () => this.showFileMenu());
+        gse.registerCommand("showGameHelp", () => new HelpDialog().show());
         gse.registerCommand("terrainUndo", () => this.undo());
         gse.registerCommand("terrainRedo", () => this.redo());
     }

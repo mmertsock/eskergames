@@ -249,6 +249,7 @@ a.tool.disabled {
     opacity: 0.5;
     cursor: not-allowed;
 }
+
 /* ~~~~~~ PROMPTS ~~~~~~ */
 
 prompt {
@@ -419,3 +420,24 @@ dialog header a.tool, dialog nav a.tool { padding: 2px 4px; }
 dialog header a.tool span { font-size: 7pt; }
 /* so header > h2 remains centered */
 dialog header a.tool.hidden { display: flex; visibility: hidden; }
+
+dialog h3 {
+    margin: 0;
+    padding: 0;
+    font-size: 11pt;
+    font-weight: 500;
+}
+
+dialog content h3, dialog content p {
+    margin: 0.5em 0;
+    padding: 0;
+}
+
+dialog content ol, dialog content ul {
+    margin: 0.5em 0;
+    padding: 0;
+}
+
+help ul {
+    list-style-type: none;
+}
