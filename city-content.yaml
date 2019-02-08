@@ -127,6 +127,11 @@ keyboard:
       - [KeyA, selectTool, brush-forest]
       - [KeyW, selectTool, brush-freshwater]
       - [KeyS, selectTool, brush-saltwater]
+      - [KeyF, selectTool, build-forest]
+      - [KeyR, selectTool, build-river]
+      - [KeyL, selectTool, build-lake]
+      - [KeyO, selectTool, build-ocean]
+      - [KeyX, selectTool, destroy-area]
 
 pointInputController:
     singleClickMovementTolerance: 3
@@ -161,6 +166,8 @@ keyInputController:
 
 terrainEditorTools:
   microPalette: [map-navigate, brush-land, brush-forest, brush-freshwater, brush-saltwater]
+  macroPalette: [build-forest, build-river, build-lake, build-ocean]
+  destroyPalette: [destroy-area]
   brushes:
     - radius: 0.9
       isDefault: true
@@ -194,8 +201,25 @@ terrainEditorTools:
       key: saltwater
     brush-forest:
       constructor: PaintTerrainTypeTool
+      paletteTitle: Trees
+      key: forest
+    destroy-area:
+      constructor: DestroyAreaTool
+      paletteTitle: Destroy Area
+    build-forest:
+      constructor: BuildBlobTool
       paletteTitle: Forest
       key: forest
+    build-lake:
+      constructor: BuildBlobTool
+      paletteTitle: Lake
+      key: freshwater
+    build-river:
+      constructor: BuildRiverTool
+      paletteTitle: River
+    build-ocean:
+      constructor: BuildOceanTool
+      paletteTitle: Ocean
 
 mapTools:
   defaultPalette: [pointer, query, bulldozer, rZone, cZone, iZone, tree]

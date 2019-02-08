@@ -40,7 +40,12 @@
         <row class="roomy">
             <block id="global-controls"></block>
             <block class="filler"></block>
-            <block id="macro-controls"></block>
+            <block class="vertical-container">
+                <h3>Build</h3>
+                <block id="macro-controls"></block>
+                <h3>&nbsp;</h3>
+                <block id="destroy-controls"></block>
+            </block>
             <block class="vertical-container">
                 <h3>Brushes</h3>
                 <block id="micro-controls"></block>
@@ -101,6 +106,11 @@ toggle land/water on single tiles
         <li><kbd>A</kbd>: Forest brush</li>
         <li><kbd>W</kbd>: Freshwater brush</li>
         <li><kbd>S</kbd>: Saltwater brush</li>
+        <li><kbd>R</kbd>: Build river</li>
+        <li><kbd>F</kbd>: Build forest</li>
+        <li><kbd>O</kbd>: Build ocean</li>
+        <li><kbd>L</kbd>: Build lake</li>
+        <li><kbd>X</kbd>: Destroy a terrain feature</li>
     </ul>
 </help>
 

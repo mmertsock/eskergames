@@ -1013,6 +1013,16 @@ class ControlsView {
         this.session = session;
         this.session.kvo.changeToken.addObserver(this, () => this._dirty = true);
         this.session.kvo.tileInspectionTarget.addObserver(this, () => this.updateTileInspection());
+        this.macroPalette = new ToolPaletteView({
+            toolController: this.session.toolController,
+            elem: this.root.querySelector("#macro-controls"),
+            palette: this.session.toolController.factory.settings.macroPalette
+        });
+        this.destroyPalette = new ToolPaletteView({
+            toolController: this.session.toolController,
+            elem: this.root.querySelector("#destroy-controls"),
+            palette: this.session.toolController.factory.settings.destroyPalette
+        });
         this.microPalette = new ToolPaletteView({
             toolController: this.session.toolController,
             elem: this.root.querySelector("#micro-controls"),
@@ -1204,13 +1214,16 @@ class TerrainToolController {
         if (this.isDragging) return;
         if (this.lastDrag && (info.timestamp - this.lastDrag.timestamp) < 10) return;
         // debugLog(`${info.timestamp} didSelectTile: ${info.point.debugDescription}. isDragging? ${this.isDragging}`);
-        this.handleInputResult(this.tool.didSelectTile(info));
+        if (typeof(this.tool.didSelectTile) == 'function')
+            this.handleInputResult(this.tool.didSelectTile(info));
     }
 
     didMove(info) {
         this.lastHover = info;
         if (this.isDragging) return;
-        this.handleInputResult(this.tool.didMove(info));
+
+        if (typeof(this.tool.didMove) == 'function')
+            this.handleInputResult(this.tool.didMove(info));
     }
 
     didDrag(info) {
@@ -1218,14 +1231,16 @@ class TerrainToolController {
         this.isDragging = true;
         this.lastDrag = info;
         // if (isStart) debugLog(`${info.timestamp} didDrag isStart: ${info.point.debugDescription}`);
-        this.handleInputResult(this.tool.didDrag(info, isStart));
+        if (typeof(this.tool.didDrag) == 'function')
+            this.handleInputResult(this.tool.didDrag(info, isStart));
     }
 
     didCompleteDrag(info) {
         if (!this.isDragging) return;
         this.lastDrag = info;
         // debugLog(`${info.timestamp} didCompleteDrag: ${info.point.debugDescription}`);
-        this.handleInputResult(this.tool.didCompleteDrag(info));
+        if (typeof(this.tool.didCompleteDrag) == 'function')
+            this.handleInputResult(this.tool.didCompleteDrag(info));
         this.isDragging = false;
     }
 
@@ -1244,7 +1259,8 @@ class TerrainToolController {
         this._dirty = false;
         let lastHover = this.lastHover;
         if (lastHover && Math.abs(Date.now() - lastHover.timestamp) > 500) lastHover = null;
-        this.tool.render(context, this.lastHover);
+        if (typeof(this.tool.render) == 'function')
+            this.tool.render(context, this.lastHover);
     }
 
     _configureCommmands() {
@@ -1392,13 +1408,67 @@ class PaintTerrainTypeTool {
     }
 }
 
+// Turns an entire contiguous section of trees/water to dirt
+// For oceans, deletes one edge of the map.
+class DestroyAreaTool {
+    constructor(toolController, config, brush) {
+        this.id = config.id;
+        this.brush = brush;
+    }
+
+    get needsRender() { return false; }
+}
+
+// Use the WoodsTileGenerator/LakeTileGenerator.
+// Shows a dialog after clicking, to adjust options
+// Save a copy the last used options in a static member
+class BuildBlobTool {
+    constructor(toolController, config, brush) {
+        this.id = config.id;
+        this.brush = brush;
+        this.key = config.key; // key into the lastSettings dictionary
+        this.type = TerrainType[config.key];
+    }
+
+    get needsRender() { return false; }
+}
+BuildBlobTool.lastSettings = {};
+
+// Click one end then another.
+// Shows a dialog after clicking, to adjust options
+class BuildRiverTool {
+    constructor(toolController, config, brush) {
+        this.id = config.id;
+        this.brush = brush;
+    }
+
+    get needsRender() { return false; }
+}
+BuildRiverTool.lastSettings = null;
+
+// Click near an edge to add or change an ocean.
+// Shows a dialog after clicking, to adjust options
+class BuildOceanTool {
+    constructor(toolController, config, brush) {
+        this.id = config.id;
+        this.brush = brush;
+    }
+
+    get needsRender() { return false; }
+}
+BuildOceanTool.lastSettings = null;
+
 let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });
     GameScriptEngine.shared = new GameScriptEngine();
     KeyInputController.shared = new KeyInputController();
     ToolFactory.shared = new ToolFactory(GameContent.shared.terrainEditorTools, {
         NavigateMapTool: NavigateMapTool,
-        PaintTerrainTypeTool: PaintTerrainTypeTool
+        PaintTerrainTypeTool: PaintTerrainTypeTool,
+        DestroyAreaTool: DestroyAreaTool,
+        BuildBlobTool: BuildBlobTool,
+        BuildRiverTool: BuildRiverTool,
+        BuildOceanTool: BuildOceanTool
     });
     CitySimTerrain.view = new RootView({ runLoop: CitySimTerrain.uiRunLoop });
     CitySimTerrain.uiRunLoop.resume();
