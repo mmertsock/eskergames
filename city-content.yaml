@@ -156,7 +156,7 @@ keyInputController:
 ################# MAP TOOLS ###############
 
 terrainEditorTools:
-  microPalette: [map-navigate, brush-land, brush-water, brush-trees]
+  microPalette: [map-navigate, brush-land, brush-freshwater, brush-saltwater, brush-trees]
   brushes:
     - radius: 0.9
       isDefault: true
@@ -180,14 +180,18 @@ terrainEditorTools:
       constructor: PaintTerrainTypeTool
       paletteTitle: Land
       key: dirt
-    brush-water:
+    brush-freshwater:
       constructor: PaintTerrainTypeTool
       paletteTitle: Water
-      key: water
+      key: freshwater
+    brush-saltwater:
+      constructor: PaintTerrainTypeTool
+      paletteTitle: Ocean
+      key: saltwater
     brush-trees:
       constructor: PaintTerrainTypeTool
       paletteTitle: Forest
-      key: trees
+      key: forest
 
 mapTools:
   defaultPalette: [pointer, query, bulldozer, rZone, cZone, iZone, tree]

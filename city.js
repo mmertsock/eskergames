@@ -395,42 +395,34 @@ class TerrainType {
     get debugDescription() { return this.value.toString(16); }
     get objectForSerialization() { return this.value; }
     get isLand() { return (this.value & TerrainType.flags.water) == 0; }
+    get isForest() { return this.isLand && (this.value & TerrainType.flags.trees); }
     get isWater() { return (this.value & TerrainType.flags.water) != 0; }
-    get isSaltwater() { return this.isWater && (this.value & TerrainType.flags.large); }
-    get isFreshwater() { return this.isWater && !(this.value & TerrainType.flags.large); }
+    get isSaltwater() { return this.value == TerrainType.saltwater.value; }
+    get isFreshwater() { return this.value == TerrainType.freshwater.value; }
     has(flag) { return (this.value & flag) != 0; }
 }
+
 TerrainType.flags = {
     dirt:      0x0,
     water:     0x1 << 0,
     trees:     0x1 << 1,
-    reserved1: 0x1 << 2,
-    large:     0x1 << 3,
-    deep:      0x1 << 4,
-    edge:      0x1 << 5,
-    reserved2: 0x1 << 6,
-    reserved3: 0x1 << 7
+    salt:      0x1 << 2,
+    reserved1: 0x1 << 3,
+    reserved2: 0x1 << 4,
+    reserved3: 0x1 << 5,
+    reserved4: 0x1 << 6,
+    reserved5: 0x1 << 7
 };
-
-TerrainType.dirt  = new TerrainType(TerrainType.flags.dirt);
-TerrainType.water = new TerrainType(TerrainType.flags.water);
-TerrainType.trees = new TerrainType(TerrainType.flags.trees);
-// freshwater variants
-TerrainType.riverbank = new TerrainType(TerrainType.flags.water | TerrainType.flags.edge);
-// saltwater variants
-TerrainType.shore = new TerrainType(TerrainType.flags.water | TerrainType.flags.large | TerrainType.flags.edge);
-TerrainType.sea   = new TerrainType(TerrainType.flags.water | TerrainType.flags.large);
-TerrainType.ocean = new TerrainType(TerrainType.flags.water | TerrainType.flags.large | TerrainType.flags.deep);
-// trees variants
-TerrainType.forest     = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large);
-TerrainType.forestEdge = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large | TerrainType.flags.edge);
-TerrainType.wilderness = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large | TerrainType.flags.deep);
+TerrainType.dirt = new TerrainType(TerrainType.flags.dirt);
+TerrainType.forest = new TerrainType(TerrainType.flags.dirt | TerrainType.flags.trees);
+TerrainType.freshwater = new TerrainType(TerrainType.flags.water);
+TerrainType.saltwater = new TerrainType(TerrainType.flags.water | TerrainType.flags.salt);
 TerrainType.all = new Array(256);
 [
-    TerrainType.dirt, TerrainType.water, TerrainType.trees,
-    TerrainType.riverbank,
-    TerrainType.shore, TerrainType.sea, TerrainType.ocean,
-    TerrainType.forest, TerrainType.forestEdge, TerrainType.wilderness
+    TerrainType.dirt,
+    TerrainType.forest,
+    TerrainType.freshwater,
+    TerrainType.saltwater
 ].forEach(item => { TerrainType.all[item.value] = item; });
 
 // An editable terrain file and a source for initializing a CityMap. 
@@ -534,7 +526,7 @@ class Terrain {
         let total = this.size.width * this.size.height, water = 0, trees = 0;
         this.map.terrainLayer.visitTiles(null, tile => {
             if (tile.type.isWater) { water += 1; }
-            if (tile.type.has(TerrainType.flags.trees)) { trees += 1; }
+            if (tile.type.isForest) { trees += 1; }
         });
         return { water: water / total, trees: trees / total };
     }
@@ -590,9 +582,9 @@ class TerrainTile extends MapTile {
         } else if (this._type.isFreshwater) {
             // return [{ id: "terrain_freshwater", variantKey: 0 }];
             return this._edgeVariants("freshwater", i => i.tile.type.isLand);
-        } else if (this._type.has(TerrainType.flags.trees)) {
+        } else if (this._type.isForest) {
             // return [{ id: "terrain_trees", variantKey: 0 }];
-            return this._edgeVariants("trees", i => !i.tile.type.has(TerrainType.flags.trees));
+            return this._edgeVariants("trees", i => !i.tile.type.isForest);
         } else {
             return new PainterInfoList([new PainterInfo("terrain_dirt", PainterInfo.pseudoRandomVariantKey("terrain_dirt", this.point))], _1x1);
         }
@@ -3388,8 +3380,8 @@ class TerrainSpriteSource {
             return this.edgeSprite("terrain-ocean", tile, n => n.type.isLand);
         } else if (type.isFreshwater) {
             return this.edgeSprite("terrain-freshwater", tile, n => n.type.isLand);
-        } else if (type.has(TerrainType.flags.trees)) {
-            return this.edgeSprite("terrain-forest", tile, n => !n.type.has(TerrainType.flags.trees));
+        } else if (type.isForest) {
+            return this.edgeSprite("terrain-forest", tile, n => !n.type.isForest);
         } else {
             return this.store.getSprite("terrain-dirt", this.store.defaultTileVariantKey(tile));
         }

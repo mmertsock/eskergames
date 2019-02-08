@@ -254,7 +254,7 @@ class OceanTileGenerator extends TileGenerator {
         edgeTiles.forEach(edgeTile => {
             var shoreDistance = this.lineGenerator.nextValue();
             var line = this.edge.lineOfTiles(edgeTile, shoreDistance);
-            this.fill(tiles, TerrainType.ocean, line, generator);
+            this.fill(tiles, TerrainType.saltwater, line, generator);
         });
     }
 }
@@ -315,7 +315,7 @@ class RiverTileGenerator extends TileGenerator {
                 point = point.adding(axis);
             }
         });
-        this.fill(tiles, TerrainType.water, water, generator);
+        this.fill(tiles, TerrainType.freshwater, water, generator);
     }
 }
 
@@ -378,7 +378,7 @@ class ForestTileGenerator extends BlobFillTileGenerator {
         var treeCount = 0, landCount = 0;
         tiles.forEach(row => {
             row.forEach(tile => {
-                if (tile.type.has(TerrainType.flags.trees)) { treeCount += 1; }
+                if (tile.type.isForest) { treeCount += 1; }
                 if (tile.type.isLand) { landCount += 1; }
             });
         });
@@ -447,7 +447,7 @@ class BlobTileGenerator extends TileGenerator {
 
 class LakeTileGenerator extends BlobTileGenerator {
     constructor(config) {
-        super(Object.assign({value: TerrainType.water}, config));
+        super(Object.assign({value: TerrainType.freshwater}, config));
     }
 
     shouldFill(point, tiles, generator) {
@@ -620,7 +620,7 @@ class TerrainEditor {
 
     canPaint(tile, tool) {
         if (!tile) return false;
-        if (tool.flag.has(TerrainType.flags.trees) && !tile.type.isLand) return false;
+        if (tool.flag.isForest && !tile.type.isLand) return false;
         return true;
     }
 
@@ -1076,7 +1076,7 @@ class ControlsView {
                 typeAnnotation = " (freshwater)" ;
             } else if (tile.type.isSaltwater) {
                 typeAnnotation = " (saltwater)";
-            } else if (tile.type.has(TerrainType.flags.trees)) {
+            } else if (tile.type.isForest) {
                 typeAnnotation = " (forest)"
             }
             this.kvo.tileInfoText.setValue(`${tile.point.x}, ${tile.point.y}${typeAnnotation}`);
