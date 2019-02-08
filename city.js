@@ -423,7 +423,7 @@ TerrainType.sea   = new TerrainType(TerrainType.flags.water | TerrainType.flags.
 TerrainType.ocean = new TerrainType(TerrainType.flags.water | TerrainType.flags.large | TerrainType.flags.deep);
 // trees variants
 TerrainType.forest     = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large);
-TerrainType.forestEdge = new TerrainType(TerrainType.flags.trees | TerrainType.flags.larg | TerrainType.flags.edge);
+TerrainType.forestEdge = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large | TerrainType.flags.edge);
 TerrainType.wilderness = new TerrainType(TerrainType.flags.trees | TerrainType.flags.large | TerrainType.flags.deep);
 TerrainType.all = new Array(256);
 [

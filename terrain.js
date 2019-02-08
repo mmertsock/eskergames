@@ -1165,7 +1165,7 @@ class HoverInfoInteraction {
         this.model.session.tileInspectionTarget = this.model.terrainTileFromInput(info);
     }
 
-    render(context, rl) { } // noop
+    render(context, rl) { }
 }
 
 class TerrainToolController {
@@ -1189,8 +1189,9 @@ class TerrainToolController {
     }
 
     get renderOrder() { return 0; }
-    get brush() { return this.tool ? this.tool.brush : this.factory.getBrush(-1); }
     get needsRender() { return this._dirty || this.tool.needsRender; }
+    
+    get brush() { return this.tool ? this.tool.brush : this.factory.getBrush(-1); }
 
     setBrushSize(index) {
         if (index == this.tool.brush.index) return;
@@ -1336,7 +1337,6 @@ class NavigateMapTool {
         return null;
     }
 
-    // noops
     didMove() { return null; }
     render(context, lastHover) { }
 }
@@ -1360,10 +1360,7 @@ class PaintTerrainTypeTool {
         return null;
     }
 
-    didMove(info) {
-        // store cursor location for rendering selection reticle
-        return null;
-    }
+    didMove(info) { return null; }
 
     didDrag(info, isStart) {
         if (isStart) this.model.editor.commitChangeset();
