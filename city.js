@@ -34,14 +34,6 @@ var _runLoopPriorities = {
     gameEngine: -100
 };
 
-Rect.prototype.containsTile = function(x, y) {
-    if (typeof y === 'undefined') {
-        return x.x >= this.x && x.y >= this.y && x.x < (this.x + this.width) && x.y < (this.y + this.height);
-    } else {
-        return   x >= this.x &&   y >= this.y &&   x < (this.x + this.width) &&   y < (this.y + this.height);
-    }
-};
-
 // ordered by row then column
 Rect.prototype.allTileCoordinates = function() {
     var extremes = this.extremes;
@@ -3838,6 +3830,7 @@ class GameDialog {
         this.dialogButtons.forEach(elem => nav.append(elem));
         this.root.append(nav);
         this.manager.show(this);
+        return this;
     }
 
     // override if needed
@@ -3847,6 +3840,37 @@ class GameDialog {
 
     dismiss() {
         this.manager.dismiss(this);
+    }
+}
+
+// No need for the caller to keep a reference to this
+class ConfirmDialog extends GameDialog {
+    constructor(config) {
+        super();
+        this.contentElem = GameDialog.createContentElem();
+        this.title = config.title || "";
+        let text = document.createElement("p");
+        text.innerText = config.text;
+        this.contentElem.append(text);
+        this.completion = config.completion ? config.completion : (() => {});
+        this.okButton = new ToolButton({ title: config.ok, click: () => this.responded(true) });
+        this.cancelButton = config.cancel ? new ToolButton({ title: config.cancel, click: () => this.responded(false) }) : null;
+        ConfirmDialog.current = this;
+    }
+
+    responded(result) {
+        this.dismiss();
+        this.completion(result);
+        ConfirmDialog.current = null;
+    }
+
+    dismissButtonClicked() {
+        this.completion(false);
+    }
+
+    get isModal() { return true; }
+    get dialogButtons() {
+        return this.cancelButton ? [this.cancelButton.elem, this.okButton.elem] : [this.okButton.elem];
     }
 }
 
@@ -3986,6 +4010,7 @@ function gameContentIsReady(content, settings) {
         return;
     }
     GameContent.shared = GameContent.prepare(content);
+
     ScriptPainterStore.shared = new ScriptPainterStore();
     SpritesheetStore.load(SpritesheetTheme.defaultTheme(), (store, error) => {
         if (error) {
@@ -4023,6 +4048,7 @@ return {
     CanvasTileViewport: CanvasTileViewport,
     City: City,
     CityMap: CityMap,
+    ConfirmDialog: ConfirmDialog,
     Game: Game,
     GameDialog: GameDialog,
     GameStorage: GameStorage,

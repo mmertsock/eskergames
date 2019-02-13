@@ -204,6 +204,7 @@ class Sparkline {
         this.min = config.min;
         this.max = config.max;
         this.count = 0;
+        this.values = [];
         if (config.width) {
             this.elem.style.width = `${config.width}px`;
             this.autoWidth = false;
@@ -218,6 +219,7 @@ class Sparkline {
         values.forEach(value => this.push(value));
     }
     push(value) {
+        this.values.push(value);
         var magnitude = Math.scaleValueLinear(value, { min: this.min, max: this.max }, { min: 0, max: 100 });
         var item = document.createElement("li");
         item.style.height = `${100 - magnitude}%`;
@@ -229,6 +231,11 @@ class Sparkline {
         if (this.autoWidth) {
             this.elem.style.width = `${this.count}px`;
         }
+    }
+
+    get debugDescription() {
+        let values = this.values.join(", ");
+        return `<Sparkline [${this.min}...${this.max}]: ${values}>`;
     }
 }
 
@@ -1310,6 +1317,73 @@ function tilePlaneTest() {
         sut.offset = new Point(0, 0);
         sut.tileWidth = 7;
         this.assertEqual(sut.screenRectForModelTile(new Point(2, 9)), new Rect(14, 0, 7, 7), "Size change");
+    }).buildAndRun();
+
+    new UnitTest("TilePlane.traversal", function() {
+        let sut = new TilePlane({ width: 7, height: 5 }, 1);
+
+        let tiles = sut.surroundingTiles(new Point(2, 2), false);
+        if (this.assertEqual(tiles.length, 4)) {
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(1, 2))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(3, 2))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(2, 1))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(2, 3))) != null);
+        }
+
+        tiles = sut.surroundingTiles(new Point(2, 2), true);
+        if (this.assertEqual(tiles.length, 8)) {
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(1, 1))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(2, 1))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(3, 1))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(1, 2))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(3, 2))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(1, 3))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(2, 3))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(3, 3))) != null);
+        }
+
+        tiles = sut.surroundingTiles(new Point(0, 0), true);
+        if (this.assertEqual(tiles.length, 3)) {
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(1, 0))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(0, 1))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(1, 1))) != null);
+        }
+        this.assertEqual(sut.surroundingTiles(new Point(0, 0), false).length, 2);
+
+        tiles = sut.surroundingTiles(new Point(6, 4), true);
+        if (this.assertEqual(tiles.length, 3)) {
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(5, 4))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(5, 3))) != null);
+            this.assertTrue(tiles.find(i => i.isEqual(new Point(6, 3))) != null);
+        }
+        this.assertEqual(sut.surroundingTiles(new Point(6, 4), false).length, 2);
+
+        this.assertEqual(sut.floodFilter(new Point(-1, -1), true, () => true).length, 0);
+        this.assertEqual(sut.floodFilter(new Point(7, 5), true, () => true).length, 0);
+
+        let logFloodFilter = function(tile, diagonally, filter) {
+            let log = [];
+            let grid = []; for (let y = 0; y < sut.size.height; y += 1) {
+                grid.push([]); for (let x = 0; x < sut.size.width; x += 1) grid[y].push("xx");
+            }
+            grid[tile.y][tile.x] = "OO";
+            let got = sut.floodFilter(tile, diagonally, (next, source, depth, origin) => {
+                let result = filter(next, source, depth, origin);
+                log.push([next.debugDescription, source.debugDescription, depth, origin.debugDescription].join("; "));
+                grid[next.y][next.x] = `${result ? "T" : "F"}${depth}`;
+                return result;
+            });
+            debugDump(grid.map(row => row.join(" ")).concat(log).join("\n"));
+            return got;
+        }
+
+        tiles = logFloodFilter(new Point(2, 2), true, (next, source, depth, origin) => (depth == 0));
+        if (this.assertEqual(tiles.length, 1)) {
+            this.assertEqual(tiles[0], new Point(2, 2));
+        }
+
+        tiles = logFloodFilter(new Point(0, 0), true, () => true);
+        this.assertEqual(tiles.length, sut.size.width * sut.size.height);
 
     }).buildAndRun();
 }

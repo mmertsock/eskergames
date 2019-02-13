@@ -39,6 +39,7 @@ const Rng = Gaming.Rng;
 const SaveStateCollection = Gaming.SaveStateCollection;
 const SaveStateItem = Gaming.SaveStateItem;
 const SelectableList = Gaming.SelectableList;
+const TilePlane = Gaming.TilePlane;
 const UndoStack = Gaming.UndoStack;
 const Vector = Gaming.Vector;
 
@@ -46,6 +47,7 @@ const AnimationState = CitySim.AnimationState;
 const CanvasInputController = CitySim.CanvasInputController;
 const CanvasTileViewport = CitySim.CanvasTileViewport;
 const CityMap = CitySim.CityMap;
+const ConfirmDialog = CitySim.ConfirmDialog;
 const GameContent = CitySimContent.GameContent;
 const GameDialog = CitySim.GameDialog;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
@@ -565,9 +567,16 @@ class EditSession {
     static Kvo() { return { "changeToken": "changeToken", "tileInspectionTarget": "_tileInspectionTarget" }; }
 
     static quit(prompt) {
-        if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
-            window.location = "index.html";
+        if (!prompt) {
+            window.location = "index.html"; return;
         }
+        new ConfirmDialog({
+            title: null,
+            text: Strings.str("quitGameConfirmPrompt"),
+            ok: Strings.str("quitButton"),
+            cancel: Strings.str("genericCancelButton"),
+            completion: result => { if (result) EditSession.quit(false); }
+        }).show();
     }
 
     constructor(config) {
@@ -620,18 +629,15 @@ class TerrainEditor {
     // addToChangeset(operation)
 
     canPaint(tile, tool) {
-        if (!tile) return false;
-        if (tool.flag.isForest && !tile.type.isLand) return false;
-        return true;
+        return tool.brush.canPaint(tile, tool.flag);
     }
 
     allBrushTiles(tile, tool) {
-        return tool.brush.tilesCenteredAt(tile, this.session.map.terrainLayer);
+        return tool.brush.allTilesCenteredAt(tile, tool.flag, this.session.map.terrainLayer);
     }
 
     validPaintTiles(tile, tool) {
-        return tool.brush.tilesCenteredAt(tile, this.session.map.terrainLayer)
-            .filter(item => this.canPaint(item, tool));
+        return tool.brush.paintableTilesCenteredAt(tile, tool.flag, this.session.map.terrainLayer);
     }
 
     addPaintToChangeset(tile, tool) {
@@ -1018,11 +1024,6 @@ class ControlsView {
             elem: this.root.querySelector("#macro-controls"),
             palette: this.session.toolController.factory.settings.macroPalette
         });
-        this.destroyPalette = new ToolPaletteView({
-            toolController: this.session.toolController,
-            elem: this.root.querySelector("#destroy-controls"),
-            palette: this.session.toolController.factory.settings.destroyPalette
-        });
         this.microPalette = new ToolPaletteView({
             toolController: this.session.toolController,
             elem: this.root.querySelector("#micro-controls"),
@@ -1140,7 +1141,7 @@ class ToolBrushView {
 
     update(toolController) {
         this.buttons.forEach(item => {
-            item.isSelected = (item.id == toolController.brush.index);
+            item.isSelected = (toolController.tool.usesBrush && item.id == toolController.brush.index);
         });
     }
 }
@@ -1292,11 +1293,13 @@ class ToolFactory {
     getDefinition(id) { return this.settings.definitions[id]; }
 
     getBrush(index) {
-        return new ToolBrush(GameContent.itemOrDefaultFromArray(this.settings.brushes, index));
+        let config = GameContent.itemOrDefaultFromArray(this.settings.brushes, index);
+        let type = this.namespace[config.constructor];
+        return new type(config);
     }
 }
 
-class ToolBrush {
+class CircularBrush {
     constructor(config) {
         this.index = config.index;
         this.radius = config.radius;
@@ -1305,12 +1308,52 @@ class ToolBrush {
         this.searchRectSize = { width: size, height: size };
     }
 
-    tilesCenteredAt(tile, layer) {
+    get allowsDragPainting() { return true; }
+
+    canPaint(tile, type) {
+        if (!tile) return false;
+        if (type.isForest && !tile.type.isLand) return false;
+        return true;
+    }
+
+    allTilesCenteredAt(tile, type, layer) {
         let rect = new Rect(this.searchRectOriginOffset.offsettingPosition(tile.point), this.searchRectSize);
         let tiles = layer.filterTiles(rect, item => {
             return Vector.betweenPoints(tile.point, item.point).magnitude < this.radius;
         });
         return tiles;
+    }
+
+    paintableTilesCenteredAt(tile, type, layer) {
+        return this.allTilesCenteredAt(tile, type, layer)
+            .filter(item => this.canPaint(item, type));  
+    }
+}
+
+class FillBrush {
+    constructor(config) {
+        this.index = config.index;
+    }
+
+    get allowsDragPainting() { return false; }
+
+    canPaint(tile, type) {
+        if (!tile) return false;
+        return tile.type.value != type.value;
+    }
+
+    allTilesCenteredAt(tile, type, layer) {
+        let plane = new TilePlane(layer.size, 1);
+        return plane.floodMap(tile.point, false, (neighbor) => {
+            let item = layer.getTileAtPoint(neighbor);
+            if (!item) return null;
+            return (item.type.value == tile.type.value) ? item : null;
+            // return item ? (item.type.value == tile.type.value) : false;
+        });
+    }
+
+    paintableTilesCenteredAt(tile, type, layer) {
+        return this.allTilesCenteredAt(tile, type, layer);
     }
 }
 
@@ -1323,6 +1366,7 @@ class NavigateMapTool {
         this.dragStartInfo = null;
     }
 
+    get usesBrush() { return false; }
     get needsRender() { return false; }
 
     didSelectTile(info) {
@@ -1364,6 +1408,7 @@ class PaintTerrainTypeTool {
         this.notAllowedHoverFillStyle = toolController.factory.settings.notAllowedHoverFillStyle;
     }
 
+    get usesBrush() { return true; }
     get needsRender() { return true; }
 
     didSelectTile(info) {
@@ -1376,6 +1421,7 @@ class PaintTerrainTypeTool {
     didMove(info) { return null; }
 
     didDrag(info, isStart) {
+        if (!this.brush.allowsDragPainting) return null;
         if (isStart) this.model.editor.commitChangeset();
         this.tryPaint(info);
         return null;
@@ -1408,17 +1454,6 @@ class PaintTerrainTypeTool {
     }
 }
 
-// Turns an entire contiguous section of trees/water to dirt
-// For oceans, deletes one edge of the map.
-class DestroyAreaTool {
-    constructor(toolController, config, brush) {
-        this.id = config.id;
-        this.brush = brush;
-    }
-
-    get needsRender() { return false; }
-}
-
 // Use the WoodsTileGenerator/LakeTileGenerator.
 // Shows a dialog after clicking, to adjust options
 // Save a copy the last used options in a static member
@@ -1430,6 +1465,7 @@ class BuildBlobTool {
         this.type = TerrainType[config.key];
     }
 
+    get usesBrush() { return false; }
     get needsRender() { return false; }
 }
 BuildBlobTool.lastSettings = {};
@@ -1442,6 +1478,7 @@ class BuildRiverTool {
         this.brush = brush;
     }
 
+    get usesBrush() { return false; }
     get needsRender() { return false; }
 }
 BuildRiverTool.lastSettings = null;
@@ -1454,6 +1491,7 @@ class BuildOceanTool {
         this.brush = brush;
     }
 
+    get usesBrush() { return false; }
     get needsRender() { return false; }
 }
 BuildOceanTool.lastSettings = null;
@@ -1465,10 +1503,11 @@ let initialize = function() {
     ToolFactory.shared = new ToolFactory(GameContent.shared.terrainEditorTools, {
         NavigateMapTool: NavigateMapTool,
         PaintTerrainTypeTool: PaintTerrainTypeTool,
-        DestroyAreaTool: DestroyAreaTool,
         BuildBlobTool: BuildBlobTool,
         BuildRiverTool: BuildRiverTool,
-        BuildOceanTool: BuildOceanTool
+        BuildOceanTool: BuildOceanTool,
+        CircularBrush: CircularBrush,
+        FillBrush: FillBrush
     });
     CitySimTerrain.view = new RootView({ runLoop: CitySimTerrain.uiRunLoop });
     CitySimTerrain.uiRunLoop.resume();

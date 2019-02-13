@@ -43,8 +43,6 @@
             <block class="vertical-container">
                 <h3>Build</h3>
                 <block id="macro-controls"></block>
-                <h3>&nbsp;</h3>
-                <block id="destroy-controls"></block>
             </block>
             <block class="vertical-container">
                 <h3>Brushes</h3>
@@ -66,22 +64,6 @@
         </row>
     </controls>
 </main>
-<!--
-TODO
-global controls:
-label: current filename.
-button to change the name of the terrain (and other options that *don't* regenerate the map, as applicable).
-import/export via JSON or bitmap
-
-macro controls:
-plop a river
-select an edge to define as ocean
-spraypaint forests
-
-micro controls:
-paint trees on single tiles
-toggle land/water on single tiles
--->
 
 <div id="dialogs" class="hidden"></div>
 
@@ -100,7 +82,7 @@ toggle land/water on single tiles
         <li><kbd>⬆︎ ⬇︎ ⬅︎ ➡︎</kbd>: Move map up/down/left/right</li>
         <li><kbd>+ −</kbd>: Zoom in/out</li>
         <li><kbd>&#x21e7; 1 2 3 4</kbd>: Change zoom level</li>
-        <li><kbd>1 2 3 4</kbd>: Change brush size</li>
+        <li><kbd>1 2 3 4 5 6</kbd>: Change brush size</li>
         <li><kbd>ESC</kbd>: Cancel tools, close popups, etc.</li>
         <li><kbd>Q</kbd>: Dirt brush</li>
         <li><kbd>A</kbd>: Forest brush</li>

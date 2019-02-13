@@ -108,6 +108,7 @@ keyboard:
       - [Digit3, setBrushSize, 2]
       - [Digit4, setBrushSize, 3]
       - [Digit5, setBrushSize, 4]
+      - [Digit6, setBrushSize, 5]
       - [Shift+Digit1, setZoomLevel, 0]
       - [Shift+Digit2, setZoomLevel, 1]
       - [Shift+Digit3, setZoomLevel, 2]
@@ -131,7 +132,6 @@ keyboard:
       - [KeyR, selectTool, build-river]
       - [KeyL, selectTool, build-lake]
       - [KeyO, selectTool, build-ocean]
-      - [KeyX, selectTool, destroy-area]
 
 pointInputController:
     singleClickMovementTolerance: 3
@@ -167,19 +167,26 @@ keyInputController:
 terrainEditorTools:
   microPalette: [map-navigate, brush-land, brush-forest, brush-freshwater, brush-saltwater]
   macroPalette: [build-forest, build-river, build-lake, build-ocean]
-  destroyPalette: [destroy-area]
   brushes:
     - radius: 0.9
       isDefault: true
       paletteTitle: "✏️"
+      constructor: CircularBrush
     - radius: 2.0
       paletteTitle: "🧹"
+      constructor: CircularBrush
     - radius: 2.3
       paletteTitle: "⛏"
+      constructor: CircularBrush
     - radius: 3.5
       paletteTitle: "🚜"
+      constructor: CircularBrush
     - radius: 5.3
       paletteTitle: "🚚"
+      constructor: CircularBrush
+    - radius: 0
+      paletteTitle: "Fill"
+      constructor: FillBrush
   validHoverFillStyle: "hsla(120, 50%, 50%, 0.3)"
   notAllowedHoverFillStyle: "hsla(0, 50%, 75%, 0.3)"
   definitions:
@@ -203,9 +210,6 @@ terrainEditorTools:
       constructor: PaintTerrainTypeTool
       paletteTitle: Trees
       key: forest
-    destroy-area:
-      constructor: DestroyAreaTool
-      paletteTitle: Destroy Area
     build-forest:
       constructor: BuildBlobTool
       paletteTitle: Forest

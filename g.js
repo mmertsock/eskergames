@@ -119,6 +119,13 @@ Array.prototype.map2D = function(block) {
     });
 };
 
+// Return false if already has value. Adds value and returns true otherwise.
+Set.prototype.addIfNotContains = function(value) {
+    if (this.has(value)) return false;
+    this.add(value);
+    return true;
+};
+
 var _primes = [3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71];
 function hashArrayOfInts(values) {
     var result = 0;
@@ -314,7 +321,7 @@ class RandomLineGenerator {
         this.style = config.style || "walk";
         this.min = config.min;
         this.max = config.max;
-        this.lastValue = Rng.shared.nextFloatOpenRange(this.min, this.max);
+        this.lastValue = typeof(config.value) == 'undefined' ? Rng.shared.nextFloatOpenRange(this.min, this.max) : config.value;
         this.variance = config.variance;
     }
 
@@ -708,6 +715,13 @@ class Rect {
         if (!other || this.isEmpty() || other.isEmpty()) { return false; }
         return e1.min.x <= e2.min.x && e1.max.x >= e2.max.x
             && e1.min.y <= e2.min.y && e1.max.y >= e2.max.y;
+    }
+    containsTile(x, y) {
+        if (typeof y === 'undefined') {
+            return x.x >= this.x && x.y >= this.y && x.x < (this.x + this.width) && x.y < (this.y + this.height);
+        } else {
+            return   x >= this.x &&   y >= this.y &&   x < (this.x + this.width) &&   y < (this.y + this.height);
+        }
     }
     union(other) {
         if (!other) { return new Rect(this); }
@@ -1422,6 +1436,7 @@ class TilePlane {
     get size() { return this._size; }
     set size(value) {
         this._size = value;
+        this._modelBounds = new Rect(0, 0, value.width, value.height);
         this._yMinuend = this._size.height - 1;
         this._drawOrderFactor = Math.min(this._size.width, this._size.height);
     }
@@ -1512,6 +1527,45 @@ class TilePlane {
     get visibleModelRect() {
         if (this._viewport.width < 1 || this._viewport.height < 1) { return new Rect(0, 0, 0, 0); }
         return this.modelRectForScreenRect(this._viewport);
+    }
+
+    // ~~~~~~ Traversal ~~~~~~
+
+    surroundingTiles(tile, diagonally) {
+        return (diagonally ? Vector.manhattanUnits : Vector.cardinalUnits)
+            .map((v, direction) => {
+                let neighbor = tile.adding(v);
+                return this._modelBounds.containsTile(neighbor) ? neighbor : null;
+            }).filter(i => i != null);
+    }
+
+    // filter callback:
+    // (tile to filter, valid neighbor, recursion depth (starting at 0), original tile) => bool
+    floodFilter(tile, diagonally, filter) {
+        return this.floodMap(tile, diagonally, (tile, source, depth, origin) => (filter(tile, source, depth, origin) ? tile : null));
+    }
+
+    // Same as floodFilter, but callback returns null for tiles to ignore, and 
+    // non-null value to map the tile to otherwise
+    floodMap(tile, diagonally, filter) {
+        if (!this._modelBounds.containsTile(tile)) return [];
+        let traversed = new Set();
+        traversed.add(this.drawingOrderIndexForModelTile(tile));
+        let tiles = [filter(tile, tile, 0, tile)];
+        this._floodMap(traversed, tiles, 1, tile, tile, diagonally, filter);
+        return tiles;
+    }
+
+    _floodMap(traversed, tiles, depth, source, origin, diagonally, filter) {
+        // Breadth-first: filter and add tiles first, then recurse
+        this.surroundingTiles(source, diagonally)
+            .filter(tile => {
+                if (!traversed.addIfNotContains(this.drawingOrderIndexForModelTile(tile))) return false;
+                let mapped = filter(tile, source, depth, origin);
+                if (!mapped) return false;
+                tiles.push(mapped); return true;
+            })
+            .forEach(tile => this._floodMap(traversed, tiles, depth + 1, tile, origin, diagonally, filter));
     }
 }
 
