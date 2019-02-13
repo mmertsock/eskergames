@@ -200,14 +200,13 @@ class RandomBlobGenerator {
 }
 
 class TileGenerator {
-    generateInto(tiles, generator) { }
+    generateInto(targetLayer, sourceLayer) { }
     get debugDescription() { return `<${this.constructor.name}>`; }
 
-    fill(tiles, value, locations, generator) {
-        locations.forEach(tile => {
-            if (generator.bounds.containsTile(tile)) {
-                tiles[tile.y][tile.x].type = value;
-            }
+    fill(targetLayer, value, locations) {
+        locations.forEach(point => {
+            let tile = targetLayer.getTileAtPoint(point);
+            if (tile) tile.type = value;
         });
     }
 }
@@ -247,17 +246,17 @@ class OceanTileGenerator extends TileGenerator {
         return `<${this.constructor.name} ${this.edge.edge}->${this.averageShoreDistanceFromEdge}>`;
     }
 
-    generateInto(tiles, generator) {
+    generateInto(targetLayer, sourceLayer) {
         if (this.averageShoreDistanceFromEdge < 1) {
             debugWarn(`Invalid config, skipping ${this.debugDescription}`);
             return;
         }
         debugLog(`Generate into with ${this.debugDescription}`);
-        var edgeTiles = this.edge.edgeTiles(generator.bounds);
+        var edgeTiles = this.edge.edgeTiles(targetLayer.map.bounds);
         edgeTiles.forEach(edgeTile => {
             var shoreDistance = this.lineGenerator.nextValue();
             var line = this.edge.lineOfTiles(edgeTile, shoreDistance);
-            this.fill(tiles, TerrainType.saltwater, line, generator);
+            this.fill(targetLayer, TerrainType.saltwater, line);
         });
     }
 }
@@ -296,7 +295,7 @@ class RiverTileGenerator extends TileGenerator {
         return `<${this.constructor.name} ${this.sourceTile.debugDescription}->${this.mouthCenterTile.debugDescription}>`;
     }
 
-    generateInto(tiles, generator) {
+    generateInto(targetLayer, sourceLayer) {
         var water = [];
         var zeroToOne = { min: 0, max: 1 };
         var widthRange = { min: this.start.width, max: this.end.width };
@@ -311,14 +310,14 @@ class RiverTileGenerator extends TileGenerator {
             var point = origin.adding(axis.scaled(offset)).integral();
             sliceWidth = Math.round(sliceWidth);
             for (var i = 0; i < sliceWidth; i += 1) {
-                if (generator.bounds.containsTile(point)
-                    && tiles[point.y][point.x].type.isLand) {
+                let tile = sourceLayer.getTileAtPoint(point);
+                if (tile && tile.type.isLand) {
                     water.push(point);
                 }
                 point = point.adding(axis);
             }
         });
-        this.fill(tiles, TerrainType.freshwater, water, generator);
+        this.fill(targetLayer, TerrainType.freshwater, water);
     }
 }
 
@@ -348,9 +347,9 @@ class BlobFillTileGenerator extends TileGenerator {
         return `<${this.constructor.name} %${this.coverageRatio}>`;
     }
 
-    generateInto(tiles, generator) {
+    generateInto(targetLayer, sourceLayer) {
         var generations = 0;
-        while (this.currentCoverageRatio(tiles) < this.coverageRatio && generations < this.maxCount) {
+        while (this.currentCoverageRatio(targetLayer) < this.coverageRatio && generations < this.maxCount) {
             var config = {
                 size: {
                     width: Rng.shared.nextIntOpenRange(this.minDiameter, this.maxDiameter),
@@ -359,14 +358,14 @@ class BlobFillTileGenerator extends TileGenerator {
                 edgeVariance: Rng.shared.nextFloatOpenRange(this.edgeVariance.min, this.edgeVariance.max),
                 radiusVariance: this.radiusVariance, //Rng.shared.nextFloatOpenRange(this.variance.min, this.variance.max)
             };
-            this.makeBlobGenerator(config).generateInto(tiles, generator);
+            this.makeBlobGenerator(config).generateInto(targetLayer, sourceLayer);
             generations += 1;
         }
-        debugLog(`${this.constructor.name}: produced ${generations} generations filling ${(this.currentCoverageRatio(tiles) * 100).toFixed(2)}%.`);
+        debugLog(`${this.constructor.name}: produced ${generations} generations filling ${(this.currentCoverageRatio(targetLayer) * 100).toFixed(2)}%.`);
     }
 
     // subclass must implment
-    currentCoverageRatio(tiles) { return 1; }
+    currentCoverageRatio(layer) { return 1; }
 
     // subclass must implement
     makeBlobGenerator(config) { return undefined; }
@@ -377,13 +376,11 @@ class ForestTileGenerator extends BlobFillTileGenerator {
         return new ForestTileGenerator(BlobFillTileGenerator.defaultConfig(Terrain.settings().forestFiller, size));
     }
 
-    currentCoverageRatio(tiles) {
+    currentCoverageRatio(layer) {
         var treeCount = 0, landCount = 0;
-        tiles.forEach(row => {
-            row.forEach(tile => {
-                if (tile.type.isForest) { treeCount += 1; }
-                if (tile.type.isLand) { landCount += 1; }
-            });
+        layer.visitTiles(null, tile => {
+            if (tile.type.isForest) { treeCount += 1; }
+            if (tile.type.isLand) { landCount += 1; }
         });
         return (landCount > 0) ? (treeCount / landCount) : 1;
     }
@@ -396,13 +393,11 @@ class FreshWaterTileGenerator extends BlobFillTileGenerator {
         return new FreshWaterTileGenerator(BlobFillTileGenerator.defaultConfig(Terrain.settings().freshWaterFiller, size));
     }
 
-    currentCoverageRatio(tiles) {
+    currentCoverageRatio(layer) {
         var freshCount = 0, landCount = 0;
-        tiles.forEach(row => {
-            row.forEach(tile => {
-                if (tile.type.isFreshwater) { freshCount += 1; }
-                if (tile.type.isLand) { landCount += 1; }
-            });
+        layer.visitTiles(null, tile => {
+            if (tile.type.isFreshwater) { freshCount += 1; }
+            if (tile.type.isLand) { landCount += 1; }
         });
         return (landCount > 0) ? (freshCount / landCount) : 1;
     }
@@ -424,12 +419,12 @@ class BlobTileGenerator extends TileGenerator {
         return `<${this.constructor.name} ${this.size.width}x${this.size.height} =${this.value}>`;
     }
 
-    shouldFill(point, tiles, generator) {
+    shouldFill(tile) {
         return true;
     }
 
-    generateInto(tiles, generator) {
-        var center = this.center ? this.center : new Point(Rng.shared.nextIntOpenRange(0, generator.bounds.width), Rng.shared.nextIntOpenRange(0, generator.bounds.height));
+    generateInto(targetLayer, sourceLayer) {
+        var center = this.center ? this.center : new Point(Rng.shared.nextIntOpenRange(0, targetLayer.size.width), Rng.shared.nextIntOpenRange(0, targetLayer.size.height));
         var origin = center.adding(this.size.width * 0.5, this.size.height * 0.5).integral();
         var blob = new RandomBlobGenerator({ size: this.size, edgeVariance: this.edgeVariance, radiusVariance: this.radiusVariance }).nextBlob();
         var values = [];
@@ -438,14 +433,15 @@ class BlobTileGenerator extends TileGenerator {
             var row = blob[y];
             for (var x = 0; x < row.length; x += 1) {
                 var point = origin.adding(x, y);
-                if (generator.bounds.containsTile(point)
+                let tile = sourceLayer.getTileAtPoint(point);
+                if (!!tile
                     && row.getValue(x)
-                    && this.shouldFill(point, tiles, generator)) {
+                    && this.shouldFill(tile)) {
                     values.push(point);
                 }
             }
         }
-        this.fill(tiles, this.value, values, generator);
+        this.fill(targetLayer, this.value, values);
     }
 }
 
@@ -454,8 +450,8 @@ class LakeTileGenerator extends BlobTileGenerator {
         super(Object.assign({value: TerrainType.freshwater}, config));
     }
 
-    shouldFill(point, tiles, generator) {
-        return tiles[point.y][point.x].type.isLand;
+    shouldFill(tile) {
+        return tile.type.isLand;
     }
 }
 
@@ -464,8 +460,8 @@ class WoodsTileGenerator extends BlobTileGenerator {
         super(Object.assign({value: TerrainType.forest}, config));
     }
 
-    shouldFill(point, tiles, generator) {
-        return tiles[point.y][point.x].type.isLand;
+    shouldFill(tile) {
+        return tile.type.isLand;
     }
 }
 
@@ -503,26 +499,24 @@ class TerrainGenerator {
 
     generateMap() {
         let timer = new PerfTimer("TerrainGenerator.generateMap").start();
-        let tiles = [];
-        for (let rowIndex = 0; rowIndex < this.size.height; rowIndex += 1) {
-            let row = [];
-            for (let colIndex = 0; colIndex < this.size.width; colIndex += 1) {
-                row.push(new TerrainTile(new Point(colIndex, rowIndex), this.map.terrainLayer));
-            }
-            tiles.push(row);
-        }
-
-        this.builders.forEach(builder => builder.generateInto(tiles, this));
+        this.builders.forEach(builder => builder.generateInto(this.map.terrainLayer, this.map.terrainLayer));
         debugLog(timer.end().summary);
-        timer = new PerfTimer("TerrainGenerator.modifyTerrain").start();
-        this.map.modifyTerrain(tiles);
-        debugLog(timer.end().summary);
-
         return this.map;
     }
+}
 
-    ascii(tiles) {
-        return tiles.map(row => "|" + row.join("") + "|").join("\n");
+class TerrainEditTile extends TerrainTile {
+    constructor(point, layer) {
+        super(point, layer);
+        this._type = null;
+    }
+    get type() { return this._type; }
+    set type(value) {
+        let oldTile = this.layer.action.oldLayer.getTileAtPoint(this.point);
+        if (oldTile.type == null) {
+            oldTile.type = this.layer.action.session.map.terrainLayer.getTileAtPoint(this.point).type;
+        }
+        super.type = value;
     }
 }
 
@@ -531,19 +525,24 @@ class EditTilesAction {
         this.title = config.title;
         this.session = config.session;
         this.oldLayer = new MapLayer({ map: config.session.map, id: "EditTilesAction-Old", tileClass: TerrainTile });
-        this.newLayer = new MapLayer({ map: config.session.map, id: "EditTilesAction-New", tileClass: TerrainTile });
-        this.oldLayer.visitTiles(null, tile => tile.type = null);
-        this.newLayer.visitTiles(null, tile => tile.type = null);
+        this.newLayer = new MapLayer({ map: config.session.map, id: "EditTilesAction-New", tileClass: TerrainEditTile });
+        this.newLayer.action = this;
+        this.oldLayer.visitTiles(null, tile => tile._type = null);
     }
+
     addTiles(tiles) {
         tiles.forEach(tile => {
-            let oldTile = this.oldLayer.getTileAtPoint(tile.point);
-            if (oldTile.type == null) oldTile.type = this.session.map.terrainLayer.getTileAtPoint(tile.point).type;
             let newTile = this.newLayer.getTileAtPoint(tile.point);
             newTile.type = tile.type;
         });
         this.session.replaceTiles(this.newLayer, this);
     }
+
+    applyGenerator(generator) {
+        generator.generateInto(this.newLayer, this.session.map.terrainLayer);
+        this.session.replaceTiles(this.newLayer, this);
+    }
+
     undo() {
         this.session.replaceTiles(this.oldLayer, null);
     }
@@ -645,6 +644,11 @@ class TerrainEditor {
         let tiles = this.validPaintTiles(tile, tool)
             .map(item => { return {point: item.point, type: tool.flag}; });
         this._addTilesToChangeset(tiles);
+    }
+
+    applyGeneratorToChangeset(builder) {
+        this._beginChangesetIfNeeded();
+        this.changeset.applyGenerator(builder);
     }
 
     _addTilesToChangeset(tiles) {
@@ -754,84 +758,6 @@ class RootView {
 
     _configureCommmands() {
         GameScriptEngine.shared.registerCommand("regenerate", () => this.regenerate());
-    }
-}
-
-class BuildBlobDialog extends GameDialog {
-    constructor(config) {
-        super();
-        this.tool = config.tool;
-        this.center = config.center;
-        this.title = config.title;
-
-        this.createButton = new ToolButton({
-            title: Strings.str("buildBlobCommitButton"),
-            click: () => this.validateAndBuild()
-        });
-
-        this.contentElem = GameDialog.createContentElem();
-        const formElem = GameDialog.createFormElem();
-
-        this.widthInput = new TextInputView({
-            parent: formElem,
-            title: Strings.str("blobWidthLabel"),
-            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
-            transform: InputView.integerTransform,
-            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
-        });
-        this.heightInput = new TextInputView({
-            parent: formElem,
-            title: Strings.str("blobHeightLabel"),
-            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
-            transform: InputView.integerTransform,
-            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
-        });
-        this.edgeVarianceInput = new TextInputView({
-            parent: formElem,
-            title: Strings.str("blobEdgeVarianceLabel"),
-            placeholder: Strings.template("blobEdgeVariancePlaceholder", this.tool.ranges.edgeVariance),
-            transform: InputView.floatTransform,
-            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.edgeVariance)]
-        });
-        this.radiusVarianceInput = new TextInputView({
-            parent: formElem,
-            title: Strings.str("blobRadiusVarianceLabel"),
-            placeholder: Strings.template("blobRadiusVariancePlaceholder", this.tool.ranges.radiusVariance),
-            transform: InputView.floatTransform,
-            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.radiusVariance)]
-        });
-
-        this.widthInput.value = config.defaultValue.size.width;
-        this.heightInput.value = config.defaultValue.size.height;
-        this.edgeVarianceInput.value = Number.uiFloat(config.defaultValue.edgeVariance);
-        this.radiusVarianceInput.value = Number.uiFloat(config.defaultValue.radiusVariance);
-
-        this.contentElem.append(formElem);
-        this.allInputs = [this.widthInput, this.heightInput, this.edgeVarianceInput, this.radiusVarianceInput];
-    }
-
-    get isModal() { return true; }
-    get dialogButtons() { return [this.createButton.elem]; }
-
-    get isValid() { return this.allInputs.every(input => input.isValid); }
-    get selectedSize() { return { width: this.widthInput.value, height: this.heightInput.value }; }
-
-    validateAndBuild() {
-        if (!this.isValid) { debugLog("NOT VALID"); return; }
-
-        this.tool.build({
-            size: this.selectedSize,
-            center: this.center,
-            edgeVariance: this.edgeVarianceInput.value,
-            radiusVariance: this.radiusVarianceInput.value
-        });
-        this.dismiss();
-    }
-
-    dismiss() {
-        super.dismiss();
-        this.tool.dialog = null;
-        this.tool = null;
     }
 }
 
@@ -1546,7 +1472,6 @@ class BuildBlobTool {
             radiusVariance: { min: 0, max: 1, defaultValue: config.radiusVariance.defaultValue }
         };
         this.generator = toolController.factory.namespace[config.generator];
-        this.dialog = null;
     }
 
     get usesBrush() { return false; }
@@ -1563,7 +1488,7 @@ class BuildBlobTool {
     set lastSettings(value) { BuildBlobTool.lastSettings[this.key] = value; }
 
     didSelectTile(info) {
-        this.dialog = new BuildBlobDialog({
+        new BuildBlobDialog({
             tool: this,
             center: info.tile,
             title: this.dialogTitle,
@@ -1578,6 +1503,82 @@ class BuildBlobTool {
     }
 }
 BuildBlobTool.lastSettings = {};
+
+class BuildBlobDialog extends GameDialog {
+    constructor(config) {
+        super();
+        this.tool = config.tool;
+        this.center = config.center;
+        this.title = config.title;
+
+        this.createButton = new ToolButton({
+            title: Strings.str("buildBlobCommitButton"),
+            click: () => this.validateAndBuild()
+        });
+
+        this.contentElem = GameDialog.createContentElem();
+        const formElem = GameDialog.createFormElem();
+
+        this.widthInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobWidthLabel"),
+            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
+            transform: InputView.integerTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
+        });
+        this.heightInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobHeightLabel"),
+            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
+            transform: InputView.integerTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
+        });
+        this.edgeVarianceInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobEdgeVarianceLabel"),
+            placeholder: Strings.template("blobEdgeVariancePlaceholder", this.tool.ranges.edgeVariance),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.edgeVariance)]
+        });
+        this.radiusVarianceInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobRadiusVarianceLabel"),
+            placeholder: Strings.template("blobRadiusVariancePlaceholder", this.tool.ranges.radiusVariance),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.radiusVariance)]
+        });
+
+        this.widthInput.value = config.defaultValue.size.width;
+        this.heightInput.value = config.defaultValue.size.height;
+        this.edgeVarianceInput.value = Number.uiFloat(config.defaultValue.edgeVariance);
+        this.radiusVarianceInput.value = Number.uiFloat(config.defaultValue.radiusVariance);
+
+        this.contentElem.append(formElem);
+        this.allInputs = [this.widthInput, this.heightInput, this.edgeVarianceInput, this.radiusVarianceInput];
+    }
+
+    get isModal() { return true; }
+    get dialogButtons() { return [this.createButton.elem]; }
+
+    get isValid() { return this.allInputs.every(input => input.isValid); }
+    get selectedSize() { return { width: this.widthInput.value, height: this.heightInput.value }; }
+
+    validateAndBuild() {
+        if (!this.isValid) { debugLog("NOT VALID"); return; }
+        this.tool.build({
+            size: this.selectedSize,
+            center: this.center,
+            edgeVariance: this.edgeVarianceInput.value,
+            radiusVariance: this.radiusVarianceInput.value
+        });
+        this.dismiss();
+    }
+
+    dismiss() {
+        super.dismiss();
+        this.tool = null;
+    }
+}
 
 // Click one end then another.
 // Shows a dialog after clicking, to adjust options

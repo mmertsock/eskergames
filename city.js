@@ -551,7 +551,7 @@ class TerrainTile extends MapTile {
         return this.type.objectForSerialization;
     }
 
-    get debugDescription() { return `<${this.constructor.name}#${this.type.debugDescription} @(${x},${y})>`; }
+    get debugDescription() { return `<${this.constructor.name}#${this.type ? this.type.debugDescription : "(null)"} @(${this.point.x},${this.point.y})>`; }
 
     get type() { return this._type; }
     set type(value) {
@@ -1342,7 +1342,7 @@ class KeyInputController {
 
     get activeCodes() { return Object.getOwnPropertyNames(this.codeState); }
     get isActive() {
-        return this.hasPointer && !GameDialogManager.shared.hasModal;
+        return this.hasPointer && !GameDialogManager.shared.hasFocus;
     }
 
     isCodeActive(code) { return this.codeState.hasOwnProperty(code); }
@@ -3789,6 +3789,9 @@ class GameDialogManager {
     }
 
     get hasModal() { return this.containerElem.querySelector(".modal") != null; }
+    get hasFocus() {
+        return this.hasModal; // OR if any text input has focus (for disabling keyboard shortcuts)
+    }
 
     show(dialog) {
         if (!this.containerElem) { return; }
@@ -3858,7 +3861,6 @@ class GameDialog {
     }
 }
 
-// No need for the caller to keep a reference to this
 class ConfirmDialog extends GameDialog {
     constructor(config) {
         super();
@@ -3870,13 +3872,11 @@ class ConfirmDialog extends GameDialog {
         this.completion = config.completion ? config.completion : (() => {});
         this.okButton = new ToolButton({ title: config.ok, click: () => this.responded(true) });
         this.cancelButton = config.cancel ? new ToolButton({ title: config.cancel, click: () => this.responded(false) }) : null;
-        ConfirmDialog.current = this;
     }
 
     responded(result) {
         this.dismiss();
         this.completion(result);
-        ConfirmDialog.current = null;
     }
 
     dismissButtonClicked() {
