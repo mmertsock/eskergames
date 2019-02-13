@@ -1332,15 +1332,18 @@ class KeyInputController {
     constructor() {
         document.addEventListener("keydown", e => this.keydown(e));
         document.addEventListener("keyup", e => this.keyup(e));
-        window.addEventListener("blur", e => this.stop(e));
-        window.addEventListener("focus", e => this.start(e));
+        window.addEventListener("blur", e => this.blur(e));
+        window.addEventListener("focus", e => this.focus(e));
         this.codeState = {}; // code => keydown timestamp
         // this.currentCodes = new Set();
         this.shortcuts = [];
-        this.isActive = true;
+        this.hasPointer = true;
     }
 
     get activeCodes() { return Object.getOwnPropertyNames(this.codeState); }
+    get isActive() {
+        return this.hasPointer && !GameDialogManager.shared.hasModal;
+    }
 
     isCodeActive(code) { return this.codeState.hasOwnProperty(code); }
 
@@ -1427,12 +1430,12 @@ class KeyInputController {
         this.shortcuts.forEach(item => item.resetIfNotMatch(this));
     }
 
-    start(evt) {
-        this.isActive = true;
+    focus(evt) {
+        this.hasPointer = true;
     }
 
-    stop(evt) {
-        this.isActive = false;
+    blur(evt) {
+        this.hasPointer = false;
         this.clear(evt);
     }
 
@@ -3775,6 +3778,8 @@ class GameDialogManager {
         this._updateArrangement();
     }
 
+    get hasModal() { return this.containerElem.querySelector(".modal") != null; }
+
     show(dialog) {
         if (!this.containerElem) { return; }
         this.items.push(this);
@@ -3793,7 +3798,7 @@ class GameDialogManager {
     _updateArrangement() {
         if (!this.containerElem) { return; }
         this.containerElem.addRemClass("hidden", this.containerElem.childElementCount < 1);
-        this.containerElem.addRemClass("hasModal", this.containerElem.querySelector(".modal") != null);
+        this.containerElem.addRemClass("hasModal", this.hasModal);
     }
 }
 GameDialogManager.shared = new GameDialogManager();
@@ -3865,7 +3870,7 @@ class ConfirmDialog extends GameDialog {
     }
 
     dismissButtonClicked() {
-        this.completion(false);
+        this.responded(false);
     }
 
     get isModal() { return true; }
