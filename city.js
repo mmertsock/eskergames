@@ -1877,8 +1877,18 @@ class InputView extends FormValueView {
         return (typeof(value) === 'string') ? value.trim() : value;
     }
 
+    static integerTransform(value) { return parseInt(value); }
+    static floatTransform(value) { return parseFloat(value); }
+
     static notEmptyOrWhitespaceRule(input) {
         return !String.isEmptyOrWhitespace(input.value);
+    }
+
+    static makeNumericRangeRule(config) {
+        return input => {
+            let value = input.value;
+            return !isNaN(value) && value >= config.min && value <= config.max;
+        };
     }
 
     constructor(config, elem) {

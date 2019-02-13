@@ -213,11 +213,29 @@ terrainEditorTools:
     build-forest:
       constructor: BuildBlobTool
       paletteTitle: Forest
-      key: forest
+      dialogTitle: Build a Forest
+      generator: WoodsTileGenerator
+      size:
+        min: 3
+        defaultValue: 7
+        max: 24
+      edgeVariance:
+        defaultValue: 0.4
+      radiusVariance:
+        defaultValue: 0.4
     build-lake:
       constructor: BuildBlobTool
       paletteTitle: Lake
-      key: freshwater
+      dialogTitle: Build a Lake
+      generator: LakeTileGenerator
+      size:
+        min: 3
+        defaultValue: 7
+        max: 24
+      edgeVariance:
+        defaultValue: 0.4
+      radiusVariance:
+        defaultValue: 0.4
     build-river:
       constructor: BuildRiverTool
       paletteTitle: River
@@ -388,6 +406,14 @@ painters:
 ################## STRINGS ################
 
 strings:
+  buildBlobCommitButton: Build
+  blobHeightLabel: Height
+  blobWidthLabel: Width
+  blobSizePlaceholder: "# Tiles (<min>–<max>)"
+  blobEdgeVarianceLabel: Edge Variance
+  blobEdgeVariancePlaceholder: "0 to 1"
+  blobRadiusVarianceLabel: Radius Variance
+  blobRadiusVariancePlaceholder: "0 to 1"
   cityStatusCashLabel: Cash
   cityStatusDateLabel: Date
   cityStatusNameLabel: Name

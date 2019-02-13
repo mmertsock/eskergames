@@ -415,6 +415,7 @@ class BlobTileGenerator extends TileGenerator {
         super();
         this.value = config.value; // tile value
         this.size = config.size; // in tiles
+        this.center = config.center; // optional
         this.edgeVariance = config.edgeVariance;
         this.radiusVariance = config.radiusVariance;
     }
@@ -428,7 +429,7 @@ class BlobTileGenerator extends TileGenerator {
     }
 
     generateInto(tiles, generator) {
-        var center = new Point(Rng.shared.nextIntOpenRange(0, generator.bounds.width), Rng.shared.nextIntOpenRange(0, generator.bounds.height));
+        var center = this.center ? this.center : new Point(Rng.shared.nextIntOpenRange(0, generator.bounds.width), Rng.shared.nextIntOpenRange(0, generator.bounds.height));
         var origin = center.adding(this.size.width * 0.5, this.size.height * 0.5).integral();
         var blob = new RandomBlobGenerator({ size: this.size, edgeVariance: this.edgeVariance, radiusVariance: this.radiusVariance }).nextBlob();
         var values = [];
@@ -753,6 +754,84 @@ class RootView {
 
     _configureCommmands() {
         GameScriptEngine.shared.registerCommand("regenerate", () => this.regenerate());
+    }
+}
+
+class BuildBlobDialog extends GameDialog {
+    constructor(config) {
+        super();
+        this.tool = config.tool;
+        this.center = config.center;
+        this.title = config.title;
+
+        this.createButton = new ToolButton({
+            title: Strings.str("buildBlobCommitButton"),
+            click: () => this.validateAndBuild()
+        });
+
+        this.contentElem = GameDialog.createContentElem();
+        const formElem = GameDialog.createFormElem();
+
+        this.widthInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobWidthLabel"),
+            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
+            transform: InputView.integerTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
+        });
+        this.heightInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobHeightLabel"),
+            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
+            transform: InputView.integerTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
+        });
+        this.edgeVarianceInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobEdgeVarianceLabel"),
+            placeholder: Strings.template("blobEdgeVariancePlaceholder", this.tool.ranges.edgeVariance),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.edgeVariance)]
+        });
+        this.radiusVarianceInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("blobRadiusVarianceLabel"),
+            placeholder: Strings.template("blobRadiusVariancePlaceholder", this.tool.ranges.radiusVariance),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.radiusVariance)]
+        });
+
+        this.widthInput.value = config.defaultValue.size.width;
+        this.heightInput.value = config.defaultValue.size.height;
+        this.edgeVarianceInput.value = Number.uiFloat(config.defaultValue.edgeVariance);
+        this.radiusVarianceInput.value = Number.uiFloat(config.defaultValue.radiusVariance);
+
+        this.contentElem.append(formElem);
+        this.allInputs = [this.widthInput, this.heightInput, this.edgeVarianceInput, this.radiusVarianceInput];
+    }
+
+    get isModal() { return true; }
+    get dialogButtons() { return [this.createButton.elem]; }
+
+    get isValid() { return this.allInputs.every(input => input.isValid); }
+    get selectedSize() { return { width: this.widthInput.value, height: this.heightInput.value }; }
+
+    validateAndBuild() {
+        if (!this.isValid) { debugLog("NOT VALID"); return; }
+
+        this.tool.build({
+            size: this.selectedSize,
+            center: this.center,
+            edgeVariance: this.edgeVarianceInput.value,
+            radiusVariance: this.radiusVarianceInput.value
+        });
+        this.dismiss();
+    }
+
+    dismiss() {
+        super.dismiss();
+        this.tool.dialog = null;
+        this.tool = null;
     }
 }
 
@@ -1454,19 +1533,49 @@ class PaintTerrainTypeTool {
     }
 }
 
-// Use the WoodsTileGenerator/LakeTileGenerator.
-// Shows a dialog after clicking, to adjust options
-// Save a copy the last used options in a static member
 class BuildBlobTool {
     constructor(toolController, config, brush) {
         this.id = config.id;
         this.brush = brush;
-        this.key = config.key; // key into the lastSettings dictionary
-        this.type = TerrainType[config.key];
+        this.model = new InteractionModel({ viewModel: toolController.model });
+        this.key = config.generator;
+        this.dialogTitle = config.dialogTitle;
+        this.ranges = {
+            size: { min: config.size.min, max: config.size.max, defaultValue: config.size.defaultValue },
+            edgeVariance: { min: 0, max: 1, defaultValue: config.edgeVariance.defaultValue },
+            radiusVariance: { min: 0, max: 1, defaultValue: config.radiusVariance.defaultValue }
+        };
+        this.generator = toolController.factory.namespace[config.generator];
+        this.dialog = null;
     }
 
     get usesBrush() { return false; }
     get needsRender() { return false; }
+
+    get lastSettings() {
+        let value = BuildBlobTool.lastSettings[this.key];
+        return value ? value : {
+            size: { width: this.ranges.size.defaultValue, height: this.ranges.size.defaultValue },
+            edgeVariance: this.ranges.edgeVariance.defaultValue,
+            radiusVariance: this.ranges.radiusVariance.defaultValue
+        };
+    }
+    set lastSettings(value) { BuildBlobTool.lastSettings[this.key] = value; }
+
+    didSelectTile(info) {
+        this.dialog = new BuildBlobDialog({
+            tool: this,
+            center: info.tile,
+            title: this.dialogTitle,
+            defaultValue: this.lastSettings
+        }).show();
+    }
+
+    build(config) {
+        this.lastSettings = config;
+        this.model.editor.applyGeneratorToChangeset(new this.generator(config));
+        this.model.editor.commitChangeset();
+    }
 }
 BuildBlobTool.lastSettings = {};
 
@@ -1507,7 +1616,9 @@ let initialize = function() {
         BuildRiverTool: BuildRiverTool,
         BuildOceanTool: BuildOceanTool,
         CircularBrush: CircularBrush,
-        FillBrush: FillBrush
+        FillBrush: FillBrush,
+        LakeTileGenerator: LakeTileGenerator,
+        WoodsTileGenerator: WoodsTileGenerator
     });
     CitySimTerrain.view = new RootView({ runLoop: CitySimTerrain.uiRunLoop });
     CitySimTerrain.uiRunLoop.resume();
