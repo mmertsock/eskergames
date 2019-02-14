@@ -239,6 +239,30 @@ terrainEditorTools:
     build-river:
       constructor: BuildRiverTool
       paletteTitle: River
+      dialogTitle: Build a River
+      sourceStyle: "hsla(208, 100%, 50%, 0.5)"
+      lineStyle: "hsla(218, 100%, 50%, 0.5)"
+      mouthStyle: "hsla(229, 100%, 50%, 0.5)"
+      snakiness:
+        defaultValue: 0.1
+      source:
+        width:
+          min: 0
+          max: 20
+          defaultValue: 0
+        bendSize:
+          min: 0
+          max: 10
+          defaultValue: 0
+      mouth:
+        width:
+          min: 1
+          max: 20
+          defaultValue: 5
+        bendSize:
+          min: 0
+          max: 10
+          defaultValue: 2
     build-ocean:
       constructor: BuildOceanTool
       paletteTitle: Ocean
@@ -406,14 +430,19 @@ painters:
 ################## STRINGS ################
 
 strings:
-  buildBlobCommitButton: Build
-  blobHeightLabel: Height
-  blobWidthLabel: Width
-  blobSizePlaceholder: "# Tiles (<min>–<max>)"
+  applyStreamPresetsButton: "Stream ↘︎"
+  applyLargeRiverPresetsButton: "Large River ↘︎"
+  basicNumericInputRangePlaceholder: "<min> to <max>"
+  basicTileCountRangePlaceholder: "# Tiles (<min>–<max>)"
   blobEdgeVarianceLabel: Edge Variance
-  blobEdgeVariancePlaceholder: "0 to 1"
+  blobHeightLabel: Height
   blobRadiusVarianceLabel: Radius Variance
-  blobRadiusVariancePlaceholder: "0 to 1"
+  blobWidthLabel: Width
+  buildBlobCommitButton: Build
+  buildRiverCommitButton: Build
+  citySettingsCityNameLabel: City Name
+  citySettingsDifficultyLabel: Difficulty
+  citySettingsMayorNameLabel: Mayor Name
   cityStatusCashLabel: Cash
   cityStatusDateLabel: Date
   cityStatusNameLabel: Name
@@ -424,45 +453,50 @@ strings:
   engineMsPerDayLabel: "<value> ms/day"
   failedToFindFileMessage: Unable to locate the specified file.
   failedToLoadGameMessage: There was a problem loading the game data.
-  failedToLoadTerrainMessage: There was a problem loading the terrain data.
   failedToLoadGameTitle: Failed to load game
+  failedToLoadTerrainMessage: There was a problem loading the terrain data.
   failedToLoadTerrainTitle: Failed to load game
   frameRateTokenSeparator: ". "
   gameProductTitle: CitySim
   genericCancelButton: Cancel
-  helpDialogTitle: Help
   helpButtonLabel: Help
-  undoButtonLabel: Undo
-  redoButtonLabel: Redo
-  regenTerrainButtonLabel: Restart
+  helpDialogTitle: Help
   helpDismiss: Thanks!
   newGameDialogStartButton: Start Game
   newGameDialogTitle: New Game
+  newTerrainDialogCreateButton: Create
   newTerrainDialogTitle: New Terrain
-  replaceTerrainDialogTitle: Regenerate
   optionsButtonLabel: Options
   quitButton: Quit
   quitGameConfirmPrompt: "Are you sure you want to quit? You may have unsaved changes."
+  redoButtonLabel: Redo
   regenerateTerrainPrompt: "Are you sure? This will destroy the current terrain."
+  regenTerrainButtonLabel: Restart
+  replaceTerrainDialogTitle: Regenerate
+  riverDialogMouthHeadingLabel: Mouth
+  riverDialogSourceHeadingLabel: Source
+  riverMouthBendSizeLabel: Bend Size
+  riverMouthWidthLabel: Width
+  riverSnakinessLabel: Snakiness
+  riverSnakinessPlacholder: ""
+  riverSourceBendSizeLabel: Bend Size
+  riverSourceWidthLabel: Width
   saveAndQuitButton: Save and Quit
   saveButton: Save
   systemMenuTitle: System
   terrainMetricsTemplate: "<water> water, <trees> forest"
+  terrainSettingsBlankTemplateLabel: Blank
+  terrainSettingsIslandTemplateLabel: Island
+  terrainSettingsLandlockedTemplateLabel: Landlocked
+  terrainSettingsNameLabel: Name
+  terrainSettingsRiverTemplateLabel: River
+  terrainSettingsSizeLabel: Size
+  terrainSettingsTemplateLabel: Style
   uiFpsLabel: "<value>FPS <load> DPS:<medianDispatches>/<maxDispatches>"
+  undoButtonLabel: Undo
   windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
   zoomInButtonGlyph: ➕
   zoomOutButtonGlyph: ➖
-  citySettingsCityNameLabel: City Name
-  citySettingsMayorNameLabel: Mayor Name
-  citySettingsDifficultyLabel: Difficulty
-  terrainSettingsNameLabel: Name
-  terrainSettingsSizeLabel: Size
-  terrainSettingsTemplateLabel: Style
-  newTerrainDialogCreateButton: Create
-  terrainSettingsBlankTemplateLabel: Blank
-  terrainSettingsLandlockedTemplateLabel: Landlocked
-  terrainSettingsRiverTemplateLabel: River
-  terrainSettingsIslandTemplateLabel: Island
 
 ################## SCRIPTS ################
 

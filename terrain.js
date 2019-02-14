@@ -71,6 +71,8 @@ const TextInputView = CitySim.TextInputView;
 const TextLineView = CitySim.TextLineView;
 const ToolButton = CitySim.ToolButton;
 
+const _zeroToOne = { min: 0, max: 1 };
+
 Point.tilesBetween = function(a, b, log) {
     var v = Vector.betweenPoints(a, b);
     var m = v.magnitude;
@@ -95,7 +97,6 @@ Point.tilesBetween = function(a, b, log) {
 function scanTiles(a, b, block) {
     var start = a.integral();
     var end = b.integral();
-    var zeroToOne = { min: 0, max: 1 };
     var v = Vector.betweenPoints(start, end);
     if (Math.abs(v.y) > Math.abs(v.x)) { // scan vertically, slices are horizontal
         var sliceDirection = new Vector(1, 0);
@@ -105,7 +106,7 @@ function scanTiles(a, b, block) {
         var y = start.y;
         for (var i = 0; i <= length; i += 1) {
             var fraction = i / length;
-            var x = Math.round(Math.scaleValueLinear(fraction, zeroToOne, range));
+            var x = Math.round(Math.scaleValueLinear(fraction, _zeroToOne, range));
             block(new Point(x, y), fraction, sliceDirection);
             y += incr;
         }
@@ -117,7 +118,7 @@ function scanTiles(a, b, block) {
         var x = start.x;
         for (var i = 0; i <= length; i += 1) {
             var fraction = i / length;
-            var y = Math.round(Math.scaleValueLinear(fraction, zeroToOne, range));
+            var y = Math.round(Math.scaleValueLinear(fraction, _zeroToOne, range));
             block(new Point(x, y), fraction, sliceDirection);
             x += incr;
         }
@@ -262,27 +263,34 @@ class OceanTileGenerator extends TileGenerator {
 }
 
 class RiverTileGenerator extends TileGenerator {
-    static defaultForCrossMap(start, end, size) {
+    static defaultConfigForCrossMap(start, end, size) {
         var settings = Terrain.settings().riverGenerator;
-        return new RiverTileGenerator({
+        return {
             snakiness: settings.snakiness,
             start: { center: start, width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize },
             end:   { center: end,   width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize }
-        });
+        };
     }
 
-    static defaultStream(source, mouth, size) {
+    static defaultConfigForStream(source, mouth, size) {
         var settings = Terrain.settings().riverGenerator;
-        return new RiverTileGenerator({
+        return {
             snakiness: settings.snakiness,
             start: { center: source, width: 0, bendSize: 0 },
             end:   { center: mouth,  width: settings.mouthWidth[size.index] * 0.5, bendSize: settings.largeBendSize }
-        });
+        };
+    }
+
+    static defaultForCrossMap(start, end, size) {
+        return new RiverTileGenerator(RiverTileGenerator.defaultConfigForCrossMap(start, end, size));
+    }
+
+    static defaultStream(source, mouth, size) {
+        return new RiverTileGenerator(RiverTileGenerator.defaultConfigForStream(source, mouth, size));
     }
 
     constructor(config) {
         super();
-        this.sourceTile = config.sourceTile;
         // zero width start for a stream sourced mid-map. otherwise, assumed a full river crossing the map
         // snakiness = RandomLineGenerator variance for how quickly to curve
         // bendSize = decimal multiple of width; can be greater than 1
@@ -292,19 +300,18 @@ class RiverTileGenerator extends TileGenerator {
     }
 
     get debugDescription() {
-        return `<${this.constructor.name} ${this.sourceTile.debugDescription}->${this.mouthCenterTile.debugDescription}>`;
+        return `<${this.constructor.name} ${this.start.center.debugDescription}->${this.end.center.debugDescription}>`;
     }
 
     generateInto(targetLayer, sourceLayer) {
         var water = [];
-        var zeroToOne = { min: 0, max: 1 };
         var widthRange = { min: this.start.width, max: this.end.width };
         var bendRange = { min: this.start.bendSize, max: this.end.bendSize };
         var offsetGenerator = new RandomLineGenerator({ min: -1, max: 1, variance: this.snakiness });
 
         scanTiles(this.start.center, this.end.center, (origin, fraction, axis) => {
-            var sliceWidth = Math.scaleValueLinear(fraction, zeroToOne, widthRange);
-            var s = Math.scaleValueLinear(fraction, zeroToOne, bendRange);
+            var sliceWidth = Math.scaleValueLinear(fraction, _zeroToOne, widthRange);
+            var s = Math.scaleValueLinear(fraction, _zeroToOne, bendRange);
             var bendSize = sliceWidth * s * s;
             var offset = (bendSize * offsetGenerator.nextValue()) - (0.5 * sliceWidth);
             var point = origin.adding(axis.scaled(offset)).integral();
@@ -1494,6 +1501,7 @@ class BuildBlobTool {
             title: this.dialogTitle,
             defaultValue: this.lastSettings
         }).show();
+        return null;
     }
 
     build(config) {
@@ -1522,28 +1530,28 @@ class BuildBlobDialog extends GameDialog {
         this.widthInput = new TextInputView({
             parent: formElem,
             title: Strings.str("blobWidthLabel"),
-            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
+            placeholder: Strings.template("basicTileCountRangePlaceholder", this.tool.ranges.size),
             transform: InputView.integerTransform,
             validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
         });
         this.heightInput = new TextInputView({
             parent: formElem,
             title: Strings.str("blobHeightLabel"),
-            placeholder: Strings.template("blobSizePlaceholder", this.tool.ranges.size),
+            placeholder: Strings.template("basicTileCountRangePlaceholder", this.tool.ranges.size),
             transform: InputView.integerTransform,
             validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.size)]
         });
         this.edgeVarianceInput = new TextInputView({
             parent: formElem,
             title: Strings.str("blobEdgeVarianceLabel"),
-            placeholder: Strings.template("blobEdgeVariancePlaceholder", this.tool.ranges.edgeVariance),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.edgeVariance),
             transform: InputView.floatTransform,
             validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.edgeVariance)]
         });
         this.radiusVarianceInput = new TextInputView({
             parent: formElem,
             title: Strings.str("blobRadiusVarianceLabel"),
-            placeholder: Strings.template("blobRadiusVariancePlaceholder", this.tool.ranges.radiusVariance),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.radiusVariance),
             transform: InputView.floatTransform,
             validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.radiusVariance)]
         });
@@ -1586,12 +1594,242 @@ class BuildRiverTool {
     constructor(toolController, config, brush) {
         this.id = config.id;
         this.brush = brush;
+        this.model = new InteractionModel({ viewModel: toolController.model });
+        this.dialogTitle = config.dialogTitle;
+        this.ranges = {
+            snakiness: { min: 0, max: 1, defaultValue: config.snakiness.defaultValue },
+            source: {
+                width: { min: config.source.width.min, max: config.source.width.max, defaultValue: config.source.width.defaultValue },
+                bendSize: { min: config.source.bendSize.min, max: config.source.bendSize.max, defaultValue: config.source.bendSize.defaultValue }
+            },
+            mouth: {
+                width: { min: config.mouth.width.min, max: config.mouth.width.max, defaultValue: config.mouth.width.defaultValue },
+                bendSize: { min: config.mouth.bendSize.min, max: config.mouth.bendSize.max, defaultValue: config.mouth.bendSize.defaultValue }
+            }
+        };
+        this.sourceStyle = config.sourceStyle;
+        this.lineStyle = config.lineStyle;
+        this.mouthStyle = config.mouthStyle;
+        this.source = null;
+        this.mouth = null;
     }
 
     get usesBrush() { return false; }
-    get needsRender() { return false; }
+    get needsRender() { return true; }
+
+    get lastSettings() {
+        let value = BuildRiverTool.lastSettings;
+        return value ? value : {
+            snakiness: this.ranges.snakiness.defaultValue,
+            start: {
+                width: this.ranges.source.width.defaultValue,
+                bendSize: this.ranges.source.bendSize.defaultValue
+            },
+            end: {
+                width: this.ranges.mouth.width.defaultValue,
+                bendSize: this.ranges.mouth.bendSize.defaultValue
+            }
+        };
+    }
+    set lastSettings(value) { BuildRiverTool.lastSettings = value; }
+
+    didDrag(info, isStart) {
+        if (isStart) {
+            let tile = this.model.terrainTileFromInput(info);
+            if (tile) {
+                this.source = tile;
+                this.mouth = null;
+            }
+            return null;
+        }
+        this.updateMouth(info);
+        return null;
+    }
+
+    didCompleteDrag(info) {
+        this.updateMouth(info);
+        if (!this.source || !this.mouth) {
+            this.reset();
+            return null;
+        }
+        const size = Terrain.sizeOrDefaultForIndex(Terrain.indexForTerrainSize(this.model.session.terrain));
+        new BuildRiverDialog({
+            tool: this,
+            title: this.dialogTitle,
+            defaultValue: this.lastSettings,
+            streamValue: RiverTileGenerator.defaultConfigForStream(this.source.point, this.mouth.point, size),
+            largeRiverValue: RiverTileGenerator.defaultConfigForCrossMap(this.source.point, this.mouth.point, size)
+        }).show();
+        return null;
+    }
+
+    render(context, lastHover) {
+        if (this.source && this.mouth) {
+            this.fillDot(context, this.source, this.sourceStyle);
+            const source = context.tilePlane.screenRectForModelTile(this.source.point).center.integral();
+            const mouth = context.tilePlane.screenRectForModelTile(this.mouth.point).center.integral();
+            context.ctx.save();
+            context.ctx.beginPath();
+            context.ctx.moveTo(source.x, source.y);
+            context.ctx.lineTo(mouth.x, mouth.y);
+            context.ctx.lineCap = "round";
+            context.ctx.lineWidth = Math.max(2, context.tilePlane.tileWidth * 0.5);
+            context.ctx.strokeStyle = this.lineStyle;
+            context.ctx.stroke();
+            context.ctx.restore();
+            this.fillDot(context, this.mouth, this.mouthStyle);
+        } else if (this.source) {
+            this.fillDot(context, this.source, this.mouthStyle);
+        }
+    }
+
+    fillDot(context, tile, fillStyle) {
+        let rect = context.tilePlane.screenRectForModelTile(tile.point).inset(0.25 * context.tilePlane.tileWidth, 0.25 * context.tilePlane.tileWidth);
+        if (rect.width < 2) rect = Rect.withCenter(rect.center, { width: 2, height: 2 });
+        context.ctx.fillStyle = fillStyle;
+        context.ctx.ellipseFill(rect);
+    }
+
+    updateMouth(info) {
+        let tile = this.model.terrainTileFromInput(info);
+        if (tile && this.source && !this.source.point.isEqual(tile.point)) {
+            this.mouth = tile;
+        } else {
+            this.mouth = null;
+        }
+    }
+
+    build(config) {
+        this.lastSettings = config;
+        config.start.center = this.source.point;
+        config.end.center = this.mouth.point;
+        this.model.editor.applyGeneratorToChangeset(new RiverTileGenerator(config));
+        this.model.editor.commitChangeset();
+        this.reset();
+    }
+
+    reset() {
+        this.source = null;
+        this.mouth = null;
+    }
 }
 BuildRiverTool.lastSettings = null;
+
+class BuildRiverDialog extends GameDialog {
+    constructor(config) {
+        super();
+        this.tool = config.tool;
+        this.title = config.title;
+        this.defaultValue = config.defaultValue;
+        this.streamValue = config.streamValue;
+        this.largeRiverValue = config.largeRiverValue;
+
+        this.createButton = new ToolButton({
+            title: Strings.str("buildRiverCommitButton"),
+            click: () => this.validateAndBuild()
+        });
+
+        this.contentElem = GameDialog.createContentElem();
+        const formElem = GameDialog.createFormElem();
+
+        let nav = document.createElement("nav");
+        this.streamButton = new ToolButton({
+            parent: nav,
+            title: Strings.str("applyStreamPresetsButton"),
+            click: () => this.value = this.streamValue
+        });
+        this.largeRiverButton = new ToolButton({
+            parent: nav,
+            title: Strings.str("applyLargeRiverPresetsButton"),
+            click: () => this.value = this.largeRiverValue
+        });
+        formElem.append(nav);
+
+        this.snakinessInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("riverSnakinessLabel"),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.snakiness),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.snakiness)]
+        });
+
+        let heading = document.createElement("h3");
+        heading.innerText = Strings.str("riverDialogSourceHeadingLabel");
+        formElem.append(heading);
+
+        this.startWidthInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("riverSourceWidthLabel"),
+            placeholder: Strings.template("basicTileCountRangePlaceholder", this.tool.ranges.source.width),
+            transform: InputView.integerTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.source.width)]
+        });
+        this.startBendInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("riverSourceBendSizeLabel"),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.source.bendSize),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.source.bendSize)]
+        });
+
+        heading = document.createElement("h3");
+        heading.innerText = Strings.str("riverDialogMouthHeadingLabel");
+        formElem.append(heading);
+
+        this.endWidthInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("riverMouthWidthLabel"),
+            placeholder: Strings.template("basicTileCountRangePlaceholder", this.tool.ranges.mouth.width),
+            transform: InputView.integerTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.mouth.width)]
+        });
+        this.endBendInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("riverMouthBendSizeLabel"),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.mouth.bendSize),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.mouth.bendSize)]
+        });
+
+        this.value = this.defaultValue;
+
+        this.contentElem.append(formElem);
+        this.allInputs = [this.snakinessInput, this.startWidthInput, this.startBendInput, this.endWidthInput, this.endBendInput];
+    }
+
+    get isModal() { return true; }
+    get dialogButtons() { return [this.createButton.elem]; }
+    get isValid() { return this.allInputs.every(input => input.isValid); }
+
+    get value() {
+        return {
+            snakiness: this.snakinessInput.value,
+            start: { width: this.startWidthInput.value, bendSize: this.startBendInput.value },
+            end: { width: this.endWidthInput.value, bendSize: this.endBendInput.value }
+        };
+    }
+
+    set value(config) {
+        this.snakinessInput.value  = config.snakiness;
+        this.startWidthInput.value = config.start.width;
+        this.startBendInput.value  = config.start.bendSize;
+        this.endWidthInput.value   = config.end.width;
+        this.endBendInput.value    = config.end.bendSize;
+    }
+
+    validateAndBuild() {
+        if (!this.isValid) { debugLog("NOT VALID"); return; }
+        this.dismiss();
+        this.tool.build(this.value);
+        this.tool = null;
+    }
+
+    dismissButtonClicked() {
+        this.dismiss();
+        this.tool.reset();
+        this.tool = null;
+    }
+}
 
 // Click near an edge to add or change an ocean.
 // Shows a dialog after clicking, to adjust options

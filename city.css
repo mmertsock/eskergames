@@ -402,7 +402,7 @@ dialog content {
     padding: 0;
 }
 
-dialog nav {
+dialog > nav {
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
@@ -410,6 +410,14 @@ dialog nav {
     padding: 2px 4px;
     background-color: hsl(0, 0%, 75%);
     border-radius: 0 0 3px 3px;
+}
+
+gameForm nav {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    margin: 0.5em 0;
+    padding: 0;
 }
 
 dialog nav a:hover, dialog header a:hover {
@@ -420,6 +428,11 @@ dialog header a.tool, dialog nav a.tool { padding: 2px 4px; }
 dialog header a.tool span { font-size: 7pt; }
 /* so header > h2 remains centered */
 dialog header a.tool.hidden { display: flex; visibility: hidden; }
+
+gameForm a.tool {
+    margin: 0 8px 0 0;
+    background-color: hsl(0, 0%, 95%);
+}
 
 dialog h3 {
     margin: 0;
