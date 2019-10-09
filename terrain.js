@@ -1,13 +1,6 @@
 "use-strict";
 
 /*
-TODOs
-- Smoothing property for RandomLineGenerator: number of previous generations to average
-- Smoother riverbanks. Play with different random-walk algorithms. Get diagonal rivers working better.
-  Calculate the river banks in an ideal full-rational-number coordinate space, then iterate 
-  over the tile plane and set any tile to water if its coord is between the two banks in the ideal space.
-  - Could do a similar thing with random blob generator: generate one large ellipse for the overall blob shape,
-    then a collection of smaller random ellpises with centers along the perimeter of the main ellipse.
 
 Preserving salt water after edits:
 When generating an ocean we pick a
@@ -110,10 +103,10 @@ function scanTiles(a, b, block) {
         for (var i = 0; i <= length; i += 1) {
             var fraction = i / length;
             var x = Math.round(Math.scaleValueLinear(fraction, _zeroToOne, range));
-            block(new Point(x, y), fraction, sliceDirection);
+            block(new Point(x, y), fraction, sliceDirection, v);
             y += incr;
         }
-    } else { // sacn horizontally, slices are vertical
+    } else { // scan horizontally, slices are vertical
         var sliceDirection = new Vector(0, 1);
         var range = { min: start.y, max: end.y };
         var length = Math.abs(end.x - start.x) + 1;
@@ -122,7 +115,7 @@ function scanTiles(a, b, block) {
         for (var i = 0; i <= length; i += 1) {
             var fraction = i / length;
             var y = Math.round(Math.scaleValueLinear(fraction, _zeroToOne, range));
-            block(new Point(x, y), fraction, sliceDirection);
+            block(new Point(x, y), fraction, sliceDirection, v);
             x += incr;
         }
     }
@@ -162,46 +155,6 @@ MapEdge.N = new MapEdge(directions.N);
 MapEdge.E = new MapEdge(directions.E);
 MapEdge.S = new MapEdge(directions.S);
 MapEdge.W = new MapEdge(directions.W);
-
-class RandomBlobGenerator {
-    constructor(config) {
-        this.size = config.size;
-        this.edgeVariance = config.edgeVariance;
-        this.radiusVariance = config.radiusVariance; // % of diameter
-    }
-    nextBlob() {
-        var values = [];
-        // make a solid block of True, then && a random column and && a random row
-        for (var y = 0; y < this.size.height; y += 1) {
-            values.push(new BoolArray(this.size.width).fill(true));
-        }
-        var generators = [
-            new RandomLineGenerator({ min: 0, max: this.radiusVariance * this.size.width, variance: this.edgeVariance }),
-            new RandomLineGenerator({ min: (1 - this.radiusVariance) * this.size.width, max: this.size.width, variance: this.edgeVariance })
-        ];
-        for (var y = 0; y < this.size.height; y += 1) {
-            var min = Math.round(generators[0].nextValue());
-            var max = Math.round(generators[1].nextValue());
-            for (var x = 0; x < this.size.width; x += 1) {
-                var keep = x >= min && x <= max;
-                values[y].setValue(x, keep && values[y].getValue(x));
-            }
-        }
-        var generators = [
-            new RandomLineGenerator({ min: 0, max: this.radiusVariance * this.size.height, variance: this.edgeVariance }),
-            new RandomLineGenerator({ min: (1 - this.radiusVariance) * this.size.height, max: this.size.height, variance: this.edgeVariance })
-        ];
-        for (var x = 0; x < this.size.width; x += 1) {
-            var min = Math.round(generators[0].nextValue());
-            var max = Math.round(generators[1].nextValue());
-            for (var y = 0; y < this.size.height; y += 1) {
-                var keep = y >= min && y <= max;
-                values[y].setValue(x, keep && values[y].getValue(x));
-            }
-        }
-        return values;
-    }
-}
 
 class TileGenerator {
     generateInto(targetLayer, sourceLayer) { }
@@ -268,20 +221,11 @@ class OceanTileGenerator extends TileGenerator {
 
 class RiverTileGenerator extends TileGenerator {
     static defaultConfigForCrossMap(start, end, size) {
-        var settings = Terrain.settings().riverGenerator;
+        const settings = Terrain.settings().riverGenerator;
         return {
-            snakiness: settings.snakiness,
-            start: { center: start, width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize },
-            end:   { center: end,   width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize }
-        };
-    }
-
-    static defaultConfigForStream(source, mouth, size) {
-        var settings = Terrain.settings().riverGenerator;
-        return {
-            snakiness: settings.snakiness,
-            start: { center: source, width: 0, bendSize: 0 },
-            end:   { center: mouth,  width: settings.mouthWidth[size.index] * 0.5, bendSize: settings.largeBendSize }
+            bend: settings.bend,
+            start: { center: start, width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize[size.index] },
+            end:   { center: end,   width: settings.mouthWidth[size.index], bendSize: settings.largeBendSize[size.index] }
         };
     }
 
@@ -289,45 +233,89 @@ class RiverTileGenerator extends TileGenerator {
         return new RiverTileGenerator(RiverTileGenerator.defaultConfigForCrossMap(start, end, size));
     }
 
-    static defaultStream(source, mouth, size) {
-        return new RiverTileGenerator(RiverTileGenerator.defaultConfigForStream(source, mouth, size));
-    }
+    // static defaultConfigForStream(source, mouth, size) {
+    //     var settings = Terrain.settings().riverGenerator;
+    //     return {
+    //         lineComponents: settings.lineComponents,
+    //         smoothing: settings.smoothing,
+    //         start: { center: source, width: 0, bendSize: 0 },
+    //         end:   { center: mouth,  width: settings.mouthWidth[size.index] * 0.5, bendSize: settings.largeBendSize }
+    //     };
+    // }
+
+    // static defaultStream(source, mouth, size) {
+    //     return new RiverTileGenerator(RiverTileGenerator.defaultConfigForStream(source, mouth, size));
+    // }
 
     constructor(config) {
         super();
-        // zero width start for a stream sourced mid-map. otherwise, assumed a full river crossing the map
-        // snakiness = RandomLineGenerator variance for how quickly to curve
-        // bendSize = decimal multiple of width; can be greater than 1
-        this.snakiness = config.snakiness;
+        this.bendGenerator = new RandomLineGenerator({
+            min: -1,
+            max: 1,
+            components: RandomLineGenerator.componentsFromConfig(config.bend.lineComponents),
+            smoothing: config.bend.smoothing
+        });
+        this.bedGenerator = new RandomBlobGenerator({
+            variance: 0.5, // TODO
+            components: RandomLineGenerator.componentsFromConfig(config.bend.lineComponents), // TODO
+            smoothing: 0.5 // TODO
+        });
         this.start = { center: config.start.center, width: config.start.width, bendSize: config.start.bendSize };
         this.end = { center: config.end.center, width: config.end.width, bendSize: config.end.bendSize };
     }
 
-    get debugDescription() {
-        return `<${this.constructor.name} ${this.start.center.debugDescription}->${this.end.center.debugDescription}>`;
-    }
-
     generateInto(targetLayer, sourceLayer) {
-        var water = [];
-        var widthRange = { min: this.start.width, max: this.end.width };
-        var bendRange = { min: this.start.bendSize, max: this.end.bendSize };
-        var offsetGenerator = new RandomLineGenerator({ min: -1, max: 1, variance: this.snakiness });
+        let water = [];
 
-        scanTiles(this.start.center, this.end.center, (origin, fraction, axis) => {
-            var sliceWidth = Math.scaleValueLinear(fraction, _zeroToOne, widthRange);
-            var s = Math.scaleValueLinear(fraction, _zeroToOne, bendRange);
-            var bendSize = sliceWidth * s * s;
-            var offset = (bendSize * offsetGenerator.nextValue()) - (0.5 * sliceWidth);
-            var point = origin.adding(axis.scaled(offset)).integral();
-            sliceWidth = Math.round(sliceWidth);
-            for (var i = 0; i < sliceWidth; i += 1) {
-                let tile = sourceLayer.getTileAtPoint(point);
-                if (tile && tile.type.isLand) {
-                    water.push(point);
-                }
-                point = point.adding(axis);
+        const widthRange = { min: this.start.width, max: this.end.width };
+        const bendRange = { min: this.start.bendSize, max: this.end.bendSize };
+
+        debugLog({ widthRange: widthRange, bendRange: bendRange });
+
+        scanTiles(this.start.center, this.end.center, (origin, fraction, axis, scanVector) => {
+            let width = Math.ceil(Math.scaleValueLinear(fraction, _zeroToOne, widthRange) * 0.75);
+            let amplitude = Math.scaleValueLinear(fraction, _zeroToOne, bendRange);
+            let offset = amplitude * this.bendGenerator.nextValue();
+            // determine origin by applying offset to origin perpendicular to axis
+
+            let v = new Vector(scanVector.y, scanVector.x).unit().scaled(offset);
+            let bedOrigin = origin.adding(v);
+
+            // water.push(bedOrigin); return;
+
+            // determine the tile rect centered at that origin
+            let rect = Rect.withCenter(bedOrigin.x, bedOrigin.y, width, width).integral();
+            // make a random blob with the correct size
+            const threshold = 0.5; // TODO
+
+            let bed = (width <= 3) ? this.bedGenerator.smoothEllipse(rect, 1) : this.bedGenerator.makeRandomTiles(rect, threshold);
+
+            // debugLog({ origin: origin, bedOrigin: bedOrigin, offset: offset, fraction: fraction, sv: scanVector, v: v, width: width, amplitude: amplitude, widthRange: widthRange, bendRange: bendRange, rect: rect, bedLength: bed.length });
+            // debugLog(`o=${bedOrigin.debugDescription} w=${width}`);
+            // debugLog(`a=${amplitude} offset=${offset} v=${v.debugDescription} o=${origin.debugDescription} bo=${bedOrigin.debugDescription}`);
+            for (let i = 0; i < bed.length; i += 1) {
+                water.push(bed[i]);
             }
+
+            // TODO
+            // would be nice to delay integral()ing the points until as late as possible.
+            // eg allow non-integral blob sizes for randomblobgenerator, and it looks 
+            // at a non-integral origin point, and its (already) non-integral random radius
+            // values, and then produces the actual integral tile coordinates. With this, 
+            // should be possible to use a randomblobgenerator with zero variance to produce 
+            // the extra-smooth small-radius circles that guarantee at least one filled tile.
+            // and so it interpolates meaningfully for things like two-tile width, instead of 
+            // just always doing a 2x2 square of tiles.
+
         });
+
+        water = water.filter(point => {
+            let tile = sourceLayer.getTileAtPoint(point);
+            return tile ? tile.type.isLand : true;
+        });
+
+        debugLog(water);
+
         this.fill(targetLayer, TerrainType.freshwater, water);
     }
 }
@@ -437,22 +425,21 @@ class BlobTileGenerator extends TileGenerator {
     generateInto(targetLayer, sourceLayer) {
         var center = this.center ? this.center : new Point(Rng.shared.nextIntOpenRange(0, targetLayer.size.width), Rng.shared.nextIntOpenRange(0, targetLayer.size.height));
         var origin = center.adding(this.size.width * 0.5, this.size.height * 0.5).integral();
-        var blob = new RandomBlobGenerator({ size: this.size, edgeVariance: this.edgeVariance, radiusVariance: this.radiusVariance }).nextBlob();
-        var values = [];
-        // debugLog(blob.map(item => item.debugDescription).join("\n"));
-        for (var y = 0; y < blob.length; y += 1) {
-            var row = blob[y];
-            for (var x = 0; x < row.length; x += 1) {
-                var point = origin.adding(x, y);
+
+        let settings = Terrain.settings().blobGenerator;
+        let blob = new RandomBlobGenerator({
+            variance: this.radiusVariance,
+            components: RandomLineGenerator.componentsFromConfig(settings.perimeterComponents),
+            smoothing: settings.smoothing,
+            filter: (point) => {
                 let tile = sourceLayer.getTileAtPoint(point);
-                if (!!tile
-                    && row.getValue(x)
-                    && this.shouldFill(tile)) {
-                    values.push(point);
-                }
+                return tile ? this.shouldFill(tile) : true;
             }
-        }
-        this.fill(targetLayer, this.value, values);
+        });
+        let rect = Rect.withCenter(center, this.size);
+        let tiles = blob.makeRandomTiles(rect, settings.threshold);
+        // debugLog([tiles, rect, blob, settings]);
+        this.fill(targetLayer, this.value, tiles);
     }
 }
 

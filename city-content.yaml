@@ -548,16 +548,14 @@ terrain:
       - type: RandomComponent
         amplitude: 1
   riverGenerator:
-    lineComponents:
-      - type: PeriodicRandomComponent
-        amplitude: 2
-        period: { min: 4, max: 9 }
-      - type: PeriodicRandomComponent
-        amplitude: 1
-        period: { min: 2, max: 6 }
-    smoothing: 3
-    mouthWidth: [5, 10, 15]
-    largeBendSize: 2
+    bend:
+      lineComponents:
+        - type: PeriodicRandomComponent
+          amplitude: 1
+          period: { min: 8, max: 24 }
+      smoothing: 3
+    mouthWidth: [8, 12, 15]
+    largeBendSize: [4, 5, 8]
   blobGenerator:
     perimeterComponents:
       - type: PeriodicRandomComponent

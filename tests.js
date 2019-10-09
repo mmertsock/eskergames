@@ -373,6 +373,16 @@ let randomBlobTest = function() {
         visualizationHeader("smooth ellipse t=1", sut, this.visualizationElem);
         this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.smoothEllipse(rect, 1) }).elem);
 
+        // visualizationHeader("smooth ellipse t=0 r=3x3", sut, this.visualizationElem);
+        // rect = new Rect(0, 0, 3, 3);
+        // this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.smoothEllipse(rect, 0.5) }).elem);
+        // visualizationHeader("smooth ellipse t=0 r=2x2", sut, this.visualizationElem);
+        // rect = new Rect(0, 0, 2, 2);
+        // this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.smoothEllipse(rect, 0.5) }).elem);
+        // visualizationHeader("smooth ellipse t=0 r=1x1", sut, this.visualizationElem);
+        // rect = new Rect(0, 0, 1, 1);
+        // this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.smoothEllipse(rect, 0.5) }).elem);
+
         sut = new RandomBlobGenerator({
             variance: 0.5,
             components: [new PeriodicRandomComponent({ amplitude: 3, period: { min: 4, max: 4 } }),
