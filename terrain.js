@@ -32,7 +32,10 @@ const BoolArray = Gaming.BoolArray;
 const CircularArray = Gaming.CircularArray;
 const Kvo = Gaming.Kvo;
 const PerfTimer = Gaming.PerfTimer;
+const PeriodicRandomComponent = Gaming.PeriodicRandomComponent;
 const Point = Gaming.Point;
+const RandomBlobGenerator = Gaming.RandomBlobGenerator;
+const RandomComponent = Gaming.RandomComponent;
 const RandomLineGenerator = Gaming.RandomLineGenerator;
 const Rect = Gaming.Rect;
 const Rng = Gaming.Rng;
@@ -215,19 +218,19 @@ class TileGenerator {
 class OceanTileGenerator extends TileGenerator {
 
     static defaultForEdge(edge, size) {
-        var settings = Terrain.settings().oceanGenerator;
+        const settings = Terrain.settings().oceanGenerator;
         if (edge.edge == directions.N || edge.edge == directions.S) {
             var shoreDistance = size.height * settings.shoreDistanceFraction[size.index];
         } else {
             var shoreDistance = size.width * settings.shoreDistanceFraction[size.index];
         }
-        var shoreDistanceVariance = settings.shoreDistanceVariance[size.index];
-        var edgeVariance = settings.edgeVariance[size.index];
+        let shoreDistanceVariance = settings.shoreDistanceVariance[size.index];
         return new OceanTileGenerator({
             edge: edge,
             averageShoreDistanceFromEdge: shoreDistance,
             shoreDistanceVariance: shoreDistance * shoreDistanceVariance,
-            edgeVariance: edgeVariance
+            lineComponents: RandomLineGenerator.componentsFromConfig(settings.lineComponents),
+            smoothing: settings.smoothing
         });
     }
 
@@ -239,7 +242,8 @@ class OceanTileGenerator extends TileGenerator {
         this.lineGenerator = new RandomLineGenerator({
             min: this.averageShoreDistanceFromEdge - config.shoreDistanceVariance,
             max: this.averageShoreDistanceFromEdge + config.shoreDistanceVariance,
-            variance: config.edgeVariance
+            components: config.lineComponents,
+            smoothing: config.smoothing
         });
     }
 

@@ -267,6 +267,8 @@ window.Mixins = {
 
 window.Gaming = (function() {
 
+const _zeroToOne = { min: 0, max: 1 };
+
 Mixins.Gaming = {};
 
 Mixins.Gaming.DelegateSet = function(cls) {
@@ -316,7 +318,321 @@ class Rng {
 }
 Rng.shared = new Rng();
 
+class NonSmoothedSequence {
+    constructor() { this.lastValue = NaN; }
+    get isFull() { return true; }
+    get size() { return 1; }
+    push(value) { this.lastValue = value; return this.lastValue; }
+}
+
+class SmoothedSequence {
+    static withWindowSize(size) {
+        return (typeof(size) == 'undefined' || size < 2) ? new NonSmoothedSequence() : new SmoothedSequence(size);
+    }
+
+    constructor(size) {
+        this.values = new CircularArray(size);
+    }
+
+    get windowSize() { return this.values.maxLength; }
+    get isFull() { return this.values.size == this.values.maxLength; }
+
+    get lastValue() {
+        if (this.values.isEmpty) return NaN;
+        return this.values.values.reduce((i, j) => i + j) / this.values.size;
+    }
+
+    push(value) {
+        this.values.push(value);
+        return this.lastValue;
+    }
+}
+
+class PeriodicRandomComponent {
+    constructor(config) {
+        this.amplitude = Math.abs(config.amplitude);
+        this.period = {
+            min: Math.max(1, Math.abs(config.period.min)),
+            max: Math.max(1, Math.abs(config.period.max))
+        };
+        this.dx = {
+            min: (2 * Math.PI) / this.period.max,
+            max: (2 * Math.PI) / this.period.min,
+        };
+        this.dx.smoothing = SmoothedSequence.withWindowSize(config.smoothing);
+        this.dx.smoothing.push(0.5 * (this.dx.min + this.dx.max));
+        this.x = typeof(config.x) == 'undefined' ? 0 : config.x;
+        this.y = 0;
+    }
+
+    nextValue() {
+        this.y = Math.sin(this.x) * this.amplitude;
+        this.updateDx();
+        this.x += this.dx.smoothing.lastValue;
+        return this.y;
+    }
+
+    updateDx() {
+        this.dx.smoothing.push(Rng.shared.nextFloatOpenRange(this.dx.min, this.dx.max));
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} a${this.amplitude} p${this.period.min}-${this.period.max} $${this.dx.smoothing.windowSize > 1 ? this.dx.smoothing.windowSize : "none"}>`;
+    }
+}
+
+class RandomComponent {
+    constructor(config) {
+        this.amplitude = Math.abs(config.amplitude);
+        this.smoothing = SmoothedSequence.withWindowSize(config.smoothing);
+    }
+
+    nextValue() {
+        this.smoothing.push(Rng.shared.nextFloatOpenRange(-this.amplitude, this.amplitude));
+        return this.smoothing.lastValue;
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} a${this.amplitude} $${this.smoothing.windowSize > 1 ? this.smoothing.windowSize : "none"}>`;
+    }
+}
+
 class RandomLineGenerator {
+    static componentsFromConfig(items) {
+        return items.map(config => { let type = Gaming[config.type]; return new type(config); });
+    }
+
+    constructor(config) {
+        this.min = config.min;
+        this.max = config.max;
+        this.components = Array.from(config.components);
+        const amplitude = this.components.map(i => i.amplitude).reduce((i, j) => i + j);
+        this.domain = { min: -amplitude, max: amplitude };
+        this.range = { min: this.min, max: this.max };
+        this.smoothing = SmoothedSequence.withWindowSize(config.smoothing);
+    }
+
+    prefillSmoothing() {
+        let iterations = 0;
+        while (!this.smoothing.isFull) {
+            this.nextValue();
+            iterations += 1;
+        }
+        return iterations;
+    }
+
+    get lastValue() { return this.smoothing.lastValue; }
+
+    nextValue() {
+        let value = this.components.map(i => i.nextValue()).reduce((i, j) => i + j);
+        this.smoothing.push(Math.scaleValueLinear(value, this.domain, this.range));
+        return this.smoothing.lastValue;
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} [${this.min},${this.max}] $${this.smoothing.windowSize > 1 ? this.smoothing.windowSize : "none"} comps=${this.components.length} last=${this.lastValue}>`;
+    }
+}
+
+
+// constructor doesn't tie this to a specific blob size
+// the underlying RandomLineGenerator produces values within an idealized 0...1 domain
+// (max is always 1; min is based on the allowed fluxuation specified in the config).
+// in makeBlob, you use the RandomLineGenerator, mapped to a polar coordinate space, to 
+// produce an ideal -1...1 square blob, then stretch that blob to the specified size
+// and quantize into an array of BoolArrays.
+class RandomBlobGenerator {
+    constructor(config) {
+        this.perimeterGenerator = new RandomLineGenerator({
+            min: 1 - Math.clamp(config.variance, _zeroToOne),
+            max: 1,
+            components: config.components,
+            smoothing: 0
+        });
+        this.smoothing = SmoothedSequence.withWindowSize(config.smoothing);
+        // debugLog(this);
+    }
+
+    // returns a list of Points representing true values.
+    // rect origin and size can be non-integral, but the 
+    // Points returned are always integral.
+    // threshold == 0...1. Minimum coverage needed to mark a tile as true
+    // (just calculate this linearly based on difference between polar R value and random r threshold value)
+    makeRandomTiles(rect, threshold) {
+        let origin = rect.origin;
+        let candidateRect = rect.inset(-0.5, -0.5).integral();
+        const maxDiameter = Math.max(candidateRect.size.width, candidateRect.size.height);
+        const iterations = Math.ceil(maxDiameter * Math.PI);
+        let rawValues = new Array(iterations);
+        for (let i = 0; i < iterations; i += 1) {
+            rawValues[i] = this.perimeterGenerator.nextValue();
+        }
+        let radiusValues = rawValues.map(i => this.smoothing.push(i));
+
+// blob generation. the smoothing helps ensure the start and endpoints match:
+// generate N values normally, then re-smooth the first windowSize-1 values with the last windowSize-1 values.
+// so with raw values 2 8 4 3 6 5 9 7
+// initial smoothed are 2 5 4.67 5 4.33 4.67 6.67 7.
+// the 2 and 5 are not fully smoothed and don't line up with the 7.
+// so next, smoothing.push(2) and set item 0 == the new smoothed value (6),
+// and also smoothing.push(5) and set item 1 == that value (5.67):
+// 6 5.67 4.67 5 4.33 4.67 6.67 7
+        const endIterations = this.perimeterGenerator.smoothing.windowSize - 1;
+        if (endIterations < rawValues.length - 2) {
+            for (let i = 0; i < endIterations; i += 1) {
+                radiusValues[i] = this.smoothing.push(rawValues[i]);
+            }
+        }
+
+        const tileRange = {
+            x: { min: candidateRect.x, max: candidateRect.x + candidateRect.width },
+            y: { min: candidateRect.y, max: candidateRect.y + candidateRect.height }
+        };
+        const cartesianRange = { min: -1, max: 1 };
+        const maxTheta = 2 * Math.PI;
+        const indexRange = { min: 0, max: iterations };
+        radiusValues.push(radiusValues[0]);
+
+        // 0 threshold means (pr - 0.5) <= r
+        // 0.5 threshold means pr <= r
+        // 1 threshold means (pr + 0.5) <= r
+        const testOffset = threshold - 0.5;
+
+        // debugLog([radiusValues, candidateRect, candidateRect.allTileCoordinates.length, testOffset, threshold]);
+        // var logged = 0;
+
+        return candidateRect.allTileCoordinates.filter(point => {
+
+            // TODO need to offset the point.x/y a little bit here, to allow for non-integer 
+            // rect origin. i think we just have tileRange be 0...candidateRect.size rather than 
+            // minX...maxX. And also, add a 0.5 offset so you're looking at the center of the 
+            // tile rather than the top left corner.
+            // The goal here would be for a cartesianPoint value of (0,0) for a tile that's exactly 
+            // in the center of an odd-width, odd-height rect. And also tweak the tileRange to get 
+            // the the cartesianPoint -1/1 values to be at the true non-integer x/y coordinates of 
+            // the actual allowed blob size, to maximize the potential blob size. This may not 
+            // be the exact center points of the outer candidate tiles if the origin is non-integer.
+
+
+            const cartesianPoint = new Vector( // a point in the -1...1 x/y coordinate space
+                Math.scaleValueLinear(point.x, tileRange.x, cartesianRange),
+                Math.scaleValueLinear(point.y, tileRange.y, cartesianRange)
+            );
+            const polarPoint = {
+                theta: cartesianPoint.theta,
+                r: cartesianPoint.magnitude
+            };
+            const index = Math.clamp(polarPoint.theta * indexRange.max / maxTheta, indexRange);
+            const r = 0.5 * (radiusValues[Math.floor(index)] + radiusValues[Math.ceil(index)]);
+            const isInside = (polarPoint.r + testOffset) <= r;
+            // logged = logged + 1; if (logged < 16) { debugLog({point: point, cartesianPoint: cartesianPoint, polarPoint: polarPoint, index: index, r: r, isInside: isInside, tileRange: tileRange, cartesianRange: cartesianRange}); }
+            return isInside;
+        });
+    }
+
+    makeBlob(size) {
+        if (size.width < 1 || size.height < 1) return [];
+        const maxDiameter = Math.max(size.width, size.height);
+        const iterations = Math.ceil(maxDiameter * Math.PI);
+        let rawValues = new Array(iterations);
+        for (let i = 0; i < iterations; i += 1) {
+            rawValues[i] = this.perimeterGenerator.nextValue();
+        }
+        let radiusValues = rawValues.map(i => this.smoothing.push(i));
+
+// blob generation. the smoothing helps ensure the start and endpoints match:
+// generate N values normally, then re-smooth the first windowSize-1 values with the last windowSize-1 values.
+// so with raw values 2 8 4 3 6 5 9 7
+// initial smoothed are 2 5 4.67 5 4.33 4.67 6.67 7.
+// the 2 and 5 are not fully smoothed and don't line up with the 7.
+// so next, smoothing.push(2) and set item 0 == the new smoothed value (6),
+// and also smoothing.push(5) and set item 1 == that value (5.67):
+// 6 5.67 4.67 5 4.33 4.67 6.67 7
+        const endIterations = this.perimeterGenerator.smoothing.windowSize - 1;
+        if (endIterations < rawValues.length - 2) {
+            for (let i = 0; i < endIterations; i += 1) {
+                radiusValues[i] = this.smoothing.push(rawValues[i]);
+            }
+        }
+
+        // OK now you have a set of radius values. make an array of BoolArrays and quantize
+        const tileRect = Rect.withCenter(0, 0, size.width, size.height).integral();
+        const ext = tileRect.extremes;
+        const cartesianRange = { min: -1, max: 1 };
+        const tileRange = {
+            x: { min: 0, max: size.width },
+            y: { min: 0, max: size.height }
+            // x: { min: ext.min.x, max: ext.max.x },
+            // y: { min: ext.min.y, max: ext.max.y }
+        };
+        const maxTheta = 2 * Math.PI;
+        const indexRange = { min: 0, max: iterations };
+
+        // Add one extra value so we can round up an array index and get the "wrapped around" value if needed
+        radiusValues.push(radiusValues[0]);
+        let rows = new Array(size.height);
+        for (let i = 0; i < size.height; i += 1) {
+            let row = new BoolArray(size.width);
+            for (let j = 0; j < size.width; j += 1) {
+                const cartesianPoint = new Vector( // a point in the -1...1 x/y coordinate space
+                    // possibly an off-by-one error here
+                    Math.scaleValueLinear(j, tileRange.x, cartesianRange),
+                    Math.scaleValueLinear(i, tileRange.y, cartesianRange)
+                    // Math.scaleValueLinear(x, _zeroToOne, cartesianRange),
+                    // Math.scaleValueLinear(y, _zeroToOne, cartesianRange)
+                );
+                const polarPoint = {
+                    theta: cartesianPoint.theta,
+                    r: cartesianPoint.magnitude
+                };
+                const index = Math.clamp(polarPoint.theta * indexRange.max / maxTheta, indexRange);
+                const r = 0.5 * (radiusValues[Math.floor(index)] + radiusValues[Math.ceil(index)]);
+                row.setValue(j, polarPoint.r <= r);
+                // debugLog({ cartesianPoint: cartesianPoint, polarPoint: polarPoint, index: index, r: r, value: polarPoint.r <= r });
+            }
+            rows[i] = row;
+        }
+
+        debugLog({ me: this, size: size, maxDiameter: maxDiameter, iterations: iterations, rawValues: rawValues, radiusValues: radiusValues, cartesianRange: cartesianRange, tileRange: tileRange, maxTheta: maxTheta, indexRange: indexRange });
+        this.radiusValues = radiusValues;
+
+        return rows;
+    }
+}
+
+// Uses a RandomLineGenerator projected over polar coordinates 
+// to create an ellipse within a rect of the given size.
+class RandomBlobGeneratorNONONON {
+    constructor(config) {
+        // Max width/height of the blob. Each nextBlobe value is a 2D array of this size
+        this.size = { width: config.size.width, height: config.size.height };
+        // RandomLineGenerator config
+        this.smoothing = config.smoothing;
+        // RandomLineGenerator config
+        this.components = config.components;
+        // 0...1. % of diameter. Determines min/max of RandomLineGenerator.
+        // 0.1 radiusVariance means blob diameter will be between 90% and 100% of config.size.
+        this.radiusVariance = config.radiusVariance;
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} ${this.size.width}x${this.size.height} rv${this.radiusVariance} #t${this.components.length} ${this.smoothing}>`;
+    }
+
+    // Array of BoolArray
+    nextBlob() {
+        let values = [];
+        for (var y = 0; y < this.size.height; y += 1) {
+            values.push(new BoolArray(this.size.width));
+        }
+
+
+
+        return values;
+    }
+}
+
+class RandomLineGeneratorOLD {
     constructor(config) {
         this.style = config.style || "walk";
         this.min = config.min;
@@ -415,6 +731,14 @@ class CircularArray {
 
     get first() {
         return this.isEmpty ? null : this.items[this._oldestIndex];
+    }
+
+    get values() {
+        let values = [];
+        for (let i = 0; i < this.size; i += 1) {
+            values.push(this.getValue(i));
+        }
+        return values;
     }
 
     getValue(index) {
@@ -763,11 +1087,26 @@ class Rect {
     rounded() {
         return new Rect(Math.round(this.x), Math.round(this.y), Math.round(this.width), Math.round(this.height));
     }
+    integral() {
+        return new Rect(this.origin.integral(), { width: Math.round(this.width), height: Math.round(this.height) });
+    }
     clampedPoint(point) {
         let ext = this.extremes;
         return new Point(
             Math.clamp(point.x, {min: ext.min.x, max: ext.max.x - 1}),
             Math.clamp(point.y, {min: ext.min.y, max: ext.max.y - 1}));
+    }
+
+    // ordered by row then column
+    get allTileCoordinates() {
+        var extremes = this.extremes;
+        var coords = [];
+        for (var y = extremes.min.y; y < extremes.max.y; y += 1) {
+            for (var x = extremes.min.x; x < extremes.max.x; x += 1) {
+                coords.push(new Point(x, y));
+            }
+        }
+        return coords;
     }
 }
 
@@ -798,6 +1137,10 @@ class Vector extends XYValue {
     }
     get magnitude() {
         return Math.sqrt(this.x * this.x + this.y * this.y);
+    }
+    get theta() {
+        let value = Math.atan2(this.y, this.x);
+        return value < 0 ? (2*Math.PI + value) : value;
     }
     unit() {
         var m = this.magnitude;
@@ -1789,7 +2132,7 @@ var Prompt = function(config) {
 
 Prompt.prototype.show = function() {
     if (Prompt.current) {
-        console.log("Prompt is already visible; won't show this prompt.");
+        debugLog("Prompt is already visible; won't show this prompt.");
         return;
     }
 
@@ -1873,8 +2216,11 @@ return {
     KeyboardState: KeyboardState,
     Kvo: Kvo,
     PerfTimer: PerfTimer,
+    PeriodicRandomComponent: PeriodicRandomComponent,
     Point: Point,
     Prompt: Prompt,
+    RandomComponent: RandomComponent,
+    RandomBlobGenerator: RandomBlobGenerator,
     RandomLineGenerator: RandomLineGenerator,
     Rect: Rect,
     Rng: Rng,
@@ -1882,6 +2228,7 @@ return {
     SaveStateCollection: SaveStateCollection,
     SaveStateItem: SaveStateItem,
     SelectableList: SelectableList,
+    SmoothedSequence: SmoothedSequence,
     TilePlane: TilePlane,
     UndoStack: UndoStack,
     Vector: Vector

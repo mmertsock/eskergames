@@ -11,7 +11,10 @@ const Dispatch = Gaming.Dispatch;
 const DispatchTarget = Gaming.DispatchTarget;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const Kvo = Gaming.Kvo;
+const PeriodicRandomComponent = Gaming.PeriodicRandomComponent;
 const Point = Gaming.Point;
+const RandomComponent = Gaming.RandomComponent;
+const RandomBlobGenerator = Gaming.RandomBlobGenerator;
 const RandomLineGenerator = Gaming.RandomLineGenerator;
 const Rect = Gaming.Rect;
 const Rng = Gaming.Rng;
@@ -197,6 +200,26 @@ class UnitTest {
     }
 }
 
+class Sparkblob {
+    constructor(config) {
+        this.elem = document.createElement("table").addRemClass("sparkblob", true);
+        this.value = config.value; // Array of BoolArrays
+        for (let y = 0; y < this.value.length; y += 1) {
+            let tr = document.createElement("tr");
+            for (let x = 0; x < this.value[y].length; x += 1) {
+                let td = document.createElement("td");
+                let z = this.value[y].getValue(x);
+                td.addRemClass("highlighted", z);
+                let span = document.createElement("span");
+                span.innerText = z ? "1" : "0";
+                td.append(span);
+                tr.append(td);
+            }
+            this.elem.append(tr);
+        }
+    }
+}
+
 class Sparkline {
     constructor(config) {
         this.elem = document.createElement("ol").addRemClass("sparkline", true);
@@ -239,40 +262,87 @@ class Sparkline {
     }
 }
 
-var randomLineTest = function() {
-    new UnitTest("RandomLineGenerator", function() {
-        var styles = ["walk", "reach"];
-        styles.forEach(style => {
-            var variances = [0.05, 0.5, 1];
-            variances.forEach(variance => {
-                var config = { min: 5, max: 9, variance: variance, style: style };
-                var sut = new RandomLineGenerator(config);
-                console.log(sut.debugDescription);
-                var values = [];
-                for (var i = 0; i < 100; i += 1) {
-                    var value = sut.nextValue();
-                    if (i == 75 && style == "walk" && variance < 0.5) {
-                        sut.variance = 0.5;
-                    }
-                    if (value < config.min || value > config.max) { this.assertTrue(false); }
-                    values.push(value);
-                }
-                // logTestMsg(values.join(", "));
-                var sparkline = new Sparkline({ min: 0, max: 10, width: 200, height: 50 });
-                sparkline.append(values);
-                this.visualizationElem.append(sparkline.elem);
-            });
-        });
+function componentSparkline(config, visualizationElem) {
+    let sut = config.sut;
+    let values = [];
+    for (let i = 0; i < config.count; i += 1) {
+        values.push(sut.nextValue() + sut.amplitude);
+    }
 
-        sut = new RandomLineGenerator({ min: 10, max: 20, variance: 0, style: "walk" });
-        var values = [];
-        for (var i = 0; i < 100; i += 1) {
-            sut.variance = i / 200.0;
-            values.push(sut.nextValue());
+    let title = document.createElement("h4");
+    title.innerText = (config.title || "") + sut.debugDescription;
+    visualizationElem.append(title);
+
+    let max = typeof(config.max) == 'undefined' ? (2 * sut.amplitude) : config.max;
+    let spark = new Sparkline({ min: 0, max: max, width: 200, height: 50 });
+    spark.append(values);
+    visualizationElem.append(spark.elem);
+}
+
+function rlgSparkline(config, visualizationElem) {
+    let mapper = typeof(config.mapper) == 'undefined'
+        ? (i => i) : config.mapper;
+    let sut = new RandomLineGenerator(config);
+    console.log(sut);
+
+    let iterations = sut.prefillSmoothing();
+    console.log(`Prefilled with ${iterations} iterations, lastValue = ${sut.lastValue}`);
+
+    let values = [];
+    for (var i = 0; i < config.count; i += 1) {
+        values.push(mapper(sut.nextValue()));
+    }
+
+    let title = document.createElement("h4");
+    title.innerText = (config.title || "") + sut.debugDescription;
+    visualizationElem.append(title);
+
+    let spark = new Sparkline({ min: config.min, max: config.max, width: 200, height: 50 });
+    spark.append(values);
+    visualizationElem.append(spark.elem);
+}
+
+let randomLineTest = function() {
+    new UnitTest("RandomLineGenerator", function() {
+        let components = [
+            new PeriodicRandomComponent({ amplitude: 5, period: { min: 20, max: 50 } }),
+            new PeriodicRandomComponent({ amplitude: 2, period: { min: 5, max: 25 }, x: 0.5 * Math.PI }),
+            new PeriodicRandomComponent({ amplitude: 1, period: { min: 1, max: 10 }, x: Math.PI }),
+            new RandomComponent({ amplitude: 1 })
+        ];
+
+        rlgSparkline({ min: 0, max: 20, count: 100, smoothing: 3, components: components }, this.visualizationElem);
+        components.forEach(i => componentSparkline({ sut: i, count: 100, max: 8.5 }, this.visualizationElem));
+        componentSparkline({ sut: new RandomComponent({ amplitude: 1, smoothing: 3 }), count: 100, max: 8.5 }, this.visualizationElem);
+    }).buildAndRun();
+}
+
+let randomBlobTest = function() {
+    new UnitTest("RandomBlobGenerator", function() {
+        let sut = new RandomBlobGenerator({
+            variance: 1,
+            components: [new RandomComponent({ amplitude: 1 })],
+            smoothing: 3
+        });
+        let blob = sut.makeBlob({ width: 16, height: 10 });
+        // console.log(blob);
+        if (this.assertEqual(blob.length, 10)) {
+            this.assertEqual(blob[0].length, 16);
         }
-        var sparkline = new Sparkline({ min: 0, max: 20, width: 200, height: 50 });
-        sparkline.append(values);
-        this.visualizationElem.append(sparkline.elem);
+        this.visualizationElem.append(new Sparkblob({ value: blob }).elem);
+        let spark = new Sparkline({ min: 0, max: 1, width: 200, height: 50 });
+        spark.append(sut.radiusValues);
+        this.visualizationElem.append(spark.elem);
+
+        this.visualizationElem.append(new Sparkblob({ value: sut.makeBlob({ width: 16, height: 10 }) }).elem);
+
+        sut = new RandomBlobGenerator({
+            variance: 0.5,
+            components: [new PeriodicRandomComponent({ amplitude: 3, period: { min: 4, max: 4 } }),
+                new RandomComponent({ amplitude: 1 })],
+            smoothing: 3
+        });
+        this.visualizationElem.append(new Sparkblob({ value: sut.makeBlob({ width: 16, height: 10 }) }).elem);
     }).buildAndRun();
 }
 
@@ -394,6 +464,15 @@ var manhattanDistanceFromTest = function() {
     }).buildAndRun();
 }
 
+let rectTest = function() {
+    new UnitTest("Rect", function() {
+        let rectInt = new Rect(2, 3, 20, 30);
+        let rectFloat = new Rect(2.1, 2.8, 19.9, 30.1);
+        let rectFloatInt = rectFloat.integral();
+        this.assertTrue(rectFloatInt.isEqual(rectInt));
+    }).buildAndRun();
+}
+
 var boolArrayTest = function() {
     new UnitTest("BoolArray", function() {
         var sut = new BoolArray(0);
@@ -446,6 +525,7 @@ var circularArrayTest = function() {
         this.assertEqual(sut.size, 0);
         this.assertEqual(sut.first, null);
         this.assertEqual(sut.last, null);
+        this.assertElementsEqual(sut.values, []);
 
         sut.push("A");
         this.assertEqual(sut.maxLength, 5);
@@ -453,12 +533,14 @@ var circularArrayTest = function() {
         this.assertEqual(sut.size, 1);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "A");
+        this.assertElementsEqual(sut.values, ["A"]);
 
         sut.push("B");
         this.assertFalse(sut.isEmpty);
         this.assertEqual(sut.size, 2);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "B");
+        this.assertElementsEqual(sut.values, ["A", "B"]);
 
         sut.push("C");
         sut.push("D");
@@ -466,16 +548,19 @@ var circularArrayTest = function() {
         this.assertEqual(sut.size, 4);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "D");
+        this.assertElementsEqual(sut.values, ["A", "B", "C", "D"]);
 
         sut.push("E");
         this.assertEqual(sut.size, 5);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "E");
+        this.assertElementsEqual(sut.values, ["A", "B", "C", "D", "E"]);
 
         sut.push("F");
         this.assertEqual(sut.size, 5);
         this.assertEqual(sut.first, "B");
         this.assertEqual(sut.last, "F");
+        this.assertElementsEqual(sut.values, ["B", "C", "D", "E", "F"]);
 
         sut.push("G"); sut.push("H"); sut.push("I"); sut.push("J"); sut.push("K"); sut.push("L");
         this.assertEqual(sut.size, 5);
@@ -494,6 +579,7 @@ var circularArrayTest = function() {
         this.assertEqual(sut.size, 1);
         this.assertEqual(sut.first, "A");
         this.assertEqual(sut.last, "A");
+        this.assertElementsEqual(sut.values, ["A"]);
     }).buildAndRun();
 }
 
@@ -1674,11 +1760,11 @@ function cityRectExtensionsTest() {
             this.assertFalse(rect1.containsTile(p), p.debugDescription);
             this.assertFalse(rect1.containsTile(p.x, p.y), p.debugDescription + " decomposed");
         });
-        var coords = rect1.allTileCoordinates();
+        var coords = rect1.allTileCoordinates;
         this.assertEqual(coords.length, 28);
 
         var rect2 = new Rect(24, 31, 3, 2);
-        coords = rect2.allTileCoordinates();
+        coords = rect2.allTileCoordinates;
         this.assertElementsEqual(coords.map((p) => p.y), [31, 31, 31, 32, 32, 32]);
         this.assertElementsEqual(coords.map((p) => p.x), [24, 25, 26, 24, 25, 26]);
 
@@ -1686,13 +1772,13 @@ function cityRectExtensionsTest() {
         this.assertTrue(rect1x1.containsTile(5, 2));
         this.assertFalse(rect1x1.containsTile(4, 2));
         this.assertFalse(rect1x1.containsTile(5, 3));
-        coords = rect1x1.allTileCoordinates();
+        coords = rect1x1.allTileCoordinates;
         this.assertEqual(coords.length, 1);
         this.assertEqual(coords[0].x, 5);
         this.assertEqual(coords[0].y, 2);
 
         var rectEmpty = new Rect(3, 2, 0, 0);
-        coords = rectEmpty.allTileCoordinates();
+        coords = rectEmpty.allTileCoordinates;
         this.assertFalse(rectEmpty.containsTile(3, 2));
         this.assertEqual(coords.length, 0);
     }).buildAndRun();
@@ -1823,8 +1909,10 @@ TestSession.current = new TestSession([
     boolArrayTest,
     changeTokenBindingTest,
     circularArrayTest,
-    randomLineTest,
     randomTest,
+    randomBlobTest,
+    randomLineTest,
+    rectTest,
     stringTemplateTest,
     selectableListTest,
     saveStateTest,
@@ -1838,7 +1926,7 @@ TestSession.current = new TestSession([
     cityRectExtensionsTest,
     simDateTest
 ]);
-// TestSession.current = new TestSession([canvasStackTest]);
+// TestSession.current = new TestSession([randomBlobTest]);
 
 return TestSession.current;
 

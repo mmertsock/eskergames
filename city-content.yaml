@@ -243,8 +243,6 @@ terrainEditorTools:
       sourceStyle: "hsla(208, 100%, 50%, 0.5)"
       lineStyle: "hsla(218, 100%, 50%, 0.5)"
       mouthStyle: "hsla(229, 100%, 50%, 0.5)"
-      snakiness:
-        defaultValue: 0.1
       source:
         width:
           min: 0
@@ -477,8 +475,7 @@ strings:
   riverDialogSourceHeadingLabel: Source
   riverMouthBendSizeLabel: Bend Size
   riverMouthWidthLabel: Width
-  riverSnakinessLabel: Snakiness
-  riverSnakinessPlacholder: ""
+  riverSmoothingLabel: Smoothing
   riverSourceBendSizeLabel: Bend Size
   riverSourceWidthLabel: Width
   saveAndQuitButton: Save and Quit
@@ -523,11 +520,37 @@ terrain:
   oceanGenerator:
     shoreDistanceFraction: [0.13, 0.13, 0.13]
     shoreDistanceVariance: [0.5, 0.3, 0.2]
-    edgeVariance: [0.4, 0.32, 0.25]
+    smoothing: 3
+    lineComponents:
+      - type: PeriodicRandomComponent
+        amplitude: 8
+        period: { min: 8, max: 15 }
+      - type: PeriodicRandomComponent
+        amplitude: 4
+        period: { min: 4, max: 9 }
+      - type: PeriodicRandomComponent
+        amplitude: 2
+        period: { min: 3, max: 7 }
+      - type: RandomComponent
+        amplitude: 1
   riverGenerator:
-    snakiness: 0.1
+    lineComponents:
+      - type: PeriodicRandomComponent
+        amplitude: 2
+        period: { min: 4, max: 9 }
+      - type: PeriodicRandomComponent
+        amplitude: 1
+        period: { min: 2, max: 6 }
+    smoothing: 3
     mouthWidth: [5, 10, 15]
     largeBendSize: 2
+  blobGenerator:
+    perimeterComponents:
+      - type: PeriodicRandomComponent
+        amplitude: 2
+        period: { min: 4, max: 9 }
+    smoothing: 3
+    threshold: 0.5
   forestFiller:
     coverageRatio: [0.3, 0.28, 0.25]
     maxCount: [50, 100, 200]
