@@ -476,6 +476,16 @@ class WoodsTileGenerator extends BlobTileGenerator {
     }
 }
 
+class LandTileGenerator extends BlobTileGenerator {
+    constructor(config) {
+        super(Object.assign({value: TerrainType.dirt}, config));
+    }
+
+    shouldFill(tile) {
+        return true;
+    }
+}
+
 class TerrainGenerator {
     constructor(config) {
         this.map = new CityMap({
@@ -1861,7 +1871,8 @@ let initialize = function() {
         CircularBrush: CircularBrush,
         FillBrush: FillBrush,
         LakeTileGenerator: LakeTileGenerator,
-        WoodsTileGenerator: WoodsTileGenerator
+        WoodsTileGenerator: WoodsTileGenerator,
+        LandTileGenerator: LandTileGenerator
     });
     CitySimTerrain.view = new RootView({ runLoop: CitySimTerrain.uiRunLoop });
     CitySimTerrain.uiRunLoop.resume();

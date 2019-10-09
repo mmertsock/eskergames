@@ -218,6 +218,21 @@ class Sparkblob {
             this.elem.append(tr);
         }
     }
+
+    static withTilesInRect(config) {
+        let rows = [];
+        for (let y = 0; y < config.rect.height; y += 1) {
+            let row = new BoolArray(config.rect.width);
+            for (let x = 0; x < config.rect.width; x += 1) {
+                let point = new Point(x + config.rect.origin.x, y + config.rect.origin.y);
+                if (config.tiles.findIndex(tile => tile.isEqual(point)) >= 0) {
+                    row.setValue(x, true);
+                }
+            }
+            rows.push(row);
+        }
+        return new Sparkblob({ value: rows });
+    }
 }
 
 class Sparkline {
@@ -262,6 +277,12 @@ class Sparkline {
     }
 }
 
+function visualizationHeader(text, sut, visualizationElem) {
+    let title = document.createElement("h4");
+    title.innerText = (text ? (text + " ") : "") + sut.debugDescription;
+    visualizationElem.append(title);
+}
+
 function componentSparkline(config, visualizationElem) {
     let sut = config.sut;
     let values = [];
@@ -269,9 +290,7 @@ function componentSparkline(config, visualizationElem) {
         values.push(sut.nextValue() + sut.amplitude);
     }
 
-    let title = document.createElement("h4");
-    title.innerText = (config.title || "") + sut.debugDescription;
-    visualizationElem.append(title);
+    visualizationHeader(config.title, sut, visualizationElem);
 
     let max = typeof(config.max) == 'undefined' ? (2 * sut.amplitude) : config.max;
     let spark = new Sparkline({ min: 0, max: max, width: 200, height: 50 });
@@ -293,9 +312,7 @@ function rlgSparkline(config, visualizationElem) {
         values.push(mapper(sut.nextValue()));
     }
 
-    let title = document.createElement("h4");
-    title.innerText = (config.title || "") + sut.debugDescription;
-    visualizationElem.append(title);
+    visualizationHeader(config.title, sut, visualizationElem);
 
     let spark = new Sparkline({ min: config.min, max: config.max, width: 200, height: 50 });
     spark.append(values);
@@ -324,17 +341,37 @@ let randomBlobTest = function() {
             components: [new RandomComponent({ amplitude: 1 })],
             smoothing: 3
         });
+
+        visualizationHeader(null, sut, this.visualizationElem);
         let blob = sut.makeBlob({ width: 16, height: 10 });
         // console.log(blob);
         if (this.assertEqual(blob.length, 10)) {
             this.assertEqual(blob[0].length, 16);
         }
+
         this.visualizationElem.append(new Sparkblob({ value: blob }).elem);
         let spark = new Sparkline({ min: 0, max: 1, width: 200, height: 50 });
         spark.append(sut.radiusValues);
         this.visualizationElem.append(spark.elem);
 
+        visualizationHeader(null, sut, this.visualizationElem);
         this.visualizationElem.append(new Sparkblob({ value: sut.makeBlob({ width: 16, height: 10 }) }).elem);
+
+        visualizationHeader("makeRandomTiles t=0.5", sut, this.visualizationElem);
+        let rect = new Rect(0, 0, 16, 10);
+        this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.makeRandomTiles(rect, 0.5) }).elem);
+
+        visualizationHeader("makeRandomTiles t=0.5", sut, this.visualizationElem);
+        this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.makeRandomTiles(rect, 0.5) }).elem);
+
+        visualizationHeader("smooth ellipse t=0", sut, this.visualizationElem);
+        this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.smoothEllipse(rect, 0) }).elem);
+
+        visualizationHeader("smooth ellipse t=0.5", sut, this.visualizationElem);
+        this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.smoothEllipse(rect, 0.5) }).elem);
+
+        visualizationHeader("smooth ellipse t=1", sut, this.visualizationElem);
+        this.visualizationElem.append(Sparkblob.withTilesInRect({ rect: rect, tiles: sut.smoothEllipse(rect, 1) }).elem);
 
         sut = new RandomBlobGenerator({
             variance: 0.5,
@@ -342,6 +379,7 @@ let randomBlobTest = function() {
                 new RandomComponent({ amplitude: 1 })],
             smoothing: 3
         });
+        visualizationHeader(null, sut, this.visualizationElem);
         this.visualizationElem.append(new Sparkblob({ value: sut.makeBlob({ width: 16, height: 10 }) }).elem);
     }).buildAndRun();
 }

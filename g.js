@@ -450,7 +450,17 @@ class RandomBlobGenerator {
             smoothing: 0
         });
         this.smoothing = SmoothedSequence.withWindowSize(config.smoothing);
+        // filter is optional. (Point) => Bool; true if tile should be included in blob.
+        if (typeof(config.filter) == 'function') {
+            this.filter = config.filter;
+        } else {
+            this.filter = () => true;
+        }
         // debugLog(this);
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} perim=${this.perimeterGenerator.debugDescription} $${this.smoothing.windowSize > 1 ? this.smoothing.windowSize : "none"}>`;
     }
 
     // returns a list of Points representing true values.
@@ -502,6 +512,9 @@ class RandomBlobGenerator {
         // var logged = 0;
 
         return candidateRect.allTileCoordinates.filter(point => {
+            if (!this.filter(point)) {
+                return false;
+            }
 
             // TODO need to offset the point.x/y a little bit here, to allow for non-integer 
             // rect origin. i think we just have tileRange be 0...candidateRect.size rather than 
@@ -527,6 +540,31 @@ class RandomBlobGenerator {
             const isInside = (polarPoint.r + testOffset) <= r;
             // logged = logged + 1; if (logged < 16) { debugLog({point: point, cartesianPoint: cartesianPoint, polarPoint: polarPoint, index: index, r: r, isInside: isInside, tileRange: tileRange, cartesianRange: cartesianRange}); }
             return isInside;
+        });
+    }
+
+    // Returns array of tiles within rect that fill an ellipse with axes == rect sides.
+    // threshold == 0...1. Minimum coverage needed to mark a tile at edge of ellipse as true
+    smoothEllipse(rect, threshold) {
+        // offset the ellipse origin to be in the center of a tile
+        const origin = rect.center.adding(-0.5, -0.5);
+        const a2 = (rect.width * 0.5) * (rect.width * 0.5);
+        const b2 = (rect.height * 0.5) * (rect.height * 0.5);
+        if (a2 < 0.1 || b2 < 0.1) return [];
+
+        // Ellipse equation:
+        // given origin xo,yo; width 2a, height 2b:
+        // (x - xo)2/a2 + (y - yo)2/b2 <= 1
+        // If threshold == 0, equation is still <= 1.
+        // as threshold goes to 1, the <= becomes less than 1.
+        threshold = Math.clamp(threshold, { min: 0, max: 1 });
+        const radius = 0.5 * (rect.width + rect.height);
+        const limit = Math.pow(1 - (threshold / radius), 2);
+
+        return rect.allTileCoordinates.filter(point => {
+            const xo = (point.x - origin.x);
+            const yo = (point.y - origin.y);
+            return ((xo*xo) / a2) + ((yo*yo) / b2) <= limit;
         });
     }
 
