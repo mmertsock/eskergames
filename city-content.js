@@ -1,6 +1,6 @@
 "use-strict";
 
-window.CitySimContent = (function() {
+self.CitySimContent = (function() {
 
 var debugLog = Gaming.debugLog;
 var once = Gaming.once;

@@ -1,6 +1,6 @@
 "use-strict";
 
-window.CitySim = (function() {
+self.CitySim = (function() {
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
@@ -32,18 +32,6 @@ const _1x1 = { width: 1, height: 1 };
 
 var _runLoopPriorities = {
     gameEngine: -100
-};
-
-// ordered by row then column
-Rect.prototype.allTileCoordinates = function() {
-    var extremes = this.extremes;
-    var coords = [];
-    for (var y = extremes.min.y; y < extremes.max.y; y += 1) {
-        for (var x = extremes.min.x; x < extremes.max.x; x += 1) {
-            coords.push(new Point(x, y));
-        }
-    }
-    return coords;
 };
 
 Rect.tileRectWithCenter = function(center, size) {
@@ -779,6 +767,9 @@ class CityMap {
     isValidCoordinate(x, y) { return this.bounds.containsTile(x, y); }
     isTileRectWithinBounds(rect) { return this.bounds.contains(rect); }
 
+    nearestEdge(point) { return directions.N; }
+    hasOcean(edge) { return false; }
+
     modifyTerrain(tiles) {
         tiles.forEachFlat(tile => {
             if (!!tile.type) {
@@ -1026,7 +1017,10 @@ class GameStorage {
         return new URL(path, base).href;
     }
 }
-GameStorage.shared = new GameStorage();
+
+if (!self.isWorkerScope) {
+    GameStorage.shared = new GameStorage();
+}
 GameStorage.currentSchemaVersion = 1;
 GameStorage.minSchemaVersion = 1;
 
@@ -1119,7 +1113,7 @@ class Game {
 
     start() {
         this._configureCommmands();
-        KeyInputController.shared.initialize(this);
+        KeyInputController.shared.addShortcutsFromSettings(GameContent.shared.keyboard.game);
         this.gameSpeedActivated(this.engineSpeed);
         this.rootView.initialize(this);
         this._started = true;
@@ -3814,7 +3808,9 @@ class GameDialogManager {
         this.containerElem.addRemClass("hasModal", this.hasModal);
     }
 }
-GameDialogManager.shared = new GameDialogManager();
+if (!self.isWorkerScope) {
+    GameDialogManager.shared = new GameDialogManager();
+}
 
 // Subclass me. Subclasses should implement:
 // Required: get title() -> text
@@ -3997,7 +3993,7 @@ class HelpDialog extends GameDialog {
 
 // ########################### INIT #######################
 
-let citySimInitOptions = window.citySimInitOptions ? window.citySimInitOptions : { initGame: true };
+let citySimInitOptions = self.citySimInitOptions ? self.citySimInitOptions : { initGame: true, initializeAutomatically: true };
 if (citySimInitOptions.initGame) {
     var engineRunLoop = new Gaming.RunLoop({
         targetFrameRate: 1,
@@ -4064,6 +4060,7 @@ return {
     City: City,
     CityMap: CityMap,
     ConfirmDialog: ConfirmDialog,
+    FormValueView: FormValueView,
     Game: Game,
     GameDialog: GameDialog,
     GameStorage: GameStorage,
@@ -4107,4 +4104,6 @@ return {
 
 })(); // end CitySim namespace
 
-CitySim.initialize();
+if (CitySim.citySimInitOptions.initializeAutomatically) {
+    CitySim.initialize();
+}

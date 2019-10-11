@@ -1,6 +1,16 @@
 "use-strict";
 
-function debugLog(msg) { console.log(msg); }
+function setWorkerScope(name) {
+    self.workerScope = name;
+}
+
+function debugLog(msg) {
+    if (typeof(self.workerScope) == 'string' && typeof(msg) == 'string') {
+        console.log(msg, self.workerScope);
+    } else {
+        console.log(msg);
+    }
+}
 function debugWarn(msg, trace) {
     console.warn(msg);
     if (trace) { console.trace(); }
@@ -157,6 +167,10 @@ Array.prototype.randomItem = function() {
     return this[Math.floor(Math.random() * this.length)];
 };
 
+self.isWorkerScope = (typeof(DedicatedWorkerGlobalScope) == 'function');
+
+if (!self.isWorkerScope) { // DOM objects, etc., unavailable to Worker scope
+
 Element.prototype.addRemClass = function(className, shouldAdd) {
     if (shouldAdd)
         this.classList.add(className);
@@ -256,8 +270,9 @@ CanvasRenderingContext2D.prototype.roundRect = function(rect, xRadius, yRadius, 
     if (shouldFill) this.fill();
     if (shouldStroke) this.stroke();
 };
+} // end if !isWorkerScope
 
-window.Mixins = {
+Mixins = {
     mix: function(prototype, name, func) {
         prototype[name] = prototype[name] || func;
     }
@@ -265,7 +280,7 @@ window.Mixins = {
 
 // ----------------------------------------------------------------------
 
-window.Gaming = (function() {
+Gaming = (function() {
 
 const _zeroToOne = { min: 0, max: 1 };
 
@@ -295,6 +310,121 @@ Mixins.Gaming.DelegateSet = function(cls) {
         this._sortedDelegates = sorting.map(function (s) { return s.d });
     });
 };
+
+class WorkerMessage {
+    static registerType(type) {
+        WorkerMessage.types[type.name] = type.name;
+        type.messageName = type.name;
+    }
+
+    constructor(messageSource) {
+        this.messageName = messageSource.constructor.messageName;
+        this.payload = messageSource.messagePayload;
+    }
+}
+WorkerMessage.types = { };
+
+class WorkerController {
+    constructor(config) {
+        this.logMessages = config.logMessages;
+        this.messageHandlers = {};
+    }
+
+    setMessageHandler(messageName, block) {
+        this.messageHandlers[messageName] = block;
+    }
+
+    receivedMessage(e) {
+        if (this.logMessages) {
+            let messageName = e.data.messageName ? e.data.messageName : "(unknown)";
+            debugLog(`received message: ${messageName}`);
+        }
+        let handler = this.messageHandlers[e.data.messageName];
+        if (typeof(handler) == 'function') {
+            handler(e.data.payload, e);
+        } else {
+            this.receivedUnhandledMessage(e);
+        }
+    }
+
+    // override for custom message handling;
+    // call super to fallback and log unknown messages
+    receivedUnhandledMessage(e) {
+        debugWarn("Received unknown message");
+        debugWarn(e.data);
+    }
+
+    workerError(e) {
+        debugWarn(e, true);
+    }
+
+    postMessageTo(w, message) {
+        if (message.constructor != "WorkerMessage") {
+            message = new WorkerMessage(message);
+        }
+        if (this.logMessages) {
+            let messageName = message.messageName ? message.messageName : "(unknown)";
+            debugLog(`postMessage: ${messageName}`);
+        }
+        w.postMessage(message);
+    }
+}
+
+class UIWorkerController extends WorkerController {
+    constructor(config) {
+        super(config);
+        this.worker = config.worker;
+        this.worker.onmessage = (e) => this.receivedMessage(e);
+        this.worker.onerror = (e) => this.workerError(e);
+    }
+
+    postMessage(message) {
+        this.postMessageTo(this.worker, message);
+    }
+}
+
+class BackgroundWorkerController extends WorkerController {
+    constructor(config) {
+        super(config);
+        self.onmessage = (e) => this.receivedMessage(e);
+        self.onerror = (e) => this.workerError(e);
+    }
+
+    postMessage(message) {
+        this.postMessageTo(self, message);
+    }
+}
+
+class GameTask {
+    perform(target, queue) { }
+}
+
+class TaskQueue {
+    constructor() {
+        this.tasks = [];
+    }
+
+    // Runs all tasks in queue, synchronously. Stops when queue is empty.
+    // Tasks may modify the queue during processing.
+    run(target) {
+        while (!this.isEmpty) {
+            let task = this.tasks.shift();
+            task.perform(target, this);
+        }
+    }
+
+    get isEmpty() {
+        return this.tasks.length == 0;
+    }
+
+    prepend(task) {
+        this.tasks.unshift(task);
+    }
+
+    append(task) {
+        this.tasks.push(task);
+    }
+}
 
 class Rng {
     nextUnitFloat() {
@@ -941,7 +1071,11 @@ var directions = {
 };
 directions.opposite = function(id) { return (id + 4) % 8; };
 directions.all = [0, 1, 2, 3, 4, 5, 6, 7];
+directions.allCardinal = [0, 2, 4, 6];
 directions.isCardinal = function(id) { return id % 2 == 0 };
+directions.debugDescriptionOf = function(direction) {
+    return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][direction];
+}
 
 class XYValue {
     isEqual(p2, tol) {
@@ -2251,6 +2385,7 @@ return {
     DispatchTarget: DispatchTarget,
     Easing: Easing,
     FlexCanvasGrid: FlexCanvasGrid,
+    GameTask: GameTask,
     KeyboardState: KeyboardState,
     Kvo: Kvo,
     PerfTimer: PerfTimer,
@@ -2267,9 +2402,13 @@ return {
     SaveStateItem: SaveStateItem,
     SelectableList: SelectableList,
     SmoothedSequence: SmoothedSequence,
+    TaskQueue: TaskQueue,
     TilePlane: TilePlane,
     UndoStack: UndoStack,
-    Vector: Vector
+    Vector: Vector,
+    WorkerMessage: WorkerMessage,
+    UIWorkerController: UIWorkerController,
+    BackgroundWorkerController: BackgroundWorkerController
 };
 
 })(); // end Gaming namespace decl

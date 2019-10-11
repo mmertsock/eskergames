@@ -278,6 +278,8 @@ terrainEditorTools:
     build-ocean:
       constructor: BuildOceanTool
       paletteTitle: Ocean
+      dialogTitle: Configure Oceans
+      generator: OceanTileGenerator
 
 mapTools:
   defaultPalette: [pointer, query, bulldozer, rZone, cZone, iZone, tree]
@@ -478,6 +480,9 @@ strings:
   newGameDialogTitle: New Game
   newTerrainDialogCreateButton: Create
   newTerrainDialogTitle: New Terrain
+  oceanShoreDistanceLabel: "Ocean Size % (From Edge)"
+  oceanShoreVarianceLabel: Shore Variance
+  oceanSmoothingLabel: Smoothing
   optionsButtonLabel: Options
   quitButton: Quit
   quitGameConfirmPrompt: "Are you sure you want to quit? You may have unsaved changes."
@@ -533,9 +538,10 @@ terrain:
       height: 256
   oceanGenerator:
     shoreDistanceFraction: [0.13, 0.13, 0.13]
-    shoreDistanceVariance: [0.5, 0.3, 0.2]
+    shoreDistanceVariance: [3, 8, 12]
     smoothing: 3
-    lineComponents:
+    threshold: 0.5
+    perimeterComponents:
       - type: PeriodicRandomComponent
         amplitude: 8
         period: { min: 8, max: 15 }

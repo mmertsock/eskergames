@@ -342,6 +342,70 @@ gameForm label.singleChoiceInput span { padding-left: 3pt; }
 gameForm div.singleChoiceInput > span { display: block; }
 gameForm div.singleChoiceInput > span:after { content: ":"; }
 
+.edge-selector {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    border: 1px solid hsl(0, 0%, 50%);
+    width: 8em;
+    height: 8em;
+    margin: 2pt auto;
+}
+.edge-selector row {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    flex-grow: 1;
+}
+.edge-selector row:first-child, .edge-selector row:last-child {
+    flex-basis: 25%;
+    flex-grow: 0;
+}
+.edge-selector corner {
+    display: block;
+    flex-basis: 25%;
+    flex-grow: 0;
+}
+/*.edge-selector corner.left {
+    border-left: 1px solid hsl(0, 0%, 50%);
+    transform: translate() rotate(-45deg);
+}
+.edge-selector corner.right {
+    border-right: 1px solid hsl(0, 0%, 50%);
+    transform: rotate(45deg);
+}*/
+.edge-selector label {
+    display: block;
+    text-align: center;
+    margin: 0;
+    padding: 2pt 0pt;
+}
+.edge-selector label.direction-N, .edge-selector label.direction-S {
+    flex-basis: 50%;
+    flex-grow: 1;
+    line-height: 1.5em;
+}
+.edge-selector label.direction-W {
+    flex-basis: 25%;
+    flex-grow: 0;
+    line-height: 3.5em;
+}
+.edge-selector label.direction-E {
+    flex-basis: 25%;
+    flex-grow: 0;
+    line-height: 3.5em;
+}
+.edge-selector label.direction-0 {
+    /*border: 1px solid hsl(0, 0%, 50%);*/
+    flex-basis: 50%;
+    flex-grow: 1;
+    background-color: hsl(0, 0%, 95%);
+}
+.edge-selector label input { display: none; }
+.edge-selector label.selected {
+    background-color: hsl(120, 50%, 75%);
+}
+
 /* ~~~~~~ DIALOGS ~~~~~~ */
 
 #dialogs {

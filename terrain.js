@@ -169,54 +169,105 @@ class TileGenerator {
 }
 
 class OceanTileGenerator extends TileGenerator {
-
-    static defaultForEdge(edge, size) {
+    static defaultConfigForMapSize(size) {
         const settings = Terrain.settings().oceanGenerator;
-        if (edge.edge == directions.N || edge.edge == directions.S) {
-            var shoreDistance = size.height * settings.shoreDistanceFraction[size.index];
-        } else {
-            var shoreDistance = size.width * settings.shoreDistanceFraction[size.index];
-        }
-        let shoreDistanceVariance = settings.shoreDistanceVariance[size.index];
-        return new OceanTileGenerator({
-            edge: edge,
-            averageShoreDistanceFromEdge: shoreDistance,
-            shoreDistanceVariance: shoreDistance * shoreDistanceVariance,
-            lineComponents: RandomLineGenerator.componentsFromConfig(settings.lineComponents),
+        return {
+            edges: directions.allCardinal,
+            shoreDistanceFraction: settings.shoreDistanceFraction[size.index],
+            shoreDistanceVariance: settings.shoreDistanceVariance[size.index],
             smoothing: settings.smoothing
-        });
+        };
     }
 
     constructor(config) {
         super();
-        this.edge = config.edge; // MapEdge
-        // number of tiles from the configured edge to the shore. Can be non-integer
-        this.averageShoreDistanceFromEdge = config.averageShoreDistanceFromEdge;
-        this.lineGenerator = new RandomLineGenerator({
-            min: this.averageShoreDistanceFromEdge - config.shoreDistanceVariance,
-            max: this.averageShoreDistanceFromEdge + config.shoreDistanceVariance,
-            components: config.lineComponents,
-            smoothing: config.smoothing
-        });
+        // array of direction values
+        this.edges = config.edges;
+        // 0: shore next to map edge; small ocean.
+        // 1: shore near map center; nearly all ocean
+        this.shoreDistanceFraction = Math.clamp(config.shoreDistanceFraction, _zeroToOne);
+        // Actual number of tiles. Determines depth of bends in the shoreline
+        this.shoreDistanceVariance = config.shoreDistanceVariance;
+        this.smoothing = config.smoothing;
     }
 
     get debugDescription() {
-        return `<${this.constructor.name} ${this.edge.edge}->${this.averageShoreDistanceFromEdge}>`;
+        const edgeStrings = this.edges.map(Gaming.directions.debugDescriptionOf).join(", ");
+        return `<${this.constructor.name} edges=${edgeStrings} f=${this.shoreDistanceFraction} v=${this.shoreDistanceVariance}>`;
     }
 
     generateInto(targetLayer, sourceLayer) {
-        if (this.averageShoreDistanceFromEdge < 1) {
-            debugWarn(`Invalid config, skipping ${this.debugDescription}`);
-            return;
-        }
-        debugLog(`Generate into with ${this.debugDescription}`);
-        var edgeTiles = this.edge.edgeTiles(targetLayer.map.bounds);
-        edgeTiles.forEach(edgeTile => {
-            var shoreDistance = this.lineGenerator.nextValue();
-            var line = this.edge.lineOfTiles(edgeTile, shoreDistance);
-            this.fill(targetLayer, TerrainType.saltwater, line);
+        // Set all tiles in targetLayer as ocean
+        targetLayer.visitTiles(null, (tile) => {
+            tile.type = TerrainType.saltwater;
+        });
+
+        // Determine the bounds of the land. Extends beyond edges of map so 
+        // the blob can have flat sides as needed.
+        const landRect = this.landRectForLayer(sourceLayer);
+
+        // Make a blob describing the extent of land
+        const settings = Terrain.settings().oceanGenerator;
+        const minRadius = Math.min(landRect.size.width, landRect.size.height) * 0.5;
+        if (minRadius < 1) return;
+        const variance = this.shoreDistanceVariance / minRadius;
+        const blobGenerator = new RandomBlobGenerator({
+            variance: variance,
+            components: RandomLineGenerator.componentsFromConfig(settings.perimeterComponents),
+            smoothing: this.smoothing
+        });
+        const landTiles = blobGenerator.makeRandomTiles(landRect, settings.threshold);
+
+        // Copy all non-ocean tiles *inside the blob* from sourceLayer;
+        // copy ocean tiles from sourceLayer as blank land.
+        landTiles.forEach(point => {
+            const targetTile = targetLayer.getTileAtPoint(point);
+            const sourceTile = sourceLayer.getTileAtPoint(point);
+            if (!targetTile || !sourceTile) return;
+            if (sourceTile.type.isSaltwater) {
+                targetTile.type = TerrainType.dirt;
+            } else {
+                targetTile.type = sourceTile.type;
+            }
         });
     }
+
+    landRectForLayer(layer) {
+        // minX based on existence of west ocean
+        let extremes = { min: new Point(), max: new Point() };
+        if (this.edges.contains(directions.W)) {
+            extremes.min.x = Math.scaleValueLinear(this.shoreDistanceFraction, _zeroToOne, {min: 0, max: 0.5 * layer.size.width});
+        } else {
+            extremes.min.x = -layer.size.width;
+        }
+        if (this.edges.contains(directions.E)) {
+            extremes.max.x = Math.scaleValueLinear(1 - this.shoreDistanceFraction, _zeroToOne, {min: 0.5 * layer.size.width, max: layer.size.width});
+        } else {
+            extremes.max.x = 2 * layer.size.width;
+        }
+        if (this.edges.contains(directions.N)) {
+            extremes.min.y = Math.scaleValueLinear(this.shoreDistanceFraction, _zeroToOne, {min: 0, max: 0.5 * layer.size.height});
+        } else {
+            extremes.min.y = -layer.size.height;
+        }
+        if (this.edges.contains(directions.S)) {
+            extremes.max.y = Math.scaleValueLinear(1 - this.shoreDistanceFraction, _zeroToOne, {min: 0.5 * layer.size.height, max: layer.size.height});
+        } else {
+            extremes.max.y = 2 * layer.size.height;
+        }
+        const rect = Rect.fromExtremes(extremes);
+        debugLog(`${rect.debugDescription} for ${this.debugDescription}`);
+        return rect;
+    }
+}
+
+function test(value) {
+    if (value == 0) {
+        var dude = "zero";
+    } else {
+        var dude = "nonzero";
+    }
+    return "it's " + dude;
 }
 
 class RiverTileGenerator extends TileGenerator {
@@ -277,17 +328,10 @@ class RiverTileGenerator extends TileGenerator {
             let amplitude = Math.scaleValueLinear(fraction, _zeroToOne, bendRange);
             let offset = amplitude * this.bendGenerator.nextValue();
             // determine origin by applying offset to origin perpendicular to axis
-
             let v = new Vector(scanVector.y, scanVector.x).unit().scaled(offset);
             let bedOrigin = origin.adding(v);
-
-            // water.push(bedOrigin); return;
-
-            // determine the tile rect centered at that origin
             let rect = Rect.withCenter(bedOrigin.x, bedOrigin.y, width, width).integral();
-            // make a random blob with the correct size
             const threshold = 0.5; // TODO
-
             let bed = (width <= 3) ? this.bedGenerator.smoothEllipse(rect, 1) : this.bedGenerator.makeRandomTiles(rect, threshold);
 
             // debugLog({ origin: origin, bedOrigin: bedOrigin, offset: offset, fraction: fraction, sv: scanVector, v: v, width: width, amplitude: amplitude, widthRange: widthRange, bendRange: bendRange, rect: rect, bedLength: bed.length });
@@ -306,7 +350,6 @@ class RiverTileGenerator extends TileGenerator {
             // the extra-smooth small-radius circles that guarantee at least one filled tile.
             // and so it interpolates meaningfully for things like two-tile width, instead of 
             // just always doing a 2x2 square of tiles.
-
         });
 
         water = water.filter(point => {
@@ -481,14 +524,7 @@ class TerrainGenerator {
 
         this.builders = [];
         if (config.template == "island") {
-            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.N, config.size));
-            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.E, config.size));
-            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.S, config.size));
-            this.builders.push(OceanTileGenerator.defaultForEdge(MapEdge.W, config.size));
-            // this.builders.push(RiverTileGenerator.defaultStream(
-            //     new Point(this.size.width * 0.5, this.size.height * 0.5),
-            //     new Point(this.size.width * Rng.shared.nextFloatOpenRange(0.3, 0.7), 0),
-            //     config.size));
+            this.builders.push(new OceanTileGenerator(OceanTileGenerator.defaultConfigForMapSize(config.size)));
         }
         if (config.template != "blank") {
             this.builders.push(ForestTileGenerator.defaultGenerator(config.size));
@@ -800,6 +836,7 @@ class NewTerrainDialog extends GameDialog {
                 selected: size.index == defaultIndex
             }; })
         });
+
         this.templates = new SingleChoiceInputCollection({
             id: "template",
             parent: formElem,
@@ -1598,7 +1635,8 @@ class BuildRiverTool {
         this.model = new InteractionModel({ viewModel: toolController.model });
         this.dialogTitle = config.dialogTitle;
         this.ranges = {
-            snakiness: { min: 0, max: 1, defaultValue: config.snakiness.defaultValue },
+            smoothing: { min: 1, max: 10, defaultValue: Terrain.settings().riverGenerator.smoothing },
+            lineComponents: { defaultValue: Terrain.settings().riverGenerator.lineComponents },
             source: {
                 width: { min: config.source.width.min, max: config.source.width.max, defaultValue: config.source.width.defaultValue },
                 bendSize: { min: config.source.bendSize.min, max: config.source.bendSize.max, defaultValue: config.source.bendSize.defaultValue }
@@ -1621,7 +1659,8 @@ class BuildRiverTool {
     get lastSettings() {
         let value = BuildRiverTool.lastSettings;
         return value ? value : {
-            snakiness: this.ranges.snakiness.defaultValue,
+            smoothing: this.ranges.smoothing.defaultValue,
+            lineComponents: this.ranges.lineComponents.defaultValue,
             start: {
                 width: this.ranges.source.width.defaultValue,
                 bendSize: this.ranges.source.bendSize.defaultValue
@@ -1746,12 +1785,12 @@ class BuildRiverDialog extends GameDialog {
         });
         formElem.append(nav);
 
-        this.snakinessInput = new TextInputView({
+        this.smoothingInput = new TextInputView({
             parent: formElem,
-            title: Strings.str("riverSnakinessLabel"),
-            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.snakiness),
+            title: Strings.str("riverSmoothingLabel"),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.smoothing),
             transform: InputView.floatTransform,
-            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.snakiness)]
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.smoothing)]
         });
 
         let heading = document.createElement("h3");
@@ -1795,7 +1834,7 @@ class BuildRiverDialog extends GameDialog {
         this.value = this.defaultValue;
 
         this.contentElem.append(formElem);
-        this.allInputs = [this.snakinessInput, this.startWidthInput, this.startBendInput, this.endWidthInput, this.endBendInput];
+        this.allInputs = [this.smoothingInput, this.startWidthInput, this.startBendInput, this.endWidthInput, this.endBendInput];
     }
 
     get isModal() { return true; }
@@ -1804,18 +1843,20 @@ class BuildRiverDialog extends GameDialog {
 
     get value() {
         return {
-            snakiness: this.snakinessInput.value,
+            smoothing: this.smoothingInput.value,
+            lineComponents: this.lineComponents,
             start: { width: this.startWidthInput.value, bendSize: this.startBendInput.value },
             end: { width: this.endWidthInput.value, bendSize: this.endBendInput.value }
         };
     }
 
     set value(config) {
-        this.snakinessInput.value  = config.snakiness;
+        this.smoothingInput.value  = config.smoothing;
         this.startWidthInput.value = config.start.width;
         this.startBendInput.value  = config.start.bendSize;
         this.endWidthInput.value   = config.end.width;
         this.endBendInput.value    = config.end.bendSize;
+        this.lineComponents        = config.lineComponents;
     }
 
     validateAndBuild() {
@@ -1832,18 +1873,242 @@ class BuildRiverDialog extends GameDialog {
     }
 }
 
-// Click near an edge to add or change an ocean.
-// Shows a dialog after clicking, to adjust options
 class BuildOceanTool {
     constructor(toolController, config, brush) {
+        debugLog(toolController, config);
         this.id = config.id;
         this.brush = brush;
+        this.model = new InteractionModel({ viewModel: toolController.model });
+        this.dialogTitle = config.dialogTitle;
+        const size = toolController.model.map.size;
+        this.defaultSettings = OceanTileGenerator.defaultConfigForMapSize(size);
+        this.ranges = {
+            shoreDistanceFraction: { min: 0, max: 1, defaultValue: this.defaultSettings.shoreDistanceFraction },
+            shoreDistanceVariance: { min: 0, max: 32, defaultValue: this.defaultSettings.shoreDistanceVariance },
+            smoothing: { min: 1, max: 10, defaultValue: this.defaultSettings.smoothing }
+        };
+        this.generator = toolController.factory.namespace[config.generator];
     }
 
     get usesBrush() { return false; }
     get needsRender() { return false; }
+
+    get lastSettings() {
+        let value = BuildOceanTool.lastSettings;
+        return value ? value : {
+            edges: directions.allCardinal,
+            shoreDistanceFraction: this.defaultSettings.shoreDistanceFraction,
+            shoreDistanceVariance: this.defaultSettings.shoreDistanceVariance,
+            smoothing: this.defaultSettings.smoothing
+        };
+    }
+    set lastSettings(value) { BuildOceanTool.lastSettings = value; }
+
+    didSelectTile(info) {
+        new BuildOceanDialog({
+            tool: this,
+            title: this.dialogTitle,
+            defaultValue: this.lastSettings
+        }).show();
+        return null;
+    }
+
+    build(value) {
+        this.lastSettings = value;
+        this.model.editor.applyGeneratorToChangeset(new this.generator(value));
+        this.model.editor.commitChangeset();
+    }
 }
 BuildOceanTool.lastSettings = null;
+
+class EdgeSelectionInputView extends CitySim.FormValueView {
+    static createElement(config) {
+        const elem = document.createElement("div").addRemClass("edge-selector", true);
+        elem.append(EdgeSelectionInputView.createRow(config, ["left", directions.N, "right"]));
+        elem.append(EdgeSelectionInputView.createRow(config, [directions.W, "filler", directions.E]));
+        elem.append(EdgeSelectionInputView.createRow(config, ["left", directions.S, "right"]));
+        return elem;
+    }
+
+    static createRow(config, edges) {
+        const row = document.createElement("row");
+        edges.forEach(direction => {
+            if (direction == "filler") {
+                const label = document.createElement("label")
+                    .addRemClass("direction-0", true)
+                    .addRemClass("filler", true);
+                row.append(label);
+                return;
+            }
+            if (direction == "left") {
+                row.append(document.createElement("corner").addRemClass("left", true)); return;
+            }
+            if (direction == "right") {
+                row.append(document.createElement("corner").addRemClass("right", true)); return;
+            }
+            const label = document.createElement("label").addRemClass(EdgeSelectionInputView.directionClass(direction), true);
+            label.id = EdgeSelectionInputView.directionID(config.id, direction, "label");
+            const input = document.createElement("input").addRemClass(EdgeSelectionInputView.directionClass(direction), true);
+            input.type = "checkbox";
+            input.id = EdgeSelectionInputView.directionID(config.id, direction, "input");
+            input.name = config.id;
+            input.value = direction.toString();
+            label.append(input);
+            const span = document.createElement("span");
+            span.innerText = directions.debugDescriptionOf(direction);
+            label.append(span);
+            row.append(label);
+        });
+        return row;
+    }
+
+    static directionClass(direction) {
+        return `direction-${directions.debugDescriptionOf(direction)}`;
+    }
+
+    static directionID(id, direction, suffix) {
+        return `direction-${id}-${direction}-${suffix}`;
+    }
+
+    constructor(config, elem) {
+        config.id = config.id || Rng.shared.nextHexString(8);
+        super(config, elem || EdgeSelectionInputView.createElement(config));
+        this.id = config.id;
+        this.validationRules = config.validationRules || [];
+        this.elem.querySelectorAll("label").forEach(label => {
+            if (label.classList.contains("filler")) { return; }
+            label.addEventListener("click", evt => { evt.preventDefault(); this.clicked(label); });
+        });
+    }
+
+    get value() {
+        let edges = directions.allCardinal.filter(direction => {
+            const input = this.elem.querySelector(`#${EdgeSelectionInputView.directionID(this.id, direction, "input")}`);
+            return input.checked;
+        });
+        return edges;
+    }
+
+    set value(newValue) {
+        directions.allCardinal.forEach(direction => {
+            const selected = newValue.contains(direction);
+            const input = this.elem.querySelector(`#${EdgeSelectionInputView.directionID(this.id, direction, "input")}`);
+            input.checked = selected;
+            const label = this.elem.querySelector(`#${EdgeSelectionInputView.directionID(this.id, direction, "label")}`);
+            label.addRemClass("selected", selected);
+        });
+    }
+
+    get isValid() {
+        return this.validationRules.every(rule => rule(this));
+    }
+
+    // for bindings
+    setValue(newValue) { this.value = newValue; }
+
+    clicked(label) {
+        directions.allCardinal.forEach(direction => {
+            if (label.classList.contains(EdgeSelectionInputView.directionClass(direction))) {
+                this.toggle(direction);
+            }
+        });
+    }
+
+    toggle(direction) {
+        let newValue = this.value;
+        if (newValue.contains(direction)) {
+            this.value = newValue.filter(d => d != direction);
+        } else {
+            newValue.push(direction);
+            newValue.sort();
+            this.value = newValue;
+        }
+    }
+}
+
+class BuildOceanDialog extends GameDialog {
+    constructor(config) {
+        super();
+        this.tool = config.tool;
+        this.title = config.title;
+
+        this.createButton = new ToolButton({
+            title: Strings.str("buildBlobCommitButton"),
+            click: () => this.validateAndBuild()
+        });
+
+        this.contentElem = GameDialog.createContentElem();
+        const formElem = GameDialog.createFormElem();
+
+        this.edgesInput = new EdgeSelectionInputView({
+            parent: formElem
+        });
+
+        this.shoreDistanceInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("oceanShoreDistanceLabel"),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.shoreDistanceFraction),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.shoreDistanceFraction)]
+        });
+
+        this.shoreVarianceInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("oceanShoreVarianceLabel"),
+            placeholder: Strings.template("basicTileCountRangePlaceholder", this.tool.ranges.shoreDistanceVariance),
+            transform: InputView.integerTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.shoreDistanceVariance)]
+        });
+
+        this.smoothingInput = new TextInputView({
+            parent: formElem,
+            title: Strings.str("oceanSmoothingLabel"),
+            placeholder: Strings.template("basicNumericInputRangePlaceholder", this.tool.ranges.smoothing),
+            transform: InputView.floatTransform,
+            validationRules: [InputView.makeNumericRangeRule(this.tool.ranges.smoothing)]
+        });
+
+        this.edgesInput.value = this.swapNorthSouth(config.defaultValue.edges);
+        this.shoreDistanceInput.value = config.defaultValue.shoreDistanceFraction;
+        this.shoreVarianceInput.value = config.defaultValue.shoreDistanceVariance;
+        this.smoothingInput.value = config.defaultValue.smoothing;
+
+        this.contentElem.append(formElem);
+        this.allInputs = [this.edgesInput, this.shoreDistanceInput, this.shoreVarianceInput, this.smoothingInput];
+    }
+
+    get isModal() { return true; }
+    get dialogButtons() { return [this.createButton.elem]; }
+
+    get isValid() { return this.allInputs.every(input => input.isValid); }
+
+    // N/S in the dialog are opposite of the map model's N/S
+    swapNorthSouth(value) {
+        return value.map(direction => {
+            switch (direction) {
+                case directions.N: return directions.S;
+                case directions.S: return directions.N;
+                default: return direction;
+            }
+        });
+    }
+
+    validateAndBuild() {
+        if (!this.isValid) { debugLog("NOT VALID"); return; }
+        this.tool.build({
+            edges: this.swapNorthSouth(this.edgesInput.value),
+            shoreDistanceFraction: this.shoreDistanceInput.value,
+            shoreDistanceVariance: this.shoreVarianceInput.value,
+            smoothing: this.smoothingInput.value
+        });
+        this.dismiss();
+    }
+
+    dismiss() {
+        super.dismiss();
+        this.tool = null;
+    }
+}
 
 let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });
@@ -1859,7 +2124,8 @@ let initialize = function() {
         FillBrush: FillBrush,
         LakeTileGenerator: LakeTileGenerator,
         WoodsTileGenerator: WoodsTileGenerator,
-        LandTileGenerator: LandTileGenerator
+        LandTileGenerator: LandTileGenerator,
+        OceanTileGenerator: OceanTileGenerator
     });
     CitySimTerrain.view = new RootView({ runLoop: CitySimTerrain.uiRunLoop });
     CitySimTerrain.uiRunLoop.resume();

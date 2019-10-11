@@ -10,6 +10,7 @@ const CircularArray = Gaming.CircularArray;
 const Dispatch = Gaming.Dispatch;
 const DispatchTarget = Gaming.DispatchTarget;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const GameTask = Gaming.GameTask;
 const Kvo = Gaming.Kvo;
 const PeriodicRandomComponent = Gaming.PeriodicRandomComponent;
 const Point = Gaming.Point;
@@ -19,6 +20,7 @@ const RandomLineGenerator = Gaming.RandomLineGenerator;
 const Rect = Gaming.Rect;
 const Rng = Gaming.Rng;
 const SaveStateItem = Gaming.SaveStateItem;
+const TaskQueue = Gaming.TaskQueue;
 const TilePlane = Gaming.TilePlane;
 const UndoStack = Gaming.UndoStack;
 const Vector = Gaming.Vector;
@@ -1951,7 +1953,99 @@ function gameMapTest() {
     }).buildAndRun();
 }
 
-TestSession.current = new TestSession([
+// #################################################
+// ################## TASK SUITE ###################
+// #################################################
+
+class FakeTask extends GameTask {
+    constructor(id, performCallback) {
+        super();
+        this.id = id;
+        this.performCount = 0;
+        this.performedWith = null;
+        this.performCallback = performCallback;
+    }
+    perform(target, queue) {
+        if (typeof(this.performCallback) == 'function') {
+            this.performCallback(this);
+        }
+        this.performCount += 1;
+        this.performedWith = target;
+        FakeTask.performOrder.push(this.id);
+    }
+}
+FakeTask.performOrder = [];
+
+class DuplicatingTask extends GameTask {
+    constructor(dupeCount) {
+        super();
+        this.dupeCount = dupeCount;
+    }
+    perform(target, queue) {
+        DuplicatingTask.performOrder.push(this.dupeCount);
+        if (this.dupeCount > 0) {
+            let next = new DuplicatingTask(this.dupeCount - 1);
+            queue.append(next);
+        }
+    }
+}
+DuplicatingTask.performOrder = [];
+
+let taskQueueTest = function() {
+    new UnitTest("TaskQueue", function() {
+        let target = "target";
+        let sut = new TaskQueue();
+        this.assertTrue(sut.isEmpty);
+
+        let task = new FakeTask("a");
+        sut.append(task);
+        this.assertFalse(sut.isEmpty, "Appended task");
+        this.assertEqual(task.performCount, 0, "Does not immediately perform");
+        this.assertEqual(task.performedWith, null);
+
+        sut.run(target);
+        this.assertEqual(task.performCount, 1, "Performs task when running");
+        this.assertEqual(task.performedWith, target);
+        this.assertTrue(sut.isEmpty, "Ran queue");
+
+        sut.run(target);
+        this.assertEqual(task.performCount, 1, "Performs task once");
+
+        sut = new TaskQueue();
+        task = new FakeTask("a", (t) => {
+            this.assertTrue(sut.isEmpty, "Task removed from queue before performing task");
+        });
+        sut.append(task);
+        sut.run();
+
+        FakeTask.performOrder = [];
+        sut = new TaskQueue();
+
+        task = new FakeTask("a");
+        let task2 = new FakeTask("b");
+        let task3 = new FakeTask("c");
+        sut.prepend(task);
+        this.assertFalse(sut.isEmpty);
+        sut.append(task2);
+        sut.prepend(task3);
+
+        sut.run(target);
+        this.assertTrue(sut.isEmpty);
+        this.assertElementsEqual(FakeTask.performOrder, [task3.id, task.id, task2.id]);
+        this.assertEqual(task.performCount, 1);
+        this.assertEqual(task2.performCount, 1);
+        this.assertEqual(task3.performCount, 1);
+
+        sut = new TaskQueue();
+        task = new DuplicatingTask(2);
+        sut.append(task);
+        sut.run(target);
+        this.assertTrue(sut.isEmpty);
+        this.assertElementsEqual(DuplicatingTask.performOrder, [2, 1, 0]);
+    }).buildAndRun();
+}
+
+let standardSuite = new TestSession([
     // rectHashTest,
     manhattanDistanceFromTest,
     boolArrayTest,
@@ -1974,6 +2068,12 @@ TestSession.current = new TestSession([
     cityRectExtensionsTest,
     simDateTest
 ]);
+
+let taskSuite = new TestSession([
+    taskQueueTest
+    ]);
+
+TestSession.current = taskSuite;
 // TestSession.current = new TestSession([randomBlobTest]);
 
 return TestSession.current;
