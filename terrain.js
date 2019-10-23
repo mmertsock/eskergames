@@ -16,7 +16,7 @@ indicate it’s disabled).
 
 */
 
-window.CitySimTerrain = (function() {
+self.CitySimTerrain = (function() {
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
@@ -2136,6 +2136,6 @@ return {
     initialize: initialize
 };
 
-})(); // end namespace
+})(); // end namespace CitySimTerrain
 
 cityReady("terrain.js");
