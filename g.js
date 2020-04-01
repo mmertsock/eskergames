@@ -233,7 +233,8 @@ CanvasRenderingContext2D.prototype.ellipseFill = function(rect) {
 CanvasRenderingContext2D.prototype.fillTextCentered = function(text, rect) {
     var metrics = this.measureText(text);
     var x = rect.x + 0.5 * (rect.width - metrics.width);
-    var y = rect.y + 0.5 * (rect.height - 0);
+    var height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+    var y = rect.y + 0.5 * (rect.height + height);
     this.fillText(text, x, y);
 };
 

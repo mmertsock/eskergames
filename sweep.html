@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <title>Sweep</title>
+    <link rel="icon" href="city-icon-192.png">
+    <link rel="apple-touch-icon" href="city-icon-180.png">
+
+    <script defer src="g.js"></script>
+    <script defer src="city-content.js"></script>
+    <script defer src="city-core.js"></script>
+    <script defer src="sweep.js"></script>
+
+    <link rel="stylesheet" href="city.css">
+<style type="text/css">
+
+header controls {
+    margin-top: 0.75em;
+    background-color: transparent;
+}
+
+header row {
+    margin: 0 auto;
+    padding: 0.25em;
+}
+
+header a.tool {
+    margin: 0 0.75em;
+}
+
+main {
+    position: relative;
+    display: block;
+}
+
+board {
+    margin: 0.75em 0 0.5em 0;
+    display: block;
+}
+
+board canvas {
+    display: block;
+    margin: 0 auto;
+    border: 3px outset black;
+}
+
+footer {
+    text-align: center;
+    margin: 0.5em;
+}
+
+dialog#help {
+    max-width: 50em;
+}
+
+dialog content help ul {
+    padding-left: 1.5em;
+    list-style-type: disc;
+}
+
+highScores controls {
+    background-color: transparent;
+}
+
+highScores a.tool {
+    margin: 0 0.75em;
+}
+
+dialog content highScores ol {
+    padding-left: 1.5em;
+}
+
+highScores li row {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    flex-grow: 1;
+}
+
+highScores li row > * {
+    flex: 1 1 0;
+    text-align: center;
+}
+
+highScores p {
+    text-align: center;
+}
+
+highScores name {
+    text-transform: uppercase;
+}
+
+</style>
+
+</head>
+<body>
+
+<header><controls><row></row></controls></header>
+
+<main>
+    <board class="hidden"><canvas></canvas></board>
+</main>
+
+<footer></footer>
+
+<div id="dialogs" class="hidden"></div>
+
+<prompt class="hidden">
+    <panel>
+        <h1>(prompt title)</h1>
+        <p>(prompt message)</p>
+        <div>(custom content)</div>
+        <buttons class="promptButtons"></buttons>
+    </panel>
+</prompt>
+
+<help class="hidden">
+    <h3>How to play</h3>
+    <ul>
+        <li>Clear all the tiles while avoiding mines</li>
+        <li>A cleared tile has a number indicating how many of the eight adjacent tiles are mined. No number means none of the adjacent tiles are mined</li>
+        <li>Work incrementally from the edge of the tiles you have cleared, deducing which tiles are safe based on the arrangement of numbers</li>
+    </ul>
+    <h3>Mouse commands</h3>
+    <ul>
+        <li><kbd>Click</kbd>: Clears the selected tile, and adjacent tiles if mine count is zero</li>
+        <li><kbd>⇧ + click</kbd>: Toggle flags to mark potential mines. For safety, clicking on a flagged tile will not clear it</li>
+        <li><kbd>⌥ + click or ⌘ + click</kbd>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any "?" flags are nearby, or if the number of flagged neighbors does match the number on the clicked tile</li>
+    </ul>
+</help>
+
+<highScores class="hidden">
+    <div class="difficulties"><controls><row></row></controls></div>
+    <div class="scores"></div>
+    <scoreTemplate class="hidden">
+        <ol><li><row><name></name><date></date><points></points></row></li></ol>
+        <p>No High Scores</p>
+    </scoreTemplate>
+</highScores>
+
+</body>
+</html>
