@@ -131,12 +131,6 @@ class GameBoard {
             return this.tileAtCoord(coord);
         });
         this.shuffle();
-        // this._allTiles[3].cycleFlag();
-        // this._allTiles[5].cycleFlag().cycleFlag();
-        // this._allTiles[7]._covered = false;
-        // this._allTiles[9]._covered = false;
-        // this._allTiles[11]._covered = false;
-        // this._allTiles[13]._covered = false;
     }
 
     tileAtCoord(coord) {
@@ -158,10 +152,7 @@ class GameBoard {
     }
 
     reset() {
-        this._allTiles.forEach(tile => {
-            tile.isCovered = true;
-            tile.clearFlag();
-        });
+        this.visitTiles(null, tile => { tile._boardConstructed(); });
     }
 
     shuffle() {
@@ -241,7 +232,6 @@ class GameStorage {
             assertMineFlagCount: stats.assertMineFlagCount,
             clearedTileCount: stats.clearedTileCount
         };
-        // debugLog(highScore);
 
         let data = this.highScoresByDifficulty;
         const difficultyIndex = data.difficulties.findIndex(item => item.difficulty.index == stats.difficulty.index);
@@ -252,21 +242,14 @@ class GameStorage {
         data.difficulties[difficultyIndex].highScores.push(highScore);
         data.difficulties[difficultyIndex].highScores.sort((a, b) => b.points - a.points);
         data.difficulties[difficultyIndex].highScores = data.difficulties[difficultyIndex].highScores.slice(0, 100);
-        // debugLog(data);
         let item = new SaveStateItem(this.highScoresCollection.namespace, this.highScoresCollection.namespace, Date.now(), { highScoresByDifficulty: data });
         this.highScoresCollection.saveItem(item, {});
-        // this.hsc = data;
 
         this.lastPlayerName = highScore.playerName;
     }
 
     get highScoresByDifficulty() {
-        // if (this.hsc) { return this.hsc; }
         let item = this.highScoresCollection.getItem(this.highScoresCollection.namespace);
-        // if (item) {
-        //     this.highScoresCollection.deleteItem(this.highScoresCollection.namespace);
-        //     item = null;
-        // }
         if (item) {
             return item.data.highScoresByDifficulty;
         }
@@ -307,7 +290,6 @@ if (!self.isWorkerScope) {
     GameStorage.shared = new GameStorage();
 }
 
-// handles UI interactions
 class GameSession {
     static quit(prompt) {
         if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
@@ -322,15 +304,35 @@ class GameSession {
         this.elems = {
             boardContainer: document.querySelector("board")
         };
-        this.controlsView = GameSession.controlsView;
-        this.controlsView.session = this;
+        this.controlsView = new GameControlsView({ session: this, elem: document.querySelector("header row") });
         this.boardView = new GameBoardView({ session: this, boardContainer: this.elems.boardContainer });
         this.statusView = new GameStatusView({ session: this, elem: document.querySelector("footer") });
         this.views = [this.controlsView, this.boardView, this.statusView];
+        // this.puzzle = 2;
     }
 
     start() {
         GameStorage.shared.lastDifficultyIndex = this.game.difficulty.index;
+
+        if (this.puzzle == 1) {
+            this.game.board.visitTiles(null, tile => tile.isMined = false);
+            let center = this.game.board.tileAtCoord(new Point(5, 5));
+            center.visitNeighbors(neighbor => neighbor.isMined = true);
+            this.game.board.reset();
+        }
+        if (this.puzzle == 2) {
+            this.game.board.visitTiles(null, tile => tile.isMined = false);
+            this.game.board.tileAtCoord(new Point(0, 0)).isMined = true;
+            this.game.board.tileAtCoord(new Point(0, 4)).isMined = true;
+            this.game.board.tileAtCoord(new Point(0, 9)).isMined = true;
+            this.game.board.tileAtCoord(new Point(5, 0)).isMined = true;
+            this.game.board.tileAtCoord(new Point(4, 9)).isMined = true;
+            this.game.board.tileAtCoord(new Point(9, 0)).isMined = true;
+            this.game.board.tileAtCoord(new Point(9, 5)).isMined = true;
+            this.game.board.tileAtCoord(new Point(9, 9)).isMined = true;
+            this.game.board.reset();
+        }
+
         this.state = GameState.playing;
         this.startTime = Date.now();
         this.endTime = null;
@@ -414,10 +416,6 @@ class GameSession {
             this.mineTriggered(tile);
             return;
         }
-        // if (revealBehavior == GameSession.revealBehaviors.assertFlag && tile.flag.isPresent && !tile.isMined) {
-        //     this.incorrectFlagAsserted(tile);
-        //     return;
-        // }
         if (tile.minedNeighborCount == 0) {
             var toClear = [];
             this.revealClearArea(tile, toClear);
@@ -602,41 +600,35 @@ class GameBoardController {
 
 class GameControlsView {
     constructor(config) {
-        this._session = null;
+        this.session = config.session;
         this.elem = config.elem;
         this.buttons = null;
-    }
-
-    get session() { return this._session; }
-    set session(value) {
-        this._session = value;
+        this.elem.removeAllChildren();
+        this.buttons = [
+            new ToolButton({
+                parent: this.elem,
+                title: Strings.str("newGameButton"),
+                click: () => this.newGame()
+            }),
+            new ToolButton({
+                parent: this.elem,
+                title: Strings.str("resetBoardButton"),
+                click: () => this.resetBoard()
+            }),
+            new ToolButton({
+                parent: this.elem,
+                title: Strings.str("showHelpButton"),
+                click: () => this.showHelp()
+            }),
+            new ToolButton({
+                parent: this.elem,
+                title: Strings.str("showHighScoresButton"),
+                click: () => this.showHighScores()
+            }),
+        ];
     }
 
     render() {
-        if (!this.buttons) {
-            this.buttons = [
-                new ToolButton({
-                    parent: this.elem,
-                    title: Strings.str("newGameButton"),
-                    click: () => this.newGame()
-                }),
-                new ToolButton({
-                    parent: this.elem,
-                    title: Strings.str("resetBoardButton"),
-                    click: () => this.resetBoard()
-                }),
-                new ToolButton({
-                    parent: this.elem,
-                    title: Strings.str("showHelpButton"),
-                    click: () => this.showHelp()
-                }),
-                new ToolButton({
-                    parent: this.elem,
-                    title: Strings.str("showHighScoresButton"),
-                    click: () => this.showHighScores()
-                }),
-            ];
-        }
     }
 
     newGame() {
@@ -1045,7 +1037,7 @@ class HighScoresDialog extends GameDialog {
             return template.querySelector("p").cloneNode(true);
         } else {
             let highScores = document.createElement("ol");
-            difficulty.highScores.forEach(highScore => {
+            difficulty.highScores.slice(0, 10).forEach(highScore => {
                 let item = template.querySelector("li").cloneNode(true);
                 item.querySelector("name").innerText = highScore.playerName;
                 item.querySelector("date").innerText = new Date(highScore.timestamp).toLocaleDateString("default", { dateStyle: "short" });
@@ -1062,8 +1054,6 @@ class HighScoresDialog extends GameDialog {
 } // end class HighScoresDialog
 
 var initialize = function() {
-    GameSession.controlsView = new GameControlsView({ elem: document.querySelector("header row") });
-    // new SaveHighScoreDialog(null).show();
     new NewGameDialog().show();
 };
 
