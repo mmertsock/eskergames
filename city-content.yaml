@@ -483,7 +483,11 @@ strings:
   oceanShoreDistanceLabel: "Ocean Size % (From Edge)"
   oceanShoreVarianceLabel: Shore Variance
   oceanSmoothingLabel: Smoothing
+  okButton: OK
   optionsButtonLabel: Options
+  oxfordCommaManyItemsSeparator: ", "
+  oxfordCommaManyItemsTemplate: "<first>, and <last>"
+  oxfordCommaTwoItemsTemplate: "<first> and <last>"
   quitButton: Quit
   quitGameConfirmPrompt: "Are you sure you want to quit? You may have unsaved changes."
   redoButtonLabel: Redo
@@ -510,6 +514,8 @@ strings:
   terrainSettingsTemplateLabel: Style
   uiFpsLabel: "<value>FPS <load> DPS:<medianDispatches>/<maxDispatches>"
   undoButtonLabel: Undo
+  validationFailureFieldListTemplate: "Please check <items>."
+  validationFailureTitle: Invalid Input
   windowTitleTemplate: "<date> in <name> — <gameProductTitle>"
   zoomInButtonGlyph: ➕
   zoomOutButtonGlyph: ➖
