@@ -17,40 +17,13 @@ const Rng = Gaming.Rng;
 const SaveStateCollection = Gaming.SaveStateCollection;
 const SaveStateItem = Gaming.SaveStateItem;
 const SelectableList = Gaming.SelectableList;
+const Strings = Gaming.Strings;
 const TilePlane = Gaming.TilePlane;
 const Vector = Gaming.Vector;
 
-const GameContent = CitySimContent.GameContent;
-const GameScriptEngine = CitySimContent.GameScriptEngine;
+const GameContent = self.CitySimContent ? CitySimContent.GameContent : undefined;
 
 function mark__Utility() {} // ~~~~~~ Utility ~~~~~~
-
-Number.uiInteger = function(value) {
-    return Number(value).toLocaleString();
-};
-
-Number.uiFloat = function(value) {
-    return Number(value).toLocaleString();
-};
-
-Number.uiPercent = function(ratio) {
-    return Math.round(ratio * 100).toLocaleString() + "%";
-};
-
-Array.oxfordCommaList = function(items) {
-    if (!items) return items;
-    switch (items.length) {
-        case 0: return "";
-        case 1: return items[0];
-        case 2: return Strings.template("oxfordCommaTwoItemsTemplate", { first: items[0], last: items[1] });
-        default:
-            let last = items.pop();
-            return Strings.template("oxfordCommaManyItemsTemplate", {
-                first: items.join(Strings.str("oxfordCommaManyItemsSeparator")),
-                last: last
-            });
-    }
-};
 
 class JSONRequest {
     constructor(url) {
@@ -96,30 +69,6 @@ class JSONRequest {
     }
 } // end JSONRequest
 
-function mark__Game_Content() {} // ~~~~~~ Game Content ~~~~~~
-
-class Strings {
-    static str(id) {
-        return GameContent.shared.strings[id] || `?${id}?`;
-    }
-    static template(id, data) {
-        var template = Strings.str(id);
-        return template ? String.fromTemplate(template, data) : null;
-    }
-}
-
-const _stringTemplateRegexes = {};
-String.fromTemplate = function(template, data) {
-    if (!template || !data || template.indexOf("<") < 0) { return template; }
-    Object.getOwnPropertyNames(data).forEach((pn) => {
-        if (!_stringTemplateRegexes[pn]) {
-            _stringTemplateRegexes[pn] = new RegExp(`<${pn}>`, "g");
-        }
-        template = template.replace(_stringTemplateRegexes[pn], data[pn]);
-    });
-    return template;
-};
-
 function mark__UI_Controls() {} // ~~~~~~ UI Controls ~~~~~~
 
 class UI {
@@ -131,8 +80,8 @@ class UI {
 EventTarget.prototype.addGameCommandEventListener = function(eventType, preventDefault, command, subject) {
     this.addEventListener(eventType, (evt) => {
         if (preventDefault) { evt.preventDefault(); }
-        if (!GameScriptEngine.shared) { return; }
-        GameScriptEngine.shared.execute(command, subject);
+        if (!CitySimContent || !CitySimContent.GameScriptEngine.shared) { return; }
+        CitySimContent.GameScriptEngine.shared.execute(command, subject);
     });
 };
 
@@ -582,7 +531,7 @@ class KeyInputController {
     addGameScriptShortcut(code, shift, script, subject) {
         // TODO build a help menu automatically
         this.addShortcutListener({ code: code, shift: shift }, (controller, shortcut, evt) => {
-            GameScriptEngine.shared.execute(script, subject);
+            CitySimContent.GameScriptEngine.shared.execute(script, subject);
         });
     }
 

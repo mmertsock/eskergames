@@ -11,24 +11,12 @@ const Point = Gaming.Point;
 const Rect = Gaming.Rect;
 const SaveStateItem = Gaming.SaveStateItem;
 const SaveStateCollection = Gaming.SaveStateCollection;
+const Strings = Gaming.Strings;
 const TextInputView = CitySim.ControlViews.TextInputView;
 const TilePlane = Gaming.TilePlane;
 const ToolButton = CitySim.ControlViews.ToolButton;
 
-Number.uiPercent = function(ratio) {
-    return Math.round(ratio * 100).toLocaleString() + "%";
-};
-
-class Strings {
-    static str(id) {
-        return Strings.items[id] || `?${id}?`;
-    }
-    static template(id, data) {
-        var template = Strings.str(id);
-        return template ? String.fromTemplate(template, data) : null;
-    }
-}
-Strings.items = {
+Strings.initialize({
     "defaultPlayerName": "✷✷✷",
     "dialogDismissButton": "✖️",
     "difficultyChoiceLabelTemplate": "<name>",
@@ -47,10 +35,7 @@ Strings.items = {
     "saveHighScoreDialogTitle": "You Won!",
     "showHelpButton": "Help",
     "showHighScoresButton": "High Scores",
-};
-CitySim.Strings.str = Strings.str;
-CitySim.Strings.template = Strings.template;
-// end class Strings
+});
 
 class TileFlag {
     constructor(present) {

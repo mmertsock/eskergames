@@ -17,6 +17,7 @@ const Rng = Gaming.Rng;
 const SaveStateCollection = Gaming.SaveStateCollection;
 const SaveStateItem = Gaming.SaveStateItem;
 const SelectableList = Gaming.SelectableList;
+const Strings = Gaming.Strings;
 const TilePlane = Gaming.TilePlane;
 const Vector = Gaming.Vector;
 
@@ -85,18 +86,6 @@ var Simoleon = {
     format: function(value) {
         return `§${Number.uiInteger(value)}`;
     }
-};
-
-Number.uiInteger = function(value) {
-    return Number(value).toLocaleString();
-};
-
-Number.uiFloat = function(value) {
-    return Number(value).toLocaleString();
-};
-
-Number.uiPercent = function(ratio) {
-    return Math.round(ratio * 100).toLocaleString() + "%";
 };
 
 class SimDate {
@@ -3755,25 +3744,10 @@ class ScriptPainterStore {
 
 // #################### MISC UI #####################
 
-class Strings {
-    static str(id) {
-        return GameContent.shared.strings[id] || `?${id}?`;
-    }
-    static template(id, data) {
-        var template = Strings.str(id);
-        return template ? String.fromTemplate(template, data) : null;
-    }
-
-    static randomCityName() {
-        return "Metroville Acres"
-    }
-    static randomPersonName() {
-        return "Eustice von Honla"
-    }
-    static randomTerrainName() {
-        return "Blue Skipes"
-    }
-}
+// TODO
+Strings.randomCityName = () => { return "Metroville Acres" };
+Strings.randomPersonName = () => { return "Eustice von Honla" };
+Strings.randomTerrainName = () => { return "Blue Skipes" };
 
 class GameDialogManager {
     constructor() {
@@ -4021,6 +3995,7 @@ function gameContentIsReady(content, settings) {
         return;
     }
     GameContent.shared = GameContent.prepare(content);
+    Gaming.Strings.initialize(GameContent.shared.strings);
 
     ScriptPainterStore.shared = new ScriptPainterStore();
     SpritesheetStore.load(SpritesheetTheme.defaultTheme(), (store, error) => {
