@@ -6,7 +6,7 @@ https://www.esker-apps.com/g/sweep.html to play a Minesweeper clone. I revisit M
 
 `<marquee>🚧 UNDER CONSTRCUTION 🚧</marquee>`
 
-https://www.esker-apps.com/g is a little broken right now except for the Terrain editor.
+https://www.esker-apps.com/g is a little broken right now except for the Terrain editor. index.html graphic design inspired by the classic SimCity PC game menu from the 90s.
 
 
 
