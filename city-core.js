@@ -10,6 +10,7 @@ const CircularArray = Gaming.CircularArray;
 const ChangeTokenBinding = Gaming.ChangeTokenBinding;
 const Easing = Gaming.Easing;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const GameContent = Gaming.GameContent;
 const Kvo = Gaming.Kvo;
 const Point = Gaming.Point;
 const Rect = Gaming.Rect;
@@ -20,8 +21,6 @@ const SelectableList = Gaming.SelectableList;
 const Strings = Gaming.Strings;
 const TilePlane = Gaming.TilePlane;
 const Vector = Gaming.Vector;
-
-const GameContent = self.CitySimContent ? CitySimContent.GameContent : undefined;
 
 function mark__Utility() {} // ~~~~~~ Utility ~~~~~~
 
@@ -80,8 +79,8 @@ class UI {
 EventTarget.prototype.addGameCommandEventListener = function(eventType, preventDefault, command, subject) {
     this.addEventListener(eventType, (evt) => {
         if (preventDefault) { evt.preventDefault(); }
-        if (!CitySimContent || !CitySimContent.GameScriptEngine.shared) { return; }
-        CitySimContent.GameScriptEngine.shared.execute(command, subject);
+        if (!Gaming.GameScriptEngine || !Gaming.GameScriptEngine.shared) { return; }
+        Gaming.GameScriptEngine.shared.execute(command, subject);
     });
 };
 
@@ -531,7 +530,7 @@ class KeyInputController {
     addGameScriptShortcut(code, shift, script, subject) {
         // TODO build a help menu automatically
         this.addShortcutListener({ code: code, shift: shift }, (controller, shortcut, evt) => {
-            CitySimContent.GameScriptEngine.shared.execute(script, subject);
+            Gaming.GameScriptEngine.shared.execute(script, subject);
         });
     }
 

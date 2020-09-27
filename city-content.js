@@ -1,6 +1,6 @@
 "use-strict";
 
-self.CitySimContent = (function() {
+(function() {
 
 var debugLog = Gaming.debugLog;
 var once = Gaming.once;
@@ -82,27 +82,6 @@ class GameContent {
         });
     }
 
-    static prepare(content) {
-        if (content.gameRules) {
-            GameContent.addIndexToItemsInArray(content.gameRules.speeds);
-            GameContent.addIndexToItemsInArray(content.gameRules.difficulties);
-        }
-        if (content.terrainEditorTools) {
-            GameContent.addIndexToItemsInArray(content.terrainEditorTools.brushes);
-            GameContent.addIdToItemsInDictionary(content.terrainEditorTools.definitions);
-        }
-        if (content.mapTools) {
-            GameContent.addIdToItemsInDictionary(content.mapTools.definitions);
-        }
-        if (content.mainMapView) {
-            GameContent.addIndexToItemsInArray(content.mainMapView.zoomLevels);
-        }
-        if (content.terrain) {
-            GameContent.addIndexToItemsInArray(content.terrain.sizes);
-        }
-        return content;
-    }
-
     static addIndexToItemsInArray(items) {
         if (!items) { return; }
         items.forEach((item, index) => {
@@ -150,9 +129,7 @@ GameContent.cachePolicies = {
 };
 GameContent.oneTimeLoadKeys = new Set();
 
-return {
-    GameScriptEngine: GameScriptEngine,
-    GameContent: GameContent
-};
+Gaming.GameContent = GameContent;
+Gaming.GameScriptEngine = GameScriptEngine;
 
-})(); // end CitySimContent namespace
+})(); // end namespace

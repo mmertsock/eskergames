@@ -5,7 +5,7 @@ self.Sweep = (function() {
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
-const GameContent = CitySimContent.GameContent;
+const GameContent = Gaming.GameContent;
 const GameDialog = CitySim.GameDialog;
 const InputView = CitySim.ControlViews.InputView;
 const Point = Gaming.Point;

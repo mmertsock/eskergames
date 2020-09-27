@@ -21,8 +21,8 @@ const Strings = Gaming.Strings;
 const TilePlane = Gaming.TilePlane;
 const Vector = Gaming.Vector;
 
-const GameContent = CitySimContent.GameContent;
-const GameScriptEngine = CitySimContent.GameScriptEngine;
+const GameContent = Gaming.GameContent;
+const GameScriptEngine = Gaming.GameScriptEngine;
 
 // ########################### GLOBAL #######################
 
@@ -3964,6 +3964,27 @@ class HelpDialog extends GameDialog {
     get title() { return Strings.str("helpDialogTitle"); }
     get dialogButtons() { return [this.x.elem]; }
 }
+
+GameContent.prepare = function(content) {
+    if (content.gameRules) {
+        GameContent.addIndexToItemsInArray(content.gameRules.speeds);
+        GameContent.addIndexToItemsInArray(content.gameRules.difficulties);
+    }
+    if (content.terrainEditorTools) {
+        GameContent.addIndexToItemsInArray(content.terrainEditorTools.brushes);
+        GameContent.addIdToItemsInDictionary(content.terrainEditorTools.definitions);
+    }
+    if (content.mapTools) {
+        GameContent.addIdToItemsInDictionary(content.mapTools.definitions);
+    }
+    if (content.mainMapView) {
+        GameContent.addIndexToItemsInArray(content.mainMapView.zoomLevels);
+    }
+    if (content.terrain) {
+        GameContent.addIndexToItemsInArray(content.terrain.sizes);
+    }
+    return content;
+};
 
 // ########################### INIT #######################
 
