@@ -5,6 +5,7 @@ self.Sweep = (function() {
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const GameContent = CitySimContent.GameContent;
 const GameDialog = CitySim.GameDialog;
 const InputView = CitySim.ControlViews.InputView;
 const Point = Gaming.Point;
@@ -15,27 +16,6 @@ const Strings = Gaming.Strings;
 const TextInputView = CitySim.ControlViews.TextInputView;
 const TilePlane = Gaming.TilePlane;
 const ToolButton = CitySim.ControlViews.ToolButton;
-
-Strings.initialize({
-    "defaultPlayerName": "✷✷✷",
-    "dialogDismissButton": "✖️",
-    "difficultyChoiceLabelTemplate": "<name>",
-    "gameSettingsDifficultyLabel": "Difficulty",
-    "helpDialogTitle": "Help",
-    "helpDismiss": "Thanks!",
-    "highScoresDialogTitle": "✷ High Scores ✷",
-    "highScoresDismiss": "Done",
-    "newGameButton": "New Game",
-    "newGameDialogStartButton": "Start",
-    "newGameDialogTitle": "New Game",
-    "playerNameInputTitle": "Your Name",
-    "quitGameConfirmPrompt": "Are you sure you want to quit?",
-    "resetBoardButton": "Reset",
-    "saveHighScoreButton": "Save",
-    "saveHighScoreDialogTitle": "You Won!",
-    "showHelpButton": "Help",
-    "showHighScoresButton": "High Scores",
-});
 
 class TileFlag {
     constructor(present) {
@@ -151,15 +131,18 @@ class GameBoard {
 } // end class GameBoard
 
 class Game {
+    static initialize(content) {
+        if (content.rules && content.rules.difficulties) {
+            GameContent.addIndexToItemsInArray(content.rules.difficulties);
+            content.rules.difficulties.forEach( difficulty => { difficulty.name = Strings.str(difficulty.name); });
+        }
+        Game.content = content;
+        GameTileView.initialize(content.gameTileView);
+        GameTileViewState.initialize(content.gameTileViewState);
+    }
+
     static rules() {
-        return {
-            difficulties: [
-                { index: 0, isDefault: false, name: "Beginner", width: 10, height: 10, mineCount: 8 },
-                { index: 1, isDefault: true, name: "Intermediate", width: 24, height: 16, mineCount: 36 },
-                { index: 2, isDefault: false, name: "Advanced", width: 32, height: 32, mineCount: 100 },
-                { index: 3, isDefault: false, name: "Expert", width: 48, height: 32, mineCount: 200 }
-            ]
-        };
+        return Game.content.rules;
     }
 
     constructor(config) {
@@ -645,18 +628,18 @@ class GameStatusView {
     }
 
     render() {
-        this.elem.innerText = String.fromTemplate(this.statusTemplate, this.session.game.statistics);
+        this.elem.innerText = Strings.template(this.statusTemplate, this.session.game.statistics);
     }
 
 // TODO show elapsed time
     get statusTemplate() {
         switch (this.session.state) {
         case GameState.playing:
-            return "<points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged";
+            return "gameStatusPlayingTemplate"
         case GameState.lost:
-            return "Lost! <points> pts, <progressPercent> tiles completed";
+            return "gameStatusLostTemplate";
         case GameState.won:
-            return "Won! <points> pts, <mineCount> mines cleared";
+            return "gameStatusWonTemplate";
         }
     }
 }
@@ -717,6 +700,10 @@ GameBoardView.metrics = {
 // end class GameBoardView
 
 class GameTileView {
+    static initialize(config) {
+        GameTileView.config = config;
+    }
+
     constructor(model, boardView) {
         this.model = model; // GameTile
         this.boardView = boardView;
@@ -726,7 +713,7 @@ class GameTileView {
         const ctx = context.ctx;
         const rect = context.tilePlane.screenRectForModelTile(this.model.coord);
         const ext = rect.extremes;
-        ctx.font = "bold 32px monospace";
+        ctx.font = GameTileView.config.font;
 
         if (this.model.isCovered) {
             this.renderCovered(context, rect);
@@ -735,8 +722,8 @@ class GameTileView {
         }
 
         // borders
-        ctx.strokeStyle = "#111111"; //flag this.model.isCovered ? "#111111" : "#666666";
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = GameTileView.config.borderStrokeStyle;
+        ctx.lineWidth = GameTileView.config.borderStrokeWidth;
         if (this.model.coord.x > 0) {
             ctx.beginPath();
             ctx.moveTo(ext.min.x, ext.min.y);
@@ -751,14 +738,15 @@ class GameTileView {
         }
 
         if (this.model.isCovered) {
-            ctx.strokeStyle = "#eeeeee";
+            ctx.strokeStyle = GameTileView.config.coveredBevelStyle;
             ctx.beginPath();
-            ctx.moveTo(ext.min.x, ext.min.y + 1);
-            ctx.lineTo(ext.max.x - 1, ext.min.y + 1);
+            let offset = GameTileView.config.coveredBevelWidth;
+            ctx.moveTo(ext.min.x, ext.min.y + offset);
+            ctx.lineTo(ext.max.x - offset, ext.min.y + offset);
             ctx.stroke();
             ctx.beginPath();
-            ctx.moveTo(ext.max.x - 1, ext.min.y + 1);
-            ctx.lineTo(ext.max.x - 1, ext.max.y);
+            ctx.moveTo(ext.max.x - offset, ext.min.y + offset);
+            ctx.lineTo(ext.max.x - offset, ext.max.y);
             ctx.stroke();
         }
 
@@ -803,15 +791,29 @@ class GameTileView {
         viewState.render(context, rect, this.model);
         return this;
     }
-}
+} // end class GameTileView
 
 class GameTileViewState {
+    // config: dictionary with values: {glyph:, textColor:, fillColor:}
+    static initialize(config) {
+        GameTileViewState.covered = new GameTileViewState(config.covered);
+        GameTileViewState.assertMine = new GameTileViewState(config.assertMine);
+        GameTileViewState.maybeMine = new GameTileViewState(config.maybeMine);
+        GameTileViewState.clear = new GameTileViewState(config.clear);
+        let safe = config.safe;
+        safe.glyph = tile => `${tile.minedNeighborCount}`;
+        GameTileViewState.safe = new GameTileViewState(safe);
+        GameTileViewState.mineTriggered = new GameTileViewState(config.mineTriggered);
+        GameTileViewState.mineRevealed = new GameTileViewState(config.mineRevealed);
+        GameTileViewState.incorrectFlag = new GameTileViewState(config.incorrectFlag);
+    }
+
     constructor(config) {
         this.fillColor = config.fillColor;
-        if (typeof(config.text) === 'function') {
-            this.text = config.text;
+        if (typeof(config.glyph) === 'function') {
+            this.glyph = config.glyph;
         } else {
-            this.text = tile => config.text;
+            this.glyph = tile => config.glyph;
         }
         this.textColor = config.textColor;
     }
@@ -819,24 +821,13 @@ class GameTileViewState {
     render(context, rect, tile) {
         context.ctx.fillStyle = this.fillColor;
         context.ctx.rectFill(rect);
-        let textValue = this.text(tile);
+        let textValue = this.glyph(tile);
         if (textValue) {
             context.ctx.fillStyle = this.textColor;
             context.ctx.fillTextCentered(textValue, rect);
         }
     }
 }
-GameTileViewState.coveredColor = "#cecece";
-GameTileViewState.revealedColor = "#ececec";
-GameTileViewState.incorrectColor = "#ffcccc";
-GameTileViewState.covered = new GameTileViewState({ fillColor: GameTileViewState.coveredColor, text: null });
-GameTileViewState.assertMine = new GameTileViewState({ fillColor: GameTileViewState.coveredColor, text: "▲", textColor: "#ff3300" });
-GameTileViewState.maybeMine = new GameTileViewState({ fillColor: GameTileViewState.coveredColor, text: "?", textColor: "#0033ff" });
-GameTileViewState.clear = new GameTileViewState({ fillColor: GameTileViewState.revealedColor, text: null });
-GameTileViewState.safe = new GameTileViewState({ fillColor: GameTileViewState.revealedColor, text: tile => `${tile.minedNeighborCount}`, textColor: "#666666" });
-GameTileViewState.mineTriggered = new GameTileViewState({ fillColor: GameTileViewState.incorrectColor, text: "✸", textColor: "#990000" });
-GameTileViewState.mineRevealed = new GameTileViewState({ fillColor: "#999999", text: "✷", textColor: "#000000" });
-GameTileViewState.incorrectFlag = new GameTileViewState({ fillColor: GameTileViewState.incorrectColor, text: "✖︎", textColor: "#990000" });
 
 class NewGameDialog extends GameDialog {
     constructor() {
@@ -993,7 +984,7 @@ class HighScoresDialog extends GameDialog {
             this.buttons.push(new ToolButton({
                 id: "",
                 parent: elem.querySelector(".difficulties row"),
-                title: difficulty.difficulty.name,
+                title: Strings.str(difficulty.difficulty.name),
                 click: () => this.selectDifficulty(index)
             }));
 
@@ -1038,9 +1029,17 @@ class HighScoresDialog extends GameDialog {
     get dialogButtons() { return [this.x.elem]; }
 } // end class HighScoresDialog
 
-var initialize = function() {
+var initialize = async function() {
+    let content = await GameContent.loadYamlFromLocalFile("sweep-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
+    if (!content) {
+        alert(Strings.str("failedToLoadGameMessage"));
+        return;
+    }
+
+    Gaming.Strings.initialize(content.strings);
+    Game.initialize(content);
     new NewGameDialog().show();
-};
+}
 
 return {
     initialize: initialize,

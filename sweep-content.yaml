@@ -1,0 +1,93 @@
+
+################ GAME RULES ###############
+
+rules:
+  difficulties:
+    - name: gameDifficultyBeginner
+      width: 10
+      height: 10
+      mineCount: 8
+    - name: gameDifficultyIntermediate
+      width: 24
+      height: 16
+      mineCount: 36
+      isDefault: true
+    - name: gameDifficultyAdvanced
+      width: 32
+      height: 32
+      mineCount: 100
+    - name: gameDifficultyExpert
+      width: 48
+      height: 32
+      mineCount: 200
+
+#################### UI ###################
+
+gameTileView:
+  font: bold 32px monospace
+  borderStrokeStyle: "#111111"
+  borderStrokeWidth: 1
+  coveredBevelStyle: "#eeeeee"
+  coveredBevelWidth: 1
+gameTileViewState:
+  coveredColor: &COVEREDCOLOR "#cecece"
+  revealedColor: &REVEALEDCOLOR "#ececec"
+  incorrectColor: &INCORRECTCOLOR "#ffcccc"
+  covered:
+    fillColor: *COVEREDCOLOR
+  assertMine:
+    glyph: "▲"
+    textColor: "#ff3300"
+    fillColor: *COVEREDCOLOR
+  maybeMine:
+    glyph: "?"
+    textColor: "#0033ff"
+    fillColor: *COVEREDCOLOR
+  clear:
+    fillColor: *REVEALEDCOLOR
+  safe:
+    textColor: "#666666"
+    fillColor: *REVEALEDCOLOR
+  mineTriggered:
+    glyph: "✸"
+    textColor: "#990000"
+    fillColor: *INCORRECTCOLOR
+  mineRevealed:
+    glyph: "✷"
+    textColor: "#000000"
+    fillColor: "#999999"
+  incorrectFlag:
+    glyph: "✖︎"
+    textColor: "#990000"
+    fillColor: *INCORRECTCOLOR
+
+################## STRINGS ################
+
+strings:
+  applyStreamPresetsButton: "Stream ↘︎"
+  defaultPlayerName: "✷✷✷"
+  dialogDismissButton: "✖️"
+  difficultyChoiceLabelTemplate: "<name>"
+  failedToLoadGameMessage: There was a problem loading the game data.
+  gameSettingsDifficultyLabel: "Difficulty"
+  gameDifficultyBeginner: Beginner
+  gameDifficultyIntermediate: Intermediate
+  gameDifficultyAdvanced: Advanced
+  gameDifficultyExpert: Expert
+  helpDialogTitle: "Help"
+  helpDismiss: "Thanks!"
+  highScoresDialogTitle: "✷ High Scores ✷"
+  highScoresDismiss: "Done"
+  newGameButton: "New Game"
+  newGameDialogStartButton: "Start"
+  newGameDialogTitle: "New Game"
+  playerNameInputTitle: "Your Name"
+  quitGameConfirmPrompt: "Are you sure you want to quit?"
+  resetBoardButton: "Reset"
+  saveHighScoreButton: "Save"
+  saveHighScoreDialogTitle: "You Won!"
+  showHelpButton: "Help"
+  showHighScoresButton: "High Scores"
+  gameStatusPlayingTemplate: "<points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
+  gameStatusLostTemplate: "Lost! <points> pts, <progressPercent> tiles completed"
+  gameStatusWonTemplate: "Won! <points> pts, <mineCount> mines cleared"
