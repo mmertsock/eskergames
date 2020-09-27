@@ -23,6 +23,8 @@ rules:
 
 #################### UI ###################
 
+gameBoardView:
+  tileWidth: 24
 gameTileView:
   font: bold 32px monospace
   borderStrokeStyle: "#111111"

@@ -137,6 +137,7 @@ class Game {
             content.rules.difficulties.forEach( difficulty => { difficulty.name = Strings.str(difficulty.name); });
         }
         Game.content = content;
+        GameBoardView.initialize(content.gameBoardView);
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
     }
@@ -645,6 +646,10 @@ class GameStatusView {
 }
 
 class GameBoardView {
+    static initialize(config) {
+        GameBoardView.metrics = config;
+    }
+
     constructor(config) {
         this.session = config.session;
         this.game = config.session.game;
@@ -694,9 +699,6 @@ class GameBoardView {
         this.tileViews.forEach(tile => tile.render(context));
     }
 }
-GameBoardView.metrics = {
-    tileWidth: 24
-};
 // end class GameBoardView
 
 class GameTileView {
@@ -800,9 +802,7 @@ class GameTileViewState {
         GameTileViewState.assertMine = new GameTileViewState(config.assertMine);
         GameTileViewState.maybeMine = new GameTileViewState(config.maybeMine);
         GameTileViewState.clear = new GameTileViewState(config.clear);
-        let safe = config.safe;
-        safe.glyph = tile => `${tile.minedNeighborCount}`;
-        GameTileViewState.safe = new GameTileViewState(safe);
+        GameTileViewState.safe = new GameTileViewState(Object.assign(config.safe, { glyph: tile => `${tile.minedNeighborCount}` }));
         GameTileViewState.mineTriggered = new GameTileViewState(config.mineTriggered);
         GameTileViewState.mineRevealed = new GameTileViewState(config.mineRevealed);
         GameTileViewState.incorrectFlag = new GameTileViewState(config.incorrectFlag);
