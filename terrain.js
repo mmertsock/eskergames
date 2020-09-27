@@ -44,9 +44,9 @@ const CanvasInputController = CitySim.CanvasInputController;
 const CanvasTileViewport = CitySim.CanvasTileViewport;
 const CityMap = CitySim.CityMap;
 const ConfirmDialog = CitySim.ConfirmDialog;
-const GameContent = CitySimContent.GameContent;
+const GameContent = Gaming.GameContent;
 const GameDialog = CitySim.GameDialog;
-const GameScriptEngine = CitySimContent.GameScriptEngine;
+const GameScriptEngine = Gaming.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
 const HelpDialog = CitySim.HelpDialog;
 const InputView = CitySim.InputView;
@@ -2110,6 +2110,19 @@ class BuildOceanDialog extends GameDialog {
     }
 }
 
+class EngineController {
+    constructor() {
+        this.queue = new Gaming.TaskQueue();
+        this.uiClient = new Gaming.BackgroundWorkerController({ logMessages: true });
+
+        // this.uiClient.setMessageHandler(StartNewGameMessage.messageName, (message) => this.gotNewGameMessage(message));
+        // this.uiClient.postMessage(new CityViewModel(this.city));
+
+        this.queue.append(new InitializeEngineTask(this));
+        this.queue.run(this.city);
+    }
+}
+
 let initialize = function() {
     CitySimTerrain.uiRunLoop = new Gaming.RunLoop({ targetFrameRate: 60, id: "uiRunLoop" });
     GameScriptEngine.shared = new GameScriptEngine();
@@ -2133,7 +2146,8 @@ let initialize = function() {
 };
 
 return {
-    initialize: initialize
+    initialize: initialize,
+    EngineController: EngineController
 };
 
 })(); // end namespace CitySimTerrain
