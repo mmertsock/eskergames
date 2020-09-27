@@ -981,17 +981,20 @@ class HighScoresDialog extends GameDialog {
         this.buttons = [];
         data.difficulties.forEach(difficulty => {
             let index = difficulty.difficulty.index;
-            this.buttons.push(new ToolButton({
-                id: "",
-                parent: elem.querySelector(".difficulties row"),
-                title: Strings.str(difficulty.difficulty.name),
-                click: () => this.selectDifficulty(index)
-            }));
+            let rules = Game.rules().difficulties[index];
+            if (rules) {
+                this.buttons.push(new ToolButton({
+                    id: "",
+                    parent: elem.querySelector(".difficulties row"),
+                    title: rules.name,
+                    click: () => this.selectDifficulty(index)
+                }));
 
-            let highScore = this.highScoreElement(difficulty, elem.querySelector("scoreTemplate"))
-                .addRemClass("highScores", true)
-                .addRemClass(this.classForDifficulty(index), true);
-            this.scores.append(highScore);
+                let highScore = this.highScoreElement(difficulty, elem.querySelector("scoreTemplate"))
+                    .addRemClass("highScores", true)
+                    .addRemClass(this.classForDifficulty(index), true);
+                this.scores.append(highScore);
+            }
         });
 
         const first = data.difficulties.findIndex(item => item.highScores.length > 0);
@@ -1044,6 +1047,7 @@ var initialize = async function() {
 return {
     initialize: initialize,
     session: null,
+    Game: Game
 };
 
 })(); // end Sweep namespace
