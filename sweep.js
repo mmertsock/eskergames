@@ -616,9 +616,7 @@ class GameControlsView {
     }
 
     showHighScores() {
-        const highScores = GameStorage.shared.highScoresByDifficulty;
-        new HighScoresDialog(highScores).show();
-        // debugLog(GameStorage.shared.highScoresByDifficulty);
+        HighScoresDialog.showHighScores(GameStorage.shared);
     }
 }
 
@@ -859,6 +857,15 @@ class NewGameDialog extends GameDialog {
         this.allInputs = [this.difficulties];
     }
 
+    show() {
+        super.show();
+        this.dismissButton.elem.addRemClass("hidden", !this.isDismissable);
+    }
+
+    get isDismissable() {
+        return !!Sweep.session;
+    }
+
     get isModal() { return true; }
 
     get title() { return Strings.str("newGameDialogTitle"); }
@@ -887,7 +894,9 @@ class NewGameDialog extends GameDialog {
     }
 
     dismissButtonClicked() {
-        GameSession.quit(false);
+        if (this.isDismissable) {
+            this.dismiss();
+        }
     }
 } // end class NewGameDialog
 
@@ -937,6 +946,7 @@ class SaveHighScoreDialog extends GameDialog {
         }
         GameStorage.shared.addHighScore(this.session, this.playerName);
         this.dismiss();
+        HighScoresDialog.showHighScores(GameStorage.shared);
     }
 }
 
@@ -966,6 +976,11 @@ class HelpDialog extends GameDialog {
 }
 
 class HighScoresDialog extends GameDialog {
+    static showHighScores(storage) { // storage: GameStorage
+        const highScores = storage.highScoresByDifficulty;
+        new HighScoresDialog(highScores).show();
+    }
+
     constructor(data) {
         super();
         this.contentElem = GameDialog.createContentElem();
