@@ -8,8 +8,14 @@ Number.uiFloat = function(value) {
     return Number(value).toLocaleString();
 };
 
+// 0.237 -> 24%
 Number.uiPercent = function(ratio) {
     return Math.round(ratio * 100).toLocaleString() + "%";
+};
+
+// 23.7 -> 23.7%
+Number.uiFormatWithPercent = function(percent) {
+    return percent.toLocaleString() + "%";
 };
 
 Gaming.Strings = (() => {

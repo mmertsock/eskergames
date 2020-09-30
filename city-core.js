@@ -226,6 +226,8 @@ class SingleChoiceInputView extends InputView {
 }
 
 class SingleChoiceInputCollection extends FormValueView {
+    static Kvo() { return {"value": "value"}; }
+
     static selectionRequiredRule(collection) {
         return collection.value !== null;
     }
@@ -249,6 +251,12 @@ class SingleChoiceInputCollection extends FormValueView {
             value: item.value,
             selected: item.selected
         }));
+        this.elem.querySelectorAll("input").forEach(input => {
+            input.addEventListener("change", () => {
+                this.kvo.value.notifyChanged();
+            });
+        });
+        this.kvo = new Kvo(this);
     }
 
     get title() {
@@ -266,6 +274,7 @@ class SingleChoiceInputCollection extends FormValueView {
     set value(newValue) {
         var choice = this.choices.find(item => item.value == newValue);
         choice.selected = true;
+        this.kvo.value.notifyChanged();
     }
 }
 

@@ -16,7 +16,7 @@ rules:
     - name: gameDifficultyAdvanced
       width: 32
       height: 32
-      mineCount: 100 # ratio: 10.24
+      mineCount: 108 # ratio: 9.48
     - name: gameDifficultyExpert
       width: 48
       height: 32
@@ -84,18 +84,20 @@ gameTileViewState:
 ################## STRINGS ################
 
 strings:
-  applyStreamPresetsButton: "Stream ↘︎"
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✖️"
   difficultyChoiceLabelTemplate: "<name>"
   failedToLoadGameMessage: There was a problem loading the game data.
   gameBoardDebugSummaryTemplate: "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
-  gameSettingsDifficultyLabel: "Difficulty"
-  gameDifficultyBeginner: Beginner
-  gameDifficultyIntermediate: Intermediate
   gameDifficultyAdvanced: Advanced
-  gameDifficultyExpert: Expert
+  gameDifficultyBeginner: Beginner
   gameDifficultyCustom: Custom
+  gameDifficultyExpert: Expert
+  gameDifficultyIntermediate: Intermediate
+  gameSettingsDifficultyLabel: "Difficulty"
+  gameStatusLostTemplate: "Lost! <points> pts, <progressPercent> tiles completed"
+  gameStatusPlayingTemplate: "<points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
+  gameStatusWonTemplate: "Won! <points> pts, <mineCount> mines cleared"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   highScoresDialogTitle: "✷ High Scores ✷"
@@ -105,18 +107,15 @@ strings:
   newGameDialogTitle: "New Game"
   newGameHeightInputLabelTemplate: "Height (<min>–<max>)"
   newGameMineCountInputLabelTemplate: "Mines (<min>–<max>)"
-  newGameWidthInputLabelTemplate: "Width (<min>–<max>)"
-  newGameTileCountPlaceholder: "# Tiles"
   newGameMineCountPlaceholder: "# Mines"
+  newGameTileCountPlaceholder: "# Tiles"
+  newGameWidthInputLabelTemplate: "Width (<min>–<max>)"
   playerNameInputTitle: "Your Name"
   quitGameConfirmPrompt: "Are you sure you want to quit?"
   resetBoardButton: "Reset"
   saveHighScoreButton: "Save"
-  saveHighScoreDialogTitle: "You Won!"
   saveHighScoreDialogTextTemplate: "Your score: <points>"
+  saveHighScoreDialogTitle: "You Won!"
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
-  gameStatusPlayingTemplate: "<points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
-  gameStatusLostTemplate: "Lost! <points> pts, <progressPercent> tiles completed"
-  gameStatusWonTemplate: "Won! <points> pts, <mineCount> mines cleared"
   toggleDebugModeButton: "Debug"

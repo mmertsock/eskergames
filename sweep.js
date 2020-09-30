@@ -199,7 +199,7 @@ class Game {
             }
         });
         stats.progress = (stats.clearedTileCount + stats.assertMineFlagCount) / stats.totalTileCount;
-        stats.progressPercent = Number.uiPercent(stats.progress);
+        stats.progressPercent = Number.uiFormatWithPercent(Math.floor(100 * stats.progress));
         return stats;
     }
 } // end class Game
@@ -700,7 +700,6 @@ class GameStatusView {
         this.elem.innerText = Strings.template(this.statusTemplate, this.session.game.statistics);
     }
 
-// TODO show elapsed time
     get statusTemplate() {
         switch (this.session.state) {
         case GameState.playing:
@@ -923,6 +922,9 @@ class NewGameDialog extends GameDialog {
                 selected: difficulty.index == defaultDifficultyIndex
             }; })
         });
+        this.difficulties.kvo.value.addObserver(this, () => {
+            this.difficultyChanged();
+        });
 
         let lastCustomDifficultyConfig = GameStorage.shared.lastCustomDifficultyConfig || difficultyRules.find(difficulty => difficulty.isCustom);
         let customDifficulty = Game.rules().customDifficulty;
@@ -963,6 +965,7 @@ class NewGameDialog extends GameDialog {
 
         this.contentElem.append(formElem);
         this.allInputs = [this.difficulties, this.customWidthInput, this.customHeightInput, this.customMineCountInput];
+        this.difficultyChanged();
     }
 
     show() {
@@ -983,12 +986,16 @@ class NewGameDialog extends GameDialog {
     }
 
     get isValid() {
-        return this.allInputs.every(input => input.isValid);
+        if (this.showCustomControls) {
+            return this.allInputs.every(input => input.isValid);
+        } else {
+            return this.difficulties.isValid;
+        }
     }
 
     get difficulty() {
         let difficulty = Game.rules().difficulties[this.difficulties.value];
-        if (difficulty.isCustom) {
+        if (difficulty && difficulty.isCustom) {
             return Object.assign(difficulty, {
                 width: this.customWidthInput.value,
                 height: this.customHeightInput.value,
@@ -996,6 +1003,11 @@ class NewGameDialog extends GameDialog {
             });
         }
         return difficulty;
+    }
+
+    get showCustomControls() {
+        let difficulty = Game.rules().difficulties[this.difficulties.value];
+        return difficulty ? !!(difficulty.isCustom) : false;
     }
 
     get validMineCountRange() {
@@ -1006,10 +1018,18 @@ class NewGameDialog extends GameDialog {
     }
 
     validateMineCount(input) {
+        if (!this.showCustomControls) return true;
         let range = this.validMineCountRange;
         this.customMineCountInput.title = Strings.template("newGameMineCountInputLabelTemplate", range);
         let validation = InputView.makeNumericRangeRule(range);
         return validation(input);
+    }
+
+    difficultyChanged() {
+        [this.customWidthInput, this.customHeightInput, this.customMineCountInput].forEach(input => {
+            input.elem.addRemClass("hidden", !this.showCustomControls);
+        });
+        return true;
     }
 
     validateAndStart() {
@@ -1027,6 +1047,11 @@ class NewGameDialog extends GameDialog {
         if (this.isDismissable) {
             this.dismiss();
         }
+    }
+
+    dismiss() {
+        Gaming.Kvo.stopAllObservations(this);
+        super.dismiss();
     }
 } // end class NewGameDialog
 
