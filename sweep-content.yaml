@@ -2,24 +2,42 @@
 ################ GAME RULES ###############
 
 rules:
+  allowDebugMode: false
   difficulties:
     - name: gameDifficultyBeginner
       width: 10
       height: 10
-      mineCount: 8
+      mineCount: 8 # ratio: 12.5
     - name: gameDifficultyIntermediate
       width: 24
       height: 16
       mineCount: 36
-      isDefault: true
+      isDefault: true # ratio: 10.67
     - name: gameDifficultyAdvanced
       width: 32
       height: 32
-      mineCount: 100
+      mineCount: 100 # ratio: 10.24
     - name: gameDifficultyExpert
       width: 48
       height: 32
-      mineCount: 200
+      mineCount: 200 # ratio: 7.68
+    - name: gameDifficultyCustom
+      width: 24
+      height: 24
+      mineCount: 56
+      isCustom: true
+  customDifficulty:
+    width:
+      min: 8
+      max: 64
+    height:
+      min: 8
+      max: 64
+    mineCount:
+      min: 4
+      max: 1024
+    tileMineRatio:
+      min: 2
 
 #################### UI ###################
 
@@ -71,11 +89,13 @@ strings:
   dialogDismissButton: "✖️"
   difficultyChoiceLabelTemplate: "<name>"
   failedToLoadGameMessage: There was a problem loading the game data.
+  gameBoardDebugSummaryTemplate: "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
   gameSettingsDifficultyLabel: "Difficulty"
   gameDifficultyBeginner: Beginner
   gameDifficultyIntermediate: Intermediate
   gameDifficultyAdvanced: Advanced
   gameDifficultyExpert: Expert
+  gameDifficultyCustom: Custom
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   highScoresDialogTitle: "✷ High Scores ✷"
@@ -83,13 +103,20 @@ strings:
   newGameButton: "New Game"
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
+  newGameHeightInputLabelTemplate: "Height (<min>–<max>)"
+  newGameMineCountInputLabelTemplate: "Mines (<min>–<max>)"
+  newGameWidthInputLabelTemplate: "Width (<min>–<max>)"
+  newGameTileCountPlaceholder: "# Tiles"
+  newGameMineCountPlaceholder: "# Mines"
   playerNameInputTitle: "Your Name"
   quitGameConfirmPrompt: "Are you sure you want to quit?"
   resetBoardButton: "Reset"
   saveHighScoreButton: "Save"
   saveHighScoreDialogTitle: "You Won!"
+  saveHighScoreDialogTextTemplate: "Your score: <points>"
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
   gameStatusPlayingTemplate: "<points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
   gameStatusLostTemplate: "Lost! <points> pts, <progressPercent> tiles completed"
   gameStatusWonTemplate: "Won! <points> pts, <mineCount> mines cleared"
+  toggleDebugModeButton: "Debug"

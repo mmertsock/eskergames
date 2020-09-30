@@ -191,6 +191,9 @@ class TextInputView extends InputView {
     get title() {
         return this.elem.querySelector("label.textInput span").innerText;
     }
+    set title(value) {
+        this.elem.querySelector("label.textInput span").innerText = value;
+    }
 
     get isValid() {
         return this.validationRules.every(rule => rule(this));

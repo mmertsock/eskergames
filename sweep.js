@@ -127,6 +127,7 @@ class GameBoard {
         let mineTiles = candidates.slice(0, this.mineCount);
         mineTiles.forEach(tile => { tile.isMined = true; })
         this.visitTiles(null, tile => { tile._boardConstructed(); });
+        debugLog(Game.debugSummary(this));
     }
 } // end class GameBoard
 
@@ -144,6 +145,32 @@ class Game {
 
     static rules() {
         return Game.content.rules;
+    }
+
+    static debugSummary(board) {
+        let stats = {
+            width: board.size.width,
+            height: board.size.height,
+            totalTileCount: board.size.width * board.size.height,
+            totalMineCount: 0,
+            tileMineRatio: 0,
+            totalPoints: 0,
+            histogram: new Array(9).fill(0)
+        };
+        board.visitTiles(null, tile => {
+            if (tile.isMined) {
+                stats.totalMineCount += 1;
+            }
+            stats.totalPoints += Game.pointsValue(tile);
+            stats.histogram[tile.minedNeighborCount] += 1;
+        });
+        stats.tileMineRatio = stats.totalTileCount / stats.totalMineCount;
+        stats.histogram = stats.histogram.map((count, index) => `${index}:${count}`).join(", ");
+        return Strings.template("gameBoardDebugSummaryTemplate", stats);
+    }
+
+    static pointsValue(tile) {
+        return Math.pow(2, tile.minedNeighborCount);
     }
 
     constructor(config) {
@@ -168,7 +195,7 @@ class Game {
             if (tile.flag == TileFlag.assertMine) { stats.assertMineFlagCount += 1; }
             if (!tile.isCovered && !tile.isMined) {
                 stats.clearedTileCount += 1;
-                stats.points += Math.pow(2, tile.minedNeighborCount);
+                stats.points += Game.pointsValue(tile);
             }
         });
         stats.progress = (stats.clearedTileCount + stats.assertMineFlagCount) / stats.totalTileCount;
@@ -223,7 +250,7 @@ class GameStorage {
             return item.data.highScoresByDifficulty;
         }
         return {
-            difficulties: Game.rules().difficulties.map(difficulty => {
+            difficulties: Game.rules().difficulties.filter(difficulty => !difficulty.isCustom).map(difficulty => {
                 return { difficulty: difficulty, highScores: [] };
             })
         };
@@ -235,6 +262,14 @@ class GameStorage {
     }
     set lastDifficultyIndex(value) {
         this.setPreference("lastDifficultyIndex", value);
+    }
+
+    get lastCustomDifficultyConfig() {
+        let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
+        return item ? item.data.lastCustomDifficultyConfig : null;
+    }
+    set lastCustomDifficultyConfig(value) {
+        this.setPreference("lastCustomDifficultyConfig", value);
     }
 
     get lastPlayerName() {
@@ -270,6 +305,7 @@ class GameSession {
         this.game = config.game;
         this.state = GameState.playing;
         this.isFirstMove = true;
+        this.debugMode = false;
         this.elems = {
             boardContainer: document.querySelector("board")
         };
@@ -282,6 +318,9 @@ class GameSession {
 
     start() {
         GameStorage.shared.lastDifficultyIndex = this.game.difficulty.index;
+        if (this.game.difficulty.isCustom) {
+            GameStorage.shared.lastCustomDifficultyConfig = this.game.difficulty;
+        };
 
         if (this.puzzle == 1) {
             this.game.board.visitTiles(null, tile => tile.isMined = false);
@@ -318,6 +357,11 @@ class GameSession {
 
     renderViews() {
         this.views.forEach(view => view.render());
+    }
+
+    toggleDebugMode() {
+        this.debugMode = !this.debugMode;
+        this.renderViews();
     }
 
     cycleFlag(point) {
@@ -436,7 +480,9 @@ class GameSession {
         if (!anyUnfinished) {
             this.state = GameState.won;
             this.endTime = Date.now();
-            new SaveHighScoreDialog(this).show();
+            if (!this.game.difficulty.isCustom) {
+                new SaveHighScoreDialog(this).show();
+            }
         }
     }
 }
@@ -595,9 +641,23 @@ class GameControlsView {
                 click: () => this.showHighScores()
             }),
         ];
+        if (Game.rules().allowDebugMode) {
+            this.debugModeButton = new ToolButton({
+                parent: this.elem,
+                title: Strings.str("toggleDebugModeButton"),
+                click: () => this.toggleDebugMode()
+            });
+            this.buttons.push(this.debugModeButton);
+        } else {
+            this.debugModeButton = null;
+        }
     }
 
     render() {
+        if (this.debugModeButton) {
+            let debugMode = this.session ? this.session.debugMode : false;
+            this.debugModeButton.elem.addRemClass("selected", debugMode);
+        }
     }
 
     newGame() {
@@ -616,7 +676,17 @@ class GameControlsView {
     }
 
     showHighScores() {
-        HighScoresDialog.showHighScores(GameStorage.shared);
+        let difficulty = null;
+        if (this.session && this.session.game) {
+            difficulty = this.session.game.difficulty;
+        }
+        HighScoresDialog.showHighScores(GameStorage.shared, difficulty);
+    }
+
+    toggleDebugMode() {
+        if (this.session) {
+            this.session.toggleDebugMode();
+        }
     }
 }
 
@@ -715,7 +785,7 @@ class GameTileView {
         const ext = rect.extremes;
         ctx.font = GameTileView.config.font;
 
-        if (this.model.isCovered) {
+        if (this.model.isCovered && !context.session.debugMode) {
             this.renderCovered(context, rect);
         } else {
             this.renderRevealed(context, rect);
@@ -837,24 +907,62 @@ class NewGameDialog extends GameDialog {
         this.contentElem = GameDialog.createContentElem();
         var formElem = GameDialog.createFormElem();
 
+        const difficultyRules = Game.rules().difficulties;
         let defaultDifficultyIndex = GameStorage.shared.lastDifficultyIndex;
         if (!(defaultDifficultyIndex >= 0)) {
-            defaultDifficultyIndex = Game.rules().difficulties.findIndex(difficulty => !!difficulty.isDefault);
+            defaultDifficultyIndex = difficultyRules.findIndex(difficulty => !!difficulty.isDefault);
         }
         this.difficulties = new CitySim.ControlViews.SingleChoiceInputCollection({
             id: "difficulty",
             parent: formElem,
             title: Strings.str("gameSettingsDifficultyLabel"),
             validationRules: [CitySim.ControlViews.SingleChoiceInputCollection.selectionRequiredRule],
-            choices: Game.rules().difficulties.map(difficulty => { return {
+            choices: difficultyRules.map(difficulty => { return {
                 title: Strings.template("difficultyChoiceLabelTemplate", difficulty),
                 value: difficulty.index,
                 selected: difficulty.index == defaultDifficultyIndex
             }; })
         });
 
+        let lastCustomDifficultyConfig = GameStorage.shared.lastCustomDifficultyConfig || difficultyRules.find(difficulty => difficulty.isCustom);
+        let customDifficulty = Game.rules().customDifficulty;
+
+        let validationRules = {
+            width: InputView.makeNumericRangeRule(customDifficulty.width),
+            height: InputView.makeNumericRangeRule(customDifficulty.height)
+        };
+        this.customWidthInput = new TextInputView({
+            parent: formElem,
+            title: Strings.template("newGameWidthInputLabelTemplate", customDifficulty.width),
+            placeholder: Strings.str("newGameTileCountPlaceholder"),
+            transform: InputView.integerTransform,
+            validationRules: [input => {
+                let isValid = validationRules.width(input);
+                if (isValid) { this.customMineCountInput.revalidate(); }
+                return isValid;
+            }]
+        }).configure(input => input.value = lastCustomDifficultyConfig.width);
+        this.customHeightInput = new TextInputView({
+            parent: formElem,
+            title: Strings.template("newGameHeightInputLabelTemplate", customDifficulty.height),
+            placeholder: Strings.str("newGameTileCountPlaceholder"),
+            transform: InputView.integerTransform,
+            validationRules: [input => {
+                let isValid = validationRules.height(input);
+                if (isValid) { this.customMineCountInput.revalidate(); }
+                return isValid;
+            }]
+        }).configure(input => input.value = lastCustomDifficultyConfig.height);
+        this.customMineCountInput = new TextInputView({
+            parent: formElem,
+            title: Strings.template("newGameMineCountInputLabelTemplate", this.validMineCountRange),
+            placeholder: Strings.str("newGameMineCountPlaceholder"),
+            transform: InputView.integerTransform,
+            validationRules: [(input) => this.validateMineCount(input)]
+        }).configure(input => input.value = lastCustomDifficultyConfig.mineCount);
+
         this.contentElem.append(formElem);
-        this.allInputs = [this.difficulties];
+        this.allInputs = [this.difficulties, this.customWidthInput, this.customHeightInput, this.customMineCountInput];
     }
 
     show() {
@@ -879,7 +987,29 @@ class NewGameDialog extends GameDialog {
     }
 
     get difficulty() {
-        return Game.rules().difficulties[this.difficulties.value];
+        let difficulty = Game.rules().difficulties[this.difficulties.value];
+        if (difficulty.isCustom) {
+            return Object.assign(difficulty, {
+                width: this.customWidthInput.value,
+                height: this.customHeightInput.value,
+                mineCount: this.customMineCountInput.value
+            });
+        }
+        return difficulty;
+    }
+
+    get validMineCountRange() {
+        let customDifficulty = Game.rules().customDifficulty;
+        let tileCount = this.customWidthInput.value * this.customHeightInput.value;
+        let maxMinesByRatio = Math.floor((tileCount) / customDifficulty.tileMineRatio.min);
+        return { min: customDifficulty.mineCount.min, max: Math.min(tileCount, Math.min(maxMinesByRatio, customDifficulty.mineCount.max)) };
+    }
+
+    validateMineCount(input) {
+        let range = this.validMineCountRange;
+        this.customMineCountInput.title = Strings.template("newGameMineCountInputLabelTemplate", range);
+        let validation = InputView.makeNumericRangeRule(range);
+        return validation(input);
     }
 
     validateAndStart() {
@@ -909,7 +1039,13 @@ class SaveHighScoreDialog extends GameDialog {
             click: () => this.save()
         });
         this.contentElem = GameDialog.createContentElem();
-        var formElem = GameDialog.createFormElem();
+
+        let formElem = GameDialog.createFormElem();
+
+        let textElem = document.createElement("p");
+        textElem.style["text-align"] = "center";
+        textElem.innerText = Strings.template("saveHighScoreDialogTextTemplate", this.session.game.statistics);
+        formElem.append(textElem);
         
         this.playerNameInput = new TextInputView({
             parent: formElem,
@@ -944,9 +1080,10 @@ class SaveHighScoreDialog extends GameDialog {
             debugLog("NOT VALID");
             return;
         }
+        let difficulty = this.session.game.difficulty;
         GameStorage.shared.addHighScore(this.session, this.playerName);
         this.dismiss();
-        HighScoresDialog.showHighScores(GameStorage.shared);
+        HighScoresDialog.showHighScores(GameStorage.shared, difficulty);
     }
 }
 
@@ -976,12 +1113,12 @@ class HelpDialog extends GameDialog {
 }
 
 class HighScoresDialog extends GameDialog {
-    static showHighScores(storage) { // storage: GameStorage
+    static showHighScores(storage, difficulty) {
         const highScores = storage.highScoresByDifficulty;
-        new HighScoresDialog(highScores).show();
+        new HighScoresDialog(highScores, difficulty).show();
     }
 
-    constructor(data) {
+    constructor(data, selected) {
         super();
         this.contentElem = GameDialog.createContentElem();
         let elem = document.querySelector("body > highScores")
@@ -1012,8 +1149,12 @@ class HighScoresDialog extends GameDialog {
             }
         });
 
-        const first = data.difficulties.findIndex(item => item.highScores.length > 0);
-        this.selectDifficulty(first >= 0 ? first : 0);
+        if (selected) {
+            this.selectDifficulty(selected.index);
+        } else {
+            const first = data.difficulties.findIndex(item => item.highScores.length > 0);
+            this.selectDifficulty(first >= 0 ? first : 0);
+        }
     }
 
     classForDifficulty(index) {
