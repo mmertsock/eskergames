@@ -112,6 +112,9 @@ strings:
   helpDismiss: "Thanks!"
   highScoresDialogTitle: "✷ High Scores ✷"
   highScoresDismiss: "Done"
+  lostAlertTitle: You Lost
+  lostAlertDialogTextTemplate: "Your score: <points>"
+  lostAlertButton: Bummer
   newGameButton: "New Game"
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"

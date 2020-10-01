@@ -328,7 +328,6 @@ class GameSession {
         this.boardView = new GameBoardView({ session: this, boardContainer: this.elems.boardContainer });
         this.statusView = new GameStatusView({ session: this, elem: document.querySelector("footer") });
         this.views = [this.controlsView, this.boardView, this.statusView];
-        // this.puzzle = 2;
     }
 
     start() {
@@ -336,25 +335,6 @@ class GameSession {
         if (this.game.difficulty.isCustom) {
             GameStorage.shared.lastCustomDifficultyConfig = this.game.difficulty;
         };
-
-        if (this.puzzle == 1) {
-            this.game.board.visitTiles(null, tile => tile.isMined = false);
-            let center = this.game.board.tileAtCoord(new Point(5, 5));
-            center.visitNeighbors(neighbor => neighbor.isMined = true);
-            this.game.board.reset();
-        }
-        if (this.puzzle == 2) {
-            this.game.board.visitTiles(null, tile => tile.isMined = false);
-            this.game.board.tileAtCoord(new Point(0, 0)).isMined = true;
-            this.game.board.tileAtCoord(new Point(0, 4)).isMined = true;
-            this.game.board.tileAtCoord(new Point(0, 9)).isMined = true;
-            this.game.board.tileAtCoord(new Point(5, 0)).isMined = true;
-            this.game.board.tileAtCoord(new Point(4, 9)).isMined = true;
-            this.game.board.tileAtCoord(new Point(9, 0)).isMined = true;
-            this.game.board.tileAtCoord(new Point(9, 5)).isMined = true;
-            this.game.board.tileAtCoord(new Point(9, 9)).isMined = true;
-            this.game.board.reset();
-        }
 
         this.state = GameState.playing;
         this.startTime = Date.now();
@@ -527,9 +507,14 @@ class GameSession {
     }
 
     mineTriggered(tile) {
+        tile.isCovered = false;
         this.state = GameState.lost;
         this.endTime = Date.now();
-        tile.isCovered = false;
+        new AlertDialog({
+            title: Strings.str("lostAlertTitle"),
+            message: Strings.template("lostAlertDialogTextTemplate", this.game.statistics),
+            button: Strings.str("lostAlertButton")
+        }).show();
     }
 
     checkForWin() {
@@ -1150,7 +1135,7 @@ class AlertDialog extends GameDialog {
         this.title = config.title;
         this.contentElem = GameDialog.createContentElem();
         this.x = new ToolButton({ title: config.button, click: () => this.dismiss() });
-        let message = document.createElement("p");
+        let message = document.createElement("p").addRemClass("message", true);
         message.innerText = config.message;
         this.contentElem.append(message);
     }
@@ -1171,8 +1156,7 @@ class SaveHighScoreDialog extends GameDialog {
 
         let formElem = GameDialog.createFormElem();
 
-        let textElem = document.createElement("p");
-        textElem.style["text-align"] = "center";
+        let textElem = document.createElement("p").addRemClass("message", true);
         let template = this.isEnabled ? "saveHighScoreDialogTextTemplate" : "saveHighScoreDisabledDialogTextTemplate";
         textElem.innerText = Strings.template(template, this.session.game.statistics);
         formElem.append(textElem);
