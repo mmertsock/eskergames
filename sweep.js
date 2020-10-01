@@ -173,6 +173,13 @@ class Game {
         return Math.pow(2, tile.minedNeighborCount);
     }
 
+    static starCount(stats) {
+        const highScoreThresholds = Game.rules().highScoreThresholds;
+        if (stats.totalTileCount <= 0) { return 1; }
+        let ratio = stats.mineCount / Math.pow(stats.totalTileCount, 0.75)
+        return 1 + highScoreThresholds.filter(value => value <= ratio).length;
+    }
+
     constructor(config) {
         this.difficulty = config.difficulty;
         this.board = new GameBoard({ size: config.difficulty, mineCount: config.difficulty.mineCount });
@@ -200,6 +207,8 @@ class Game {
         });
         stats.progress = (stats.clearedTileCount + stats.assertMineFlagCount) / stats.totalTileCount;
         stats.progressPercent = Number.uiFormatWithPercent(Math.floor(100 * stats.progress));
+        stats.starCount = Game.starCount(stats);
+        stats.stars = Strings.str(`stars${stats.starCount}`);
         return stats;
     }
 } // end class Game
@@ -247,10 +256,13 @@ class GameStorage {
     get highScoresByDifficulty() {
         let item = this.highScoresCollection.getItem(this.highScoresCollection.namespace);
         if (item) {
-            return item.data.highScoresByDifficulty;
+            return { difficulties: Game.rules().difficulties.map(difficulty => {
+                let scores = item.data.highScoresByDifficulty.difficulties.find(x => x.difficulty.index == difficulty.index);
+                return { difficulty: difficulty, highScores: scores ? scores.highScores : [] }
+            }) };
         }
         return {
-            difficulties: Game.rules().difficulties.filter(difficulty => !difficulty.isCustom).map(difficulty => {
+            difficulties: Game.rules().difficulties.map(difficulty => {
                 return { difficulty: difficulty, highScores: [] };
             })
         };
@@ -480,9 +492,7 @@ class GameSession {
         if (!anyUnfinished) {
             this.state = GameState.won;
             this.endTime = Date.now();
-            if (!this.game.difficulty.isCustom) {
-                new SaveHighScoreDialog(this).show();
-            }
+            new SaveHighScoreDialog(this).show();
         }
     }
 }
@@ -1202,6 +1212,7 @@ class HighScoresDialog extends GameDialog {
                 item.querySelector("name").innerText = highScore.playerName;
                 item.querySelector("date").innerText = new Date(highScore.timestamp).toLocaleDateString("default", { dateStyle: "short" });
                 item.querySelector("points").innerText = highScore.points;
+                item.querySelector("stars").innerText = Strings.str(`stars${Game.starCount(highScore)}`);
                 highScores.append(item);
             });
             return highScores;

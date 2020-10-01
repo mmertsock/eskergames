@@ -38,6 +38,10 @@ rules:
       max: 1024
     tileMineRatio:
       min: 2
+  # Determines number of difficulty stars for a game
+  # max values for 1/2/3/4 stars. 5 stars is anything past the end of array
+  # values are mine/(tiles^0.75) ratio
+  highScoreThresholds: [0.3, 0.53, 0.7, 1.2]
 
 #################### UI ###################
 
@@ -95,9 +99,9 @@ strings:
   gameDifficultyExpert: Expert
   gameDifficultyIntermediate: Intermediate
   gameSettingsDifficultyLabel: "Difficulty"
-  gameStatusLostTemplate: "Lost! <points> pts, <progressPercent> tiles completed"
-  gameStatusPlayingTemplate: "<points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
-  gameStatusWonTemplate: "Won! <points> pts, <mineCount> mines cleared"
+  gameStatusLostTemplate: "Lost! <stars> <points> pts, <progressPercent> tiles completed"
+  gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
+  gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCount> mines cleared"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   highScoresDialogTitle: "✷ High Scores ✷"
@@ -118,4 +122,9 @@ strings:
   saveHighScoreDialogTitle: "You Won!"
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
+  stars1: "★☆☆☆☆"
+  stars2: "★★☆☆☆"
+  stars3: "★★★☆☆"
+  stars4: "★★★★☆"
+  stars5: "★★★★★"
   toggleDebugModeButton: "Debug"
