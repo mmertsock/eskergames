@@ -668,37 +668,32 @@ class GameControlsView {
     constructor(config) {
         this.session = config.session;
         this.elem = config.elem;
-        this.buttons = null;
         this.elem.removeAllChildren();
-        this.buttons = [
-            new ToolButton({
-                parent: this.elem,
-                title: Strings.str("newGameButton"),
-                click: () => this.newGame()
-            }),
-            new ToolButton({
-                parent: this.elem,
-                title: Strings.str("resetBoardButton"),
-                click: () => this.resetBoard()
-            }),
-            new ToolButton({
-                parent: this.elem,
-                title: Strings.str("showHelpButton"),
-                click: () => this.showHelp()
-            }),
-            new ToolButton({
-                parent: this.elem,
-                title: Strings.str("showHighScoresButton"),
-                click: () => this.showHighScores()
-            })
-        ];
-
+        this.newGameButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("newGameButton"),
+            click: () => this.newGame()
+        });
+        this.resetBoardButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("resetBoardButton"),
+            click: () => this.resetBoard()
+        });
+        this.showHelpButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("showHelpButton"),
+            click: () => this.showHelp()
+        });
+        this.showHighScoresButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("showHighScoresButton"),
+            click: () => this.showHighScores()
+        });
         this.showHintButton = new ToolButton({
             parent: this.elem,
             title: Strings.str("showHintButton"),
             click: () => this.showHint()
         });
-        this.buttons.push(this.showHintButton);
 
         if (Game.rules().allowDebugMode) {
             this.debugModeButton = new ToolButton({
@@ -706,13 +701,13 @@ class GameControlsView {
                 title: Strings.str("toggleDebugModeButton"),
                 click: () => this.toggleDebugMode()
             });
-            this.buttons.push(this.debugModeButton);
         } else {
             this.debugModeButton = null;
         }
     }
 
     render() {
+        this.resetBoardButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
         this.showHintButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
         if (this.debugModeButton) {
             this.debugModeButton.isSelected = this.session ? this.session.debugMode : false
