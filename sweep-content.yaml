@@ -84,6 +84,10 @@ gameTileViewState:
     glyph: "✖︎"
     textColor: "#990000"
     fillColor: *INCORRECTCOLOR
+  hintTile:
+    fillColor: "hsla(120, 85%, 85%, 0.5)"
+  debug:
+    fillColor: "hsla(83, 100%, 50%, 0.2)"
 
 ################## STRINGS ################
 
@@ -91,6 +95,8 @@ strings:
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✖️"
   difficultyChoiceLabelTemplate: "<name>"
+  errorAlertDismissButton: Bummer
+  errorAlertTitle: "Oh No!"
   failedToLoadGameMessage: There was a problem loading the game data.
   gameBoardDebugSummaryTemplate: "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
   gameDifficultyAdvanced: Advanced
@@ -120,8 +126,12 @@ strings:
   saveHighScoreButton: "Save"
   saveHighScoreDialogTextTemplate: "Your score: <points>"
   saveHighScoreDialogTitle: "You Won!"
+  saveHighScoreDisabledDialogTextTemplate: "Your score: <points>. But you can’t save your high score because you got help."
+  saveHighScoreDisabledButton: OK
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
+  showHintButton: Hint
+  showHintErrorText: Can’t find any hints to show.
   stars1: "★☆☆☆☆"
   stars2: "★★☆☆☆"
   stars3: "★★★☆☆"

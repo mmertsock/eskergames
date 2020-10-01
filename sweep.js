@@ -316,8 +316,11 @@ class GameSession {
     constructor(config) {
         this.game = config.game;
         this.state = GameState.playing;
-        this.isFirstMove = true;
         this.debugMode = false;
+        this.isFirstMove = true;
+        this.isClean = !this.debugMode; // false if cheated, etc.
+        this.hintTile = null;
+        this.debugTiles = [];
         this.elems = {
             boardContainer: document.querySelector("board")
         };
@@ -357,6 +360,8 @@ class GameSession {
         this.startTime = Date.now();
         this.endTime = null;
         this.isFirstMove = true;
+        this.isClean = !this.debugMode;
+        this.hintTile = null;
         this.elems.boardContainer.addRemClass("hidden", false);
         this.renderViews();
     }
@@ -371,17 +376,68 @@ class GameSession {
         this.views.forEach(view => view.render());
     }
 
+    showHint() {
+        if (this.state != GameState.playing) { return; }
+        if (this.hintTile) return;
+        var candidates = [];
+
+        // Try to find a safe covered tile adjacent to a cleared tile
+        this.game.board.visitTiles(null, tile => {
+            if (tile.isCovered) return true;
+            if (!tile.isCovered) {
+                tile.visitNeighbors(neighbor => {
+                    if (neighbor.isCovered && !neighbor.isMined && !candidates.contains(neighbor)) {
+                        candidates.push(neighbor);
+                    }
+                });
+            }
+            return true;
+        });
+
+        // Fall back: find any safe covered tile
+        if (candidates.length == 0) {
+            this.game.board.visitTiles(null, tile => {
+                if (tile.isCovered && !tile.isMined) {
+                    candidates.push(tile);
+                }
+                return true;
+            });
+        }
+        
+        if (candidates.length > 0) {
+            this.hintTile = candidates.randomItem();
+            this.isClean = false;
+        } else {
+            this.hintTile = null;
+            new AlertDialog({
+                title: Strings.str("errorAlertTitle"),
+                message: Strings.str("showHintErrorText"),
+                button: Strings.str("errorAlertDismissButton")
+            }).show();
+        }
+
+        this.renderViews();
+    }
+
     toggleDebugMode() {
         this.debugMode = !this.debugMode;
+        if (this.debugMode) {
+            this.isClean = false;
+        }
         this.renderViews();
+    }
+
+    beginMove() {
+        this.isFirstMove = false;
+        this.hintTile = null;
     }
 
     cycleFlag(point) {
         if (this.state != GameState.playing) { return; }
         let tile = this.game.board.tileAtCoord(point);
         if (!tile) { return; }
-        this.isFirstMove = false;
         if (!tile.isCovered) { return; }
+        this.beginMove();
         tile.cycleFlag();
         this.checkForWin();
         this.renderViews();
@@ -405,7 +461,7 @@ class GameSession {
             debugLog("Clicked a mine on first move. Shuffling.");
             this.game.board.shuffle();
         }
-        this.isFirstMove = false;
+        this.beginMove();
 
         switch (revealBehavior) {
         case GameSession.revealBehaviors.safe:
@@ -649,8 +705,16 @@ class GameControlsView {
                 parent: this.elem,
                 title: Strings.str("showHighScoresButton"),
                 click: () => this.showHighScores()
-            }),
+            })
         ];
+
+        this.showHintButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("showHintButton"),
+            click: () => this.showHint()
+        });
+        this.buttons.push(this.showHintButton);
+
         if (Game.rules().allowDebugMode) {
             this.debugModeButton = new ToolButton({
                 parent: this.elem,
@@ -664,9 +728,9 @@ class GameControlsView {
     }
 
     render() {
+        this.showHintButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
         if (this.debugModeButton) {
-            let debugMode = this.session ? this.session.debugMode : false;
-            this.debugModeButton.elem.addRemClass("selected", debugMode);
+            this.debugModeButton.isSelected = this.session ? this.session.debugMode : false
         }
     }
 
@@ -676,7 +740,7 @@ class GameControlsView {
 
     resetBoard() {
         if (this.session) {
-            // prompt are you sure
+            // TODO prompt are you sure
             this.session.resetBoard();
         }
     }
@@ -691,6 +755,12 @@ class GameControlsView {
             difficulty = this.session.game.difficulty;
         }
         HighScoresDialog.showHighScores(GameStorage.shared, difficulty);
+    }
+
+    showHint() {
+        if (this.session) {
+            this.session.showHint();
+        }
     }
 
     toggleDebugMode() {
@@ -829,6 +899,13 @@ class GameTileView {
             ctx.stroke();
         }
 
+        if (context.session.hintTile == this.model) {
+            this.renderContent(context, rect, GameTileViewState.hintTile);
+        }
+
+        if (context.session.debugTiles && context.session.debugTiles.contains(this.model)) {
+            this.renderContent(context, rect, GameTileViewState.debug);
+        }
     }
 
     renderCovered(context, rect) {
@@ -883,6 +960,8 @@ class GameTileViewState {
         GameTileViewState.mineTriggered = new GameTileViewState(config.mineTriggered);
         GameTileViewState.mineRevealed = new GameTileViewState(config.mineRevealed);
         GameTileViewState.incorrectFlag = new GameTileViewState(config.incorrectFlag);
+        GameTileViewState.hintTile = new GameTileViewState(config.hintTile);
+        GameTileViewState.debug = new GameTileViewState(config.debug);
     }
 
     constructor(config) {
@@ -1065,12 +1144,27 @@ class NewGameDialog extends GameDialog {
     }
 } // end class NewGameDialog
 
+class AlertDialog extends GameDialog {
+    constructor(config) {
+        super();
+        this.title = config.title;
+        this.contentElem = GameDialog.createContentElem();
+        this.x = new ToolButton({ title: config.button, click: () => this.dismiss() });
+        let message = document.createElement("p");
+        message.innerText = config.message;
+        this.contentElem.append(message);
+    }
+
+    get isModal() { return true; }
+    get dialogButtons() { return [this.x.elem]; }
+}
+
 class SaveHighScoreDialog extends GameDialog {
     constructor(session) {
         super();
         this.session = session;
         this.saveButton = new ToolButton({
-            title: Strings.str("saveHighScoreButton"),
+            title: Strings.str(this.isEnabled ? "saveHighScoreButton" : "saveHighScoreDisabledButton"),
             click: () => this.save()
         });
         this.contentElem = GameDialog.createContentElem();
@@ -1079,20 +1173,25 @@ class SaveHighScoreDialog extends GameDialog {
 
         let textElem = document.createElement("p");
         textElem.style["text-align"] = "center";
-        textElem.innerText = Strings.template("saveHighScoreDialogTextTemplate", this.session.game.statistics);
+        let template = this.isEnabled ? "saveHighScoreDialogTextTemplate" : "saveHighScoreDisabledDialogTextTemplate";
+        textElem.innerText = Strings.template(template, this.session.game.statistics);
         formElem.append(textElem);
-        
-        this.playerNameInput = new TextInputView({
-            parent: formElem,
-            title: Strings.str("playerNameInputTitle"),
-            placeholder: "",
-            transform: (value) => InputView.trimTransform(value).toLocaleUpperCase(),
-            // Count emoji as single characters
-            validationRules: [InputView.notEmptyOrWhitespaceRule, (input) => [...(input.value)].length <= 3]
-        }).configure(input => input.value = GameStorage.shared.lastPlayerName);
 
+        if (this.isEnabled) {
+            this.playerNameInput = new TextInputView({
+                parent: formElem,
+                title: Strings.str("playerNameInputTitle"),
+                placeholder: "",
+                transform: (value) => InputView.trimTransform(value).toLocaleUpperCase(),
+                // Count emoji as single characters
+                validationRules: [InputView.notEmptyOrWhitespaceRule, (input) => [...(input.value)].length <= 3]
+            }).configure(input => input.value = GameStorage.shared.lastPlayerName);
+            this.allInputs = [this.playerNameInput];
+        } else {
+            this.allInputs = [];
+        }
+        
         this.contentElem.append(formElem);
-        this.allInputs = [this.playerNameInput];
     }
 
     get isModal() { return true; }
@@ -1102,6 +1201,9 @@ class SaveHighScoreDialog extends GameDialog {
         return [this.saveButton.elem];
     }
 
+    get isEnabled() {
+        return this.session.isClean;
+    }
     get isValid() {
         return this.allInputs.every(input => input.isValid);
     }
@@ -1111,6 +1213,11 @@ class SaveHighScoreDialog extends GameDialog {
     }
 
     save() {
+        if (!this.isEnabled) {
+            this.dismiss();
+            return;
+        }
+
         if (!this.isValid) {
             debugLog("NOT VALID");
             return;
