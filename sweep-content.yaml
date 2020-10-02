@@ -71,6 +71,8 @@ gameTileViewState:
     fillColor: *REVEALEDCOLOR
   safe:
     textColor: "#666666"
+    # numbers 1 through 8: blue -> red
+    numberTextColors: ["#666666", "hsl(217, 50%, 40%)", "hsl(186, 50%, 40%)", "hsl(155, 50%, 40%)", "hsl(124, 50%, 40%)", "hsl(93, 50%, 40%)", "hsl(62, 50%, 40%)", "hsl(31, 50%, 40%)", "hsl(0, 50%, 40%)"]
     fillColor: *REVEALEDCOLOR
   mineTriggered:
     glyph: "✸"

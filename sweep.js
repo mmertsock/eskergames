@@ -952,6 +952,7 @@ class GameTileViewState {
             this.glyph = tile => config.glyph;
         }
         this.textColor = config.textColor;
+        this.numberTextColors = config.numberTextColors;
     }
 
     render(context, rect, tile) {
@@ -959,7 +960,11 @@ class GameTileViewState {
         context.ctx.rectFill(rect);
         let textValue = this.glyph(tile);
         if (textValue) {
-            context.ctx.fillStyle = this.textColor;
+            if (this.numberTextColors && tile.minedNeighborCount > 0) {
+                context.ctx.fillStyle = this.numberTextColors[tile.minedNeighborCount];
+            } else {
+                context.ctx.fillStyle = this.textColor;
+            }
             context.ctx.fillTextCentered(textValue, rect);
         }
     }
