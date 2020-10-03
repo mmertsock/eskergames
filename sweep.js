@@ -350,6 +350,7 @@ class GameSession {
         this.isClean = !this.debugMode; // false if cheated, etc.
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
+        this.solver = null;
         this.debugTiles = [];
         this.elems = {
             boardContainer: document.querySelector("board")
@@ -377,6 +378,13 @@ class GameSession {
         this.hintTile = null;
         this.elems.boardContainer.addRemClass("hidden", false);
         this.renderViews();
+
+        if (SweepSolver) {
+            let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
+            this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
+        } else {
+            this.solver = null;
+        }
     }
 
     resetBoard() {
@@ -807,6 +815,43 @@ class CycleFlagAction extends PointInputBasedAction {
 }
 SweepAction.CycleFlagAction = CycleFlagAction;
 
+class AttemptSolverStepAction extends SweepAction {
+    debugDescription() {
+        return "<solverStep>"
+    }
+
+    perform(session) {
+        if (!this.assertIsValid(session, !!session.solver)) { return SweepAction.Result.noop; }
+        session.beginMove();
+        session.isClean = false;
+        let result = session.solver.tryStep();
+        debugLog(result);
+        if (!result || !result.isSuccess) {
+            new ShowAlertDialogAction({
+                title: Strings.str("errorAlertTitle"),
+                message: Strings.str("solverGotStuckMessage"),
+                button: Strings.str("errorAlertDismissButton")
+            }).perform(session);
+            return SweepAction.Result.ok;
+        }
+
+        session.debugTiles = result.debugTiles;
+        if (!result.debugMode) {
+            result.actions.forEach(action => {
+                if (session.state == GameState.playing) {
+                    // TODO append action.tile to a list of solverActionTiles. Render them with a
+                    // highlight similar to hint tiles
+                    debugLog(`Perform: ${action.debugDescription}`);
+                    let actionResult = action.perform(session);
+                    session.checkForWin();
+                }
+            });
+        }
+        // TODO set mostRecentAction in session
+    }
+}
+SweepAction.AttemptSolverStepAction = AttemptSolverStepAction;
+
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
 
 class PointInputSequence {
@@ -958,6 +1003,11 @@ class GameControlsView {
             title: Strings.str("showHintButton"),
             click: () => this.showHint()
         });
+        this.solverStepButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("solverStepButton"),
+            click: () => this.solverStep()
+        });
 
         if (Game.rules().allowDebugMode) {
             this.debugModeButton = new ToolButton({
@@ -1004,6 +1054,12 @@ class GameControlsView {
     showHint() {
         if (this.session) {
             this.session.performAction(new AttemptHintAction());
+        }
+    }
+
+    solverStep() {
+        if (this.session) {
+            this.session.performAction(new AttemptSolverStepAction());
         }
     }
 
