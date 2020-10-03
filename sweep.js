@@ -672,36 +672,27 @@ class AttemptHintAction extends SweepAction {
 
     perform(session) {
         if (!this.assertIsValid(session, AttemptHintAction.isValid(session))) { return SweepAction.Result.noop; }
-        var candidates = [];
-
-        // TODO use solver filters instead
 
         // Try to find a safe covered tile adjacent to a cleared tile
-        session.game.board.visitTiles(null, tile => {
-            if (tile.isCovered) return true;
-            if (!tile.isCovered) {
-                // TODO use tile.neighbors.filter(...) instead
-                tile.visitNeighbors(neighbor => {
-                    if (neighbor.isCovered && !neighbor.isMined && !candidates.contains(neighbor)) {
-                        candidates.push(neighbor);
-                    }
-                });
-            }
-            return true;
-        });
+        let candidates = TileCollection.allTiles(session)
+            .applying(new RevealedTilesFilter())
+            .applying(new CollectNeighborsTransform({ transform: collection =>
+                collection.applying(new CoveredTilesFilter())
+                    .applying(new MineFilter(false))
+            }));
 
         // Fall back: find any safe covered tile
-        if (candidates.length == 0) {
-            session.game.board.visitTiles(null, tile => {
-                if (tile.isCovered && !tile.isMined) {
-                    candidates.push(tile);
-                }
-                return true;
-            });
+        // TODO how about a filter that only applies if the collection is empty?
+        // so you can chain all of this onto the above and make it declarative etc.
+        if (candidates.tiles.length == 0) {
+            candidates = TileCollection.allTiles(session)
+                .applying(new CoveredTilesFilter())
+                .applying(new MineFilter(false));
         }
         
-        if (candidates.length > 0) {
-            new ShowHintAction({ tile: candidates.randomItem() }).perform(session);
+        let tile = candidates.randomTileClosestTo(session.mostRecentAction.tile)
+        if (tile) {
+            new ShowHintAction({ tile: tile }).perform(session);
         } else {
             session.hintTile = null;
             new ShowAlertDialogAction({
@@ -721,7 +712,7 @@ class ShowHintAction extends TileBasedAction {
 
     perform(session) {
         if (!this.assertIsValid(session)) { return SweepAction.Result.noop; }
-
+        session.beginMove();
         session.hintTile = this.tile;
         session.isClean = false;
         session.mostRecentAction = this.result;
@@ -851,6 +842,182 @@ class AttemptSolverStepAction extends SweepAction {
     }
 }
 SweepAction.AttemptSolverStepAction = AttemptSolverStepAction;
+
+function mark__Tile_Collections_and_Transforms() {} // ~~~~~~ Tile Collections and Transforms ~~~~~~
+
+class TileCollection {
+    static allTiles(session) {
+        let tiles = [];
+        session.game.board.visitTiles(null, tile => tiles.push(tile));
+        return new TileCollection(tiles);
+    }
+
+    constructor(tiles, debugTiles) {
+        this.tiles = tiles;
+        this.debugTiles = debugTiles ? debugTiles : [];
+    }
+
+    get debugDescription() {
+        return `<${this.tiles.length} tiles>`;
+    }
+
+    applying(transform) {
+        let applied = this.tiles.flatMap(tile => {
+            let mapped = transform.map(tile, this);
+            if (mapped instanceof GameTile) {
+                return mapped;
+            } else if (typeof(mapped) == 'object') {
+                return mapped;
+            } else {
+                return mapped ? tile : [];
+            }
+        });
+        
+        let collection = new TileCollection(TileTransform.unique(applied));
+        if (this.debugTiles) {
+            collection.appendDebugTiles(this.debugTiles);
+        }
+        return collection;
+    }
+
+    randomTileClosestTo(origin) {
+        if (!origin || this.tiles.length == 0) {
+            return this.tiles.randomItem();
+        }
+
+        let min = -1;
+        let items = this.tiles.map(tile => {
+            let distance = tile.coord.manhattanDistanceFrom(origin.coord).magnitude;
+            min = min < 0 ? distance : Math.min(min, distance);
+            return { tile: tile, distance: distance };
+        });
+        
+        return items.filter(item => item.distance == min).randomItem().tile;
+    }
+
+    emitDebugTiles() {
+        this.appendDebugTiles(this.tiles);
+        return this;
+    }
+
+    appendDebugTiles(items) {
+        if (!this.debugTiles) { this.debugTiles = []; }
+        items.forEach(tile => {
+            if (!this.debugTiles.contains(tile)) { this.debugTiles.push(tile); }
+        });
+    }
+} // end class TileCollection
+
+class TileTransform {
+    static unique(tiles) {
+        let applied = [];
+        tiles.forEach(tile => {
+            if (!applied.includes(tile)) { applied.push(tile); }
+        });
+        return applied;
+    }
+
+    // Return a boolean, empty array, one tile object, or array of multiple tiles.
+    // Do not return null.
+    map(tile, collection) {
+        return tile;
+    }
+}
+TileTransform.maxNeighbors = 8;
+
+class HasNeighborsFilter extends TileTransform {
+    constructor(config) {
+        super();
+        // TileCollection => TileCollection
+        this.transform = config.transform;
+        // condition = { HasNeighborsFilter.Condition.x: value }
+        this.condition = config.condition;
+    }
+
+    map(tile, collection) {
+        let filtered = this.transform(new TileCollection(tile.neighbors));
+        let neighbors = filtered.tiles;
+        if (filtered.debugTiles) { collection.appendDebugTiles(filtered.debugTiles); }
+        if (typeof(this.condition.filteredNeighborCountEqualsMinedNeighborCount) != 'undefined') {
+            let filteredNeighborCountEqualsMinedNeighborCount = (neighbors.length == tile.minedNeighborCount);
+            return filteredNeighborCountEqualsMinedNeighborCount == this.condition.filteredNeighborCountEqualsMinedNeighborCount;
+        } else if (typeof(this.condition.range) != 'undefined') {
+            return neighbors.length >= this.condition.range.min && neighbors.length <= this.condition.range.max;
+        }
+        return false;
+    }
+}
+HasNeighborsFilter.Condition = {
+    filteredNeighborCountEqualsMinedNeighborCount: "filteredNeighborCountEqualsMinedNeighborCount",
+    range: "range"
+};
+TileTransform.HasNeighborsFilter = HasNeighborsFilter;
+
+class CollectNeighborsTransform extends TileTransform {
+    constructor(config) {
+        super();
+        // TileCollection => TileCollection
+        this.transform = config.transform;
+    }
+
+    map(tile, collection) {
+        let filtered = this.transform(new TileCollection(tile.neighbors));
+        if (filtered.debugTiles) { collection.appendDebugTiles(filtered.debugTiles); }
+        return filtered.tiles;
+    }
+}
+TileTransform.CollectNeighborsTransform = CollectNeighborsTransform;
+
+class RevealedTilesFilter extends TileTransform {
+    map(tile, collection) {
+        return !tile.isCovered;
+    }
+}
+TileTransform.RevealedTilesFilter = RevealedTilesFilter;
+
+class CoveredTilesFilter extends TileTransform {
+    map(tile, collection) {
+        return tile.isCovered;
+    }
+}
+TileTransform.CoveredTilesFilter = CoveredTilesFilter;
+
+class FlaggedTilesFilter extends TileTransform {
+    constructor(allowedFlags) {
+        super();
+        this.allowedFlags = allowedFlags;
+    }
+
+    map(tile, collection) {
+        return this.allowedFlags.contains(tile.flag);
+    }
+}
+TileTransform.FlaggedTilesFilter = FlaggedTilesFilter;
+
+class MineFilter extends TileTransform {
+    constructor(isMined) {
+        super();
+        this.isMined = isMined;
+    }
+
+    map(tile, collection) {
+        return tile.isMined == this.isMined;
+    }
+}
+TileTransform.MineFilter = MineFilter;
+
+class MinedNeighborCountRangeFilter extends TileTransform {
+    constructor(range) {
+        super();
+        this.range = range;
+    }
+
+    map(tile, collection) {
+        return tile.minedNeighborCount >= this.range.min && tile.minedNeighborCount <= this.range.max;
+    }
+}
+MinedNeighborCountRangeFilter.hasAny = new MinedNeighborCountRangeFilter({ min: 1, max: TileTransform.maxNeighbors });
+TileTransform.MinedNeighborCountRangeFilter = MinedNeighborCountRangeFilter;
 
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
 
@@ -1685,7 +1852,9 @@ return {
     GameSession: GameSession,
     GameTile: GameTile,
     SweepAction: SweepAction,
-    TileFlag: TileFlag
+    TileCollection: TileCollection,
+    TileFlag: TileFlag,
+    TileTransform: TileTransform
 };
 
 })(); // end Sweep namespace

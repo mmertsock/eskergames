@@ -18,7 +18,9 @@ const PerfTimer = Gaming.PerfTimer;
 const Strings = Gaming.Strings;
 const SweepAction = Sweep.SweepAction;
 const TileBasedAction = Sweep.SweepAction.TileBasedAction;
+const TileCollection = Sweep.TileCollection;
 const TileFlag = Sweep.TileFlag;
+const TileTransform = Sweep.TileTransform;
 
 function mark__Solver_Agent() {} // ~~~~~~ Solver Agent ~~~~~~
 
@@ -66,155 +68,6 @@ class SolverAgent {
         return result;
     }
 }
-
-function mark__Tile_Sets_and_Transforms() {} // ~~~~~~ Tile Sets and Transforms ~~~~~~
-
-class SolverTileSet {
-    static allTiles(session) {
-        let tiles = [];
-        session.game.board.visitTiles(null, tile => tiles.push(tile));
-        return new SolverTileSet(tiles);
-    }
-
-    constructor(tiles, debugTiles) {
-        this.tiles = tiles;
-        this.debugTiles = debugTiles ? debugTiles : [];
-    }
-
-    get debugDescription() {
-        return `<${this.tiles.length} tiles>`;
-    }
-
-    applying(transform) {
-        let applied = new SolverTileSet(this.tiles.flatMap(tile => {
-            let mapped = transform.map(tile, this);
-            if (mapped instanceof GameTile) {
-                return mapped;
-            } else if (typeof(mapped) == 'object') {
-                return mapped;
-            } else {
-                return mapped ? tile : [];
-            }
-        }));
-        if (this.debugTiles) {
-            applied.appendDebugTiles(this.debugTiles);
-        }
-        // debugLog(`Apply ${transform.debugDescription || transform.constructor.name} to ${this.debugDescription} => ${applied.debugDescription}`);
-        return applied;
-    }
-
-    randomTileClosestTo(origin) {
-        if (!origin || this.tiles.length == 0) {
-            return null;
-        }
-
-        let min = -1;
-        let items = this.tiles.map(tile => {
-            let distance = tile.coord.manhattanDistanceFrom(origin.coord).magnitude;
-            min = min < 0 ? distance : Math.min(min, distance);
-            return { tile: tile, distance: distance };
-        });
-        
-        return items.filter(item => item.distance == min).randomItem().tile;
-    }
-
-    emitDebugTiles() {
-        this.appendDebugTiles(this.tiles);
-        return this;
-    }
-
-    appendDebugTiles(items) {
-        if (!this.debugTiles) { this.debugTiles = []; }
-        items.forEach(tile => {
-            if (!this.debugTiles.contains(tile)) { this.debugTiles.push(tile); }
-        });
-    }
-}
-
-class TileTransform {
-    // Return a boolean, empty array, one tile object, or array of multiple tiles.
-    // Do not return null.
-    map(tile, tileSet) {
-        return tile;
-    }
-}
-TileTransform.maxNeighbors = 8;
-
-class HasNeighborsFilter extends TileTransform {
-    constructor(config) {
-        super();
-        // SolverTileSet => SolverTileSet
-        this.transform = config.transform;
-        // condition = { HasNeighborsFilter.Condition.x: value }
-        this.condition = config.condition;
-    }
-
-    map(tile, tileSet) {
-        let filtered = this.transform(new SolverTileSet(tile.neighbors));
-        let neighbors = filtered.tiles;
-        if (filtered.debugTiles) { tileSet.appendDebugTiles(filtered.debugTiles); }
-        if (typeof(this.condition.filteredNeighborCountEqualsMinedNeighborCount) != 'undefined') {
-            let filteredNeighborCountEqualsMinedNeighborCount = (neighbors.length == tile.minedNeighborCount);
-            return filteredNeighborCountEqualsMinedNeighborCount == this.condition.filteredNeighborCountEqualsMinedNeighborCount;
-        } else if (typeof(this.condition.range) != 'undefined') {
-            return neighbors.length >= this.condition.range.min && neighbors.length <= this.condition.range.max;
-        }
-        return false;
-    }
-}
-HasNeighborsFilter.Condition = {
-    filteredNeighborCountEqualsMinedNeighborCount: "filteredNeighborCountEqualsMinedNeighborCount",
-    range: "range"
-};
-
-class CollectNeighborsTransform extends TileTransform {
-    constructor(config) {
-        super();
-        // SolverTileSet => SolverTileSet
-        this.transform = config.transform;
-    }
-
-    map(tile, tileSet) {
-        let filtered = this.transform(new SolverTileSet(tile.neighbors));
-        if (filtered.debugTiles) { tileSet.appendDebugTiles(filtered.debugTiles); }
-        return filtered.tiles;
-    }
-}
-
-class RevealedTilesFilter extends TileTransform {
-    map(tile, tileSet) {
-        return !tile.isCovered;
-    }
-}
-
-class CoveredTilesFilter extends TileTransform {
-    map(tile, tileSet) {
-        return tile.isCovered;
-    }
-}
-
-class FlaggedTilesFilter extends TileTransform {
-    constructor(allowedFlags) {
-        super();
-        this.allowedFlags = allowedFlags;
-    }
-
-    map(tile, tileSet) {
-        return this.allowedFlags.contains(tile.flag);
-    }
-}
-
-class MinedNeighborCountRangeFilter extends TileTransform {
-    constructor(range) {
-        super();
-        this.range = range;
-    }
-
-    map(tile, tileSet) {
-        return tile.minedNeighborCount >= this.range.min && tile.minedNeighborCount <= this.range.max;
-    }
-}
-MinedNeighborCountRangeFilter.hasAny = new MinedNeighborCountRangeFilter({ min: 1, max: TileTransform.maxNeighbors });
 
 function mark__Solvers() {} // ~~~~~~ Solvers ~~~~~~
 
@@ -301,10 +154,10 @@ class GuessAtStartSolver extends Solver {
     get name() { return "solverNameGuessAtStart"; }
 
     tryStep(session) {
-        let allTiles = SolverTileSet.allTiles(session);
+        let allTiles = TileCollection.allTiles(session);
         let covered = allTiles
-            .applying(new CoveredTilesFilter())
-            .applying(new FlaggedTilesFilter([TileFlag.none]));
+            .applying(new TileTransform.CoveredTilesFilter())
+            .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none]));
 
         if (covered.tiles.length == allTiles.tiles.length) {
             return new SolverResult({
@@ -325,7 +178,7 @@ class GuessAtStartSolver extends Solver {
 class ExactCoveredTileMatchSolver extends Solver {
     get name() { return "solverNameExactCoveredTileMatch"; }
 
-    // TODO use TileSet and transforms instead
+    // TODO use TileCollection and transforms instead
     tryStep(session) {
         let sources = this.collectRevealedTilesWithExactCoveredMatch(session);
         let candidates = this.collectNeighborsOfTiles(sources)
@@ -352,19 +205,20 @@ class ClearFullyFlaggedTileSolver extends Solver {
     get name() { return "solverNameClearFullyFlaggedTile"; }
 
     tryStep(session) {
-        let candidates = SolverTileSet.allTiles(session)
-            .applying(new RevealedTilesFilter())
-            .applying(MinedNeighborCountRangeFilter.hasAny)
-            .applying(new HasNeighborsFilter({ condition: { filteredNeighborCountEqualsMinedNeighborCount: true }, transform: tileSet =>
-                tileSet.applying(new CoveredTilesFilter())
-                .applying(new FlaggedTilesFilter([TileFlag.assertMine]))
+        let candidates = TileCollection.allTiles(session)
+            .applying(new TileTransform.RevealedTilesFilter())
+            .applying(TileTransform.MinedNeighborCountRangeFilter.hasAny)
+            .applying(new TileTransform.HasNeighborsFilter({ condition: { filteredNeighborCountEqualsMinedNeighborCount: true }, transform: collection =>
+                collection.applying(new TileTransform.CoveredTilesFilter())
+                .applying(new TileTransform.FlaggedTilesFilter([TileFlag.assertMine]))
             }))
-            .applying(new HasNeighborsFilter({ condition: { range: {min: 1, max: TileTransform.maxNeighbors} }, transform: tileSet =>
-                tileSet.applying(new CoveredTilesFilter())
-                .applying(new FlaggedTilesFilter([TileFlag.none]))
+            .applying(new TileTransform.HasNeighborsFilter({ condition: { range: {min: 1, max: TileTransform.maxNeighbors} }, transform: collection =>
+                collection.applying(new TileTransform.CoveredTilesFilter())
+                .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none]))
                 // .emitDebugTiles()
             }));
 
+        // TODO among the closer tiles, prefer ones that will clear the most neighbors?
         let toClear = candidates.randomTileClosestTo(session.mostRecentAction.tile);
         toClear = toClear ? [new SweepAction.RevealTileAction({ tile: toClear, revealBehavior: GameSession.revealBehaviors.assertTrustingFlags })] : [];
 
