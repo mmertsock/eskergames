@@ -565,7 +565,6 @@ class ActionResult {
             progress: end.progress - start.progress,
             points: end.points - start.points
         };
-        debugLog(this.change);
     }
 }
 
@@ -847,7 +846,8 @@ class AttemptSolverStepAction extends SweepAction {
                 }
             });
         }
-        // TODO set mostRecentAction in session
+        // TODO set mostRecentAction in session, to an aggregate result that describes the 
+        // overall solver attempted.
     }
 }
 SweepAction.AttemptSolverStepAction = AttemptSolverStepAction;

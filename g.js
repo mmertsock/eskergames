@@ -1,5 +1,9 @@
 "use-strict";
 
+function alias(symbol, x) {
+    return symbol;
+}
+
 function setWorkerScope(name) {
     self.workerScope = name;
 }
@@ -2372,6 +2376,7 @@ Prompt.prototype.dismiss = function(action, button) {
 // ----------------------------------------------------------------------
 
 return {
+    alias: alias,
     debugLog: debugLog,
     debugWarn: debugWarn,
     once: once,

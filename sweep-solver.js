@@ -2,9 +2,18 @@
 
 self.SweepSolver = (function() {
 
-const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
-const GameSession = Sweep.GameSession;
-const GameTile = Sweep.GameTile;
+const alias = Gaming.alias, debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
+const GameSession = alias(Sweep.GameSession, {
+    game: { board: null },
+    mostRecentAction: { action: null, tile: null }
+});
+const GameTile = alias(Sweep.GameTile, {
+    neighbors: [],
+    minedNeighborCount: 0,
+    isCovered: true,
+    flag: null,
+    visitNeighbors: null
+});
 const PerfTimer = Gaming.PerfTimer;
 const Strings = Gaming.Strings;
 const SweepAction = Sweep.SweepAction;
@@ -94,6 +103,21 @@ class SolverTileSet {
         return applied;
     }
 
+    randomTileClosestTo(origin) {
+        if (!origin || this.tiles.length == 0) {
+            return null;
+        }
+
+        let min = -1;
+        let items = this.tiles.map(tile => {
+            let distance = tile.coord.manhattanDistanceFrom(origin.coord).magnitude;
+            min = min < 0 ? distance : Math.min(min, distance);
+            return { tile: tile, distance: distance };
+        });
+        
+        return items.filter(item => item.distance == min).randomItem().tile;
+    }
+
     emitDebugTiles() {
         this.appendDebugTiles(this.tiles);
         return this;
@@ -131,7 +155,6 @@ class HasNeighborsFilter extends TileTransform {
         if (filtered.debugTiles) { tileSet.appendDebugTiles(filtered.debugTiles); }
         if (typeof(this.condition.filteredNeighborCountEqualsMinedNeighborCount) != 'undefined') {
             let filteredNeighborCountEqualsMinedNeighborCount = (neighbors.length == tile.minedNeighborCount);
-            debugLog(`HasNeighborsFilter.fncemnc: fnc=${neighbors.length}, mnc=${tile.minedNeighborCount}, (${filteredNeighborCountEqualsMinedNeighborCount} == ${this.condition.filteredNeighborCountEqualsMinedNeighborCount})`);
             return filteredNeighborCountEqualsMinedNeighborCount == this.condition.filteredNeighborCountEqualsMinedNeighborCount;
         } else if (typeof(this.condition.range) != 'undefined') {
             return neighbors.length >= this.condition.range.min && neighbors.length <= this.condition.range.max;
@@ -223,10 +246,6 @@ class Solver {
 
     // Helpers: tile visitors
 
-    // visit(session, block):
-    // session: GameSession
-    // block: function (tile, session) => { ... }
-
     // Returns an array of tiles. e.g. this.collectTiles(session, this.visitRevealedEdgeTiles)
     collectTiles(session, visitFunc) {
         let tiles = [];
@@ -306,6 +325,7 @@ class GuessAtStartSolver extends Solver {
 class ExactCoveredTileMatchSolver extends Solver {
     get name() { return "solverNameExactCoveredTileMatch"; }
 
+    // TODO use TileSet and transforms instead
     tryStep(session) {
         let sources = this.collectRevealedTilesWithExactCoveredMatch(session);
         let candidates = this.collectNeighborsOfTiles(sources)
@@ -345,11 +365,8 @@ class ClearFullyFlaggedTileSolver extends Solver {
                 // .emitDebugTiles()
             }));
 
-        let toClear = candidates.tiles.randomItem();
+        let toClear = candidates.randomTileClosestTo(session.mostRecentAction.tile);
         toClear = toClear ? [new SweepAction.RevealTileAction({ tile: toClear, revealBehavior: GameSession.revealBehaviors.assertTrustingFlags })] : [];
-
-        // TODO among the candidates, prefer the tile that is closest to the 
-        // last tile that was played, to get that depth-first play style.
 
         let result = new SolverResult({
             solver: this,
