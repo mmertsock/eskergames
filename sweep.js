@@ -241,6 +241,12 @@ GameState = {
     won: 2
 };
 
+MoveState = {
+    ready: 0,
+    pending: 1,
+    active: 2
+};
+
 class GameStorage {
     constructor() {
         this.preferencesCollection = new SaveStateCollection(window.localStorage, "SweepSettings");
@@ -338,18 +344,21 @@ class GameSession {
     constructor(config) {
         this.game = config.game;
         this.state = GameState.playing;
+        this.moveState = MoveState.ready;
         this.debugMode = false;
         this.isFirstMove = true;
         this.isClean = !this.debugMode; // false if cheated, etc.
+        this.mostRecentAction = new ActionResult();
         this.hintTile = null;
         this.debugTiles = [];
         this.elems = {
             boardContainer: document.querySelector("board")
         };
         this.controlsView = new GameControlsView({ session: this, elem: document.querySelector("header row") });
+        this.mostRecentActionView = new ActionDescriptionView({ session: this, elem: document.querySelector("message") });
         this.boardView = new GameBoardView({ session: this, boardContainer: this.elems.boardContainer });
         this.statusView = new GameStatusView({ session: this, elem: document.querySelector("footer") });
-        this.views = [this.controlsView, this.boardView, this.statusView];
+        this.views = [this.controlsView, this.mostRecentActionView, this.boardView, this.statusView];
     }
 
     start() {
@@ -359,10 +368,12 @@ class GameSession {
         };
 
         this.state = GameState.playing;
+        this.moveState = MoveState.ready;
         this.startTime = Date.now();
         this.endTime = null;
         this.isFirstMove = true;
         this.isClean = !this.debugMode;
+        this.mostRecentAction = new ActionResult();
         this.hintTile = null;
         this.elems.boardContainer.addRemClass("hidden", false);
         this.renderViews();
@@ -370,55 +381,14 @@ class GameSession {
 
     resetBoard() {
         if (this.state != GameState.playing) { return; }
+        this.hintTile = null;
+        this.debugTiles = [];
         this.game.board.reset();
         this.start();
     }
 
     renderViews() {
         this.views.forEach(view => view.render());
-    }
-
-    showHint() {
-        if (this.state != GameState.playing) { return; }
-        if (this.hintTile) return;
-        var candidates = [];
-
-        // Try to find a safe covered tile adjacent to a cleared tile
-        this.game.board.visitTiles(null, tile => {
-            if (tile.isCovered) return true;
-            if (!tile.isCovered) {
-                tile.visitNeighbors(neighbor => {
-                    if (neighbor.isCovered && !neighbor.isMined && !candidates.contains(neighbor)) {
-                        candidates.push(neighbor);
-                    }
-                });
-            }
-            return true;
-        });
-
-        // Fall back: find any safe covered tile
-        if (candidates.length == 0) {
-            this.game.board.visitTiles(null, tile => {
-                if (tile.isCovered && !tile.isMined) {
-                    candidates.push(tile);
-                }
-                return true;
-            });
-        }
-        
-        if (candidates.length > 0) {
-            this.hintTile = candidates.randomItem();
-            this.isClean = false;
-        } else {
-            this.hintTile = null;
-            new AlertDialog({
-                title: Strings.str("errorAlertTitle"),
-                message: Strings.str("showHintErrorText"),
-                button: Strings.str("errorAlertDismissButton")
-            }).show();
-        }
-
-        this.renderViews();
     }
 
     toggleDebugMode() {
@@ -429,32 +399,35 @@ class GameSession {
         this.renderViews();
     }
 
-    beginMove() {
-        this.isFirstMove = false;
-        this.hintTile = null;
-    }
-
-    cycleFlag(point) {
-        if (this.state != GameState.playing) { return; }
-        let tile = this.game.board.tileAtCoord(point);
-        if (!tile) { return; }
-        if (!tile.isCovered) { return; }
-        this.beginMove();
-        tile.cycleFlag();
+    // Not reentrant.
+    // if action.peform invokoes other actions, they should do so via action.perform
+    // calls instead of session.performAction.
+    // That way performAction can represent a single block of user interaction, can manage
+    // state, etc.
+    performAction(action) {
+        this.moveState = MoveState.pending;
+        let start = this.game.statistics;
+        action.perform(this);
         this.checkForWin();
+        this.pendingMove = MoveState.ready;
+        this.mostRecentAction.setStatistics(start, this.game.statistics);
         this.renderViews();
     }
 
-    attemptReveal(point, assertTrustingFlags) {
-        let tile = this.game.board.tileAtCoord(point);
-        if (tile) {
-            let revealBehavior = assertTrustingFlags ? GameSession.revealBehaviors.assertTrustingFlags : GameSession.revealBehaviors.safe;
-            this.attemptRevealTile(tile, revealBehavior);
-            this.checkForWin();
-            this.renderViews();
+    // Can be called safely at any time by an action within a performAction scope,
+    // and the contents of beginMove runs at most once within a single performAction scope.
+    // So Actions can use it to notify the session that the action is going to do something 
+    // rather than be a noop. The run-once behavior makes it safe to call within recursive 
+    // contexts like tile clearing.
+    beginMove() {
+        if (this.moveState == MoveState.pending) {
+            this.isFirstMove = false;
+            this.hintTile = null;
+            this.debugTiles = [];
+            this.moveState = MoveState.active;
         }
     }
-
+    
     attemptRevealTile(tile, revealBehavior) {
         if (this.state != GameState.playing) { return; }
         if (!tile) { return; }
@@ -567,6 +540,275 @@ GameSession.revealBehaviors = {
 };
 // end class GameSession
 
+function mark__Actions() {} // ~~~~~~ Actions ~~~~~~
+
+class ActionResult {
+    constructor(config) {
+        this.action = config ? config.action : null;
+        this.tile = config ? config.tile : null;
+        this.description = config ? config.description : null;
+        this.change = null; // a diff of statistics
+    }
+
+    setStatistics(start, end) {
+        this.change = {
+            assertMineFlagCount: end.assertMineFlagCount - start.assertMineFlagCount,
+            clearedTileCount: end.clearedTileCount - start.clearedTileCount,
+            progress: end.progress - start.progress,
+            points: end.points - start.points
+        };
+        debugLog(this.change);
+    }
+}
+
+class SweepAction {
+    get debugDescription() { return ""; }
+    get actionDescription() { return null; }
+    get requiresGameStatePlaying() { return true; }
+
+    perform(session) {
+        return SweepAction.Result.noop;
+    }
+
+    assertIsValid(session, assertion) {
+        if (this.requiresGameStatePlaying) {
+            if (!session || !(session.state == GameState.playing)) {
+                debugWarn(`Action not valid: ${this.debugDescription}`);
+                return false;
+            }
+        }
+        if (typeof(assertion) == 'undefined') { return true; }
+        if (!!assertion) { return true; }
+        debugWarn(`Action not valid: ${this.debugDescription}`);
+        return false;
+    }
+}
+SweepAction.Result = {
+    noop: 0,
+    ok: 1,
+    mineTriggered: 2
+};
+
+class TileBasedAction extends SweepAction {
+    constructor(config) {
+        super();
+        this.tile = config.tile;
+    }
+}
+SweepAction.TileBasedAction = TileBasedAction;
+
+class PointInputBasedAction extends SweepAction {
+    constructor(config) {
+        super();
+        this.point = config.point;
+        // Optionally can directly specify tile if known
+        this.tile = config.tile ? config.tile : null;
+    }
+
+    getTile(session) {
+        return this.tile ? this.tile : session.game.board.tileAtCoord(this.point);
+    }
+
+    assertIsValidWithTile(session, assertion) {
+        if (!this.assertIsValid(session, assertion)) { return null; }
+        let tile = this.getTile(session);
+        if (!tile) {
+            debugWarn(`Tile not found for point input action: ${this.debugDescription}`);
+            return null;
+        }
+        return tile;
+    }
+}
+SweepAction.PointInputBasedAction = PointInputBasedAction;
+
+class RevealTileAction extends PointInputBasedAction {
+    constructor(config) {
+        super(config);
+        this.revealBehavior = config.revealBehavior;
+        this.reason = config.reason ? config.reason : null;
+    }
+
+    get debugDescription() {
+        return `<reveal ${this.revealBehavior} ${(this.tile ? this.tile.coord : this.point).debugDescription}>`;
+    }
+
+    perform(session) {
+        let tile = this.assertIsValidWithTile(session);
+        if (!tile) { return SweepAction.Result.noop; }
+        session.attemptRevealTile(tile, this.revealBehavior);
+        session.mostRecentAction = new ActionResult({
+            action: this,
+            tile: tile,
+            description: this.reason ? this.reason : this.actionDescription
+        });
+    }
+
+    get actionDescription() {
+        if (this.revealBehavior == GameSession.revealBehaviors.safe) {
+            return Strings.str("revealSingleTileActionDescription");
+        }
+        return Strings.str("revealTrustingFlagsActionDescription");
+    }
+}
+SweepAction.RevealTileAction = RevealTileAction;
+
+class AttemptHintAction extends SweepAction {
+    static isValid(session) {
+        if (!session) return false;
+        return (session.state == GameState.playing)
+            && !(session.mostRecentAction.action instanceof ShowHintAction);
+    }
+
+    get debugDescription() {
+        return "attemptHint";
+    }
+
+    perform(session) {
+        if (!this.assertIsValid(session, AttemptHintAction.isValid(session))) { return SweepAction.Result.noop; }
+        var candidates = [];
+
+        // TODO use solver filters instead
+
+        // Try to find a safe covered tile adjacent to a cleared tile
+        session.game.board.visitTiles(null, tile => {
+            if (tile.isCovered) return true;
+            if (!tile.isCovered) {
+                // TODO use tile.neighbors.filter(...) instead
+                tile.visitNeighbors(neighbor => {
+                    if (neighbor.isCovered && !neighbor.isMined && !candidates.contains(neighbor)) {
+                        candidates.push(neighbor);
+                    }
+                });
+            }
+            return true;
+        });
+
+        // Fall back: find any safe covered tile
+        if (candidates.length == 0) {
+            session.game.board.visitTiles(null, tile => {
+                if (tile.isCovered && !tile.isMined) {
+                    candidates.push(tile);
+                }
+                return true;
+            });
+        }
+        
+        if (candidates.length > 0) {
+            new ShowHintAction({ tile: candidates.randomItem() }).perform(session);
+        } else {
+            session.hintTile = null;
+            new ShowAlertDialogAction({
+                title: Strings.str("errorAlertTitle"),
+                message: Strings.str("showHintErrorText"),
+                button: Strings.str("errorAlertDismissButton")
+            }).perform(session);
+        }
+    }
+}
+SweepAction.AttemptHintAction = AttemptHintAction;
+
+class ShowHintAction extends TileBasedAction {
+    get debugDescription() {
+        return `<hint ${this.tile.coord.debugDescription}>`;
+    }
+
+    perform(session) {
+        if (!this.assertIsValid(session)) { return SweepAction.Result.noop; }
+
+        session.hintTile = this.tile;
+        session.isClean = false;
+        session.mostRecentAction = this.result;
+        return SweepAction.Result.ok;
+    }
+
+    get result() {
+        return new ActionResult({
+            action: this,
+            tile: this.tile,
+            description: Strings.str("showHintActionDescription")
+        });
+    }
+}
+SweepAction.ShowHintAction = ShowHintAction;
+
+class ShowAlertDialogAction extends SweepAction {
+    constructor(config) {
+        super();
+        this.config = config;
+        this.title = config.title;
+        this.message = config.message;
+        this.button = config.button;
+    }
+
+    get requiresGameStatePlaying() { return false; }
+    get debugDescription() { return "<alert>"; }
+
+    perform(session) {
+        new AlertDialog({
+            title: this.config.title,
+            message: this.config.message,
+            button: this.config.button
+        }).show();
+    }
+}
+SweepAction.ShowAlertDialogAction = ShowAlertDialogAction;
+
+class SetFlagAction extends TileBasedAction {
+    static actionDescription(tile) {
+        switch (tile.flag) {
+        case TileFlag.assertMine: return Strings.str("setFlagAssertMineActionDescription");
+        case TileFlag.maybeMine: return Strings.str("setFlagMaybeMineActionDescription");
+        case TileFlag.none: return Strings.str("setFlagNoneActionDescription");
+        }
+    }
+
+    constructor(config) {
+        super(config);
+        this.flag = config.flag; // TileFlag
+    }
+
+    get debugDescription() {
+        return `<flag ${this.flag.debugDescription}:${this.tile.coord.debugDescription}>`;
+    }
+
+    perform(session) {
+        if (!this.assertIsValid(session, this.tile.isCovered)) {
+            return SweepAction.Result.noop;
+        }
+        session.beginMove();
+        this.tile.flag = this.flag;
+        session.mostRecentAction = new ActionResult({
+            action: this,
+            tile: this.tile,
+            description: SetFlagAction.actionDescription(this.tile)
+        });
+        return SweepAction.Result.ok;
+    }
+}
+SweepAction.SetFlagAction = SetFlagAction;
+
+class CycleFlagAction extends PointInputBasedAction {
+    get debugDescription() {
+        return `<cycleFlag ${this.point.debugDescription}>`;
+    }
+
+    perform(session) {
+        let tile = this.assertIsValidWithTile(session);
+        if (!tile || !tile.isCovered) { return SweepAction.Result.noop; }
+        session.beginMove();
+        tile.cycleFlag();
+        session.mostRecentAction = new ActionResult({
+            action: this,
+            tile: this.tile,
+            description: SetFlagAction.actionDescription(tile)
+        });
+        return SweepAction.Result.ok;
+    }
+}
+SweepAction.CycleFlagAction = CycleFlagAction;
+
+function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
+
 class PointInputSequence {
     constructor(firstEvent) {
         this.events = [firstEvent];
@@ -676,11 +918,11 @@ class GameBoardController {
         let modelCoord = this.view.tilePlane.modelTileForScreenPoint(point);
         if (modelCoord) {
             if (inputSequence.latestEvent.shiftKey) {
-                this.session.cycleFlag(modelCoord);
+                this.session.performAction(new CycleFlagAction({ point: modelCoord }));
             } else {
                 let assertTrustingFlags = inputSequence.latestEvent.altKey || inputSequence.latestEvent.metaKey;
-                // debugLog(inputSequence.latestEvent);
-                this.session.attemptReveal(modelCoord, assertTrustingFlags);
+                let revealBehavior = assertTrustingFlags ? GameSession.revealBehaviors.assertTrustingFlags : GameSession.revealBehaviors.safe;
+                this.session.performAction(new RevealTileAction({ point: modelCoord, revealBehavior: revealBehavior }));
             }
         }
     }
@@ -730,7 +972,7 @@ class GameControlsView {
 
     render() {
         this.resetBoardButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
-        this.showHintButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
+        this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
         if (this.debugModeButton) {
             this.debugModeButton.isSelected = this.session ? this.session.debugMode : false
         }
@@ -761,13 +1003,43 @@ class GameControlsView {
 
     showHint() {
         if (this.session) {
-            this.session.showHint();
+            this.session.performAction(new AttemptHintAction());
         }
     }
 
     toggleDebugMode() {
         if (this.session) {
             this.session.toggleDebugMode();
+        }
+    }
+}
+
+class ActionDescriptionView {
+    constructor(config) {
+        this.session = config.session;
+        this.elem = config.elem;
+    }
+
+    render() {
+        let description = this.session.mostRecentAction ? this.session.mostRecentAction.description : null;
+        if (!description) {
+            this.elem.innerHTML = "&nbsp;";
+            return;
+        }
+        let change = this.session.mostRecentAction.change;
+        let tokens = [];
+        // TODO p11n
+        if (change && change.clearedTileCount > 0) {
+            tokens.push(Strings.template("recentActionClearedTileCountToken", change));
+        }
+        if (change && change.points > 0) {
+            tokens.push(Strings.template("recentActionPointsWonToken", change));
+        }
+        if (tokens.length > 0) {
+            let data = Object.assign({}, this.session.mostRecentAction, { list: Array.oxfordCommaList(tokens) });
+            this.elem.innerText = Strings.template("recentActionWithChangesTemplate", data);
+        } else {
+            this.elem.innerText = description;
         }
     }
 }
@@ -905,7 +1177,7 @@ class GameTileView {
             this.renderContent(context, rect, GameTileViewState.hintTile);
         }
 
-        if (context.session.debugTiles && context.session.debugTiles.contains(this.model)) {
+        if (Game.rules().allowDebugMode && context.session.debugTiles && context.session.debugTiles.contains(this.model)) {
             this.renderContent(context, rect, GameTileViewState.debug);
         }
     }
@@ -1352,7 +1624,12 @@ var initialize = async function() {
 return {
     initialize: initialize,
     session: null,
-    Game: Game
+    ActionResult: ActionResult,
+    Game: Game,
+    GameSession: GameSession,
+    GameTile: GameTile,
+    SweepAction: SweepAction,
+    TileFlag: TileFlag
 };
 
 })(); // end Sweep namespace

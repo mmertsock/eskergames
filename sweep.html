@@ -46,7 +46,8 @@ board canvas {
     border: 3px outset black;
 }
 
-footer {
+footer, header message {
+    display: block;
     text-align: center;
     margin: 0.5em;
 }
@@ -101,7 +102,7 @@ p.message {
 </head>
 <body>
 
-<header><controls><row></row></controls></header>
+<header><controls><row></row></controls><message></message></header>
 
 <main>
     <board class="hidden"><canvas></canvas></board>

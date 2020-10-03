@@ -130,7 +130,15 @@ strings:
   oxfordCommaTwoItemsTemplate: "<first> and <last>"
   playerNameInputTitle: "Your Name"
   quitGameConfirmPrompt: "Are you sure you want to quit?"
+  recentActionClearedTileCountToken: "cleared <clearedTileCount> tiles"
+  recentActionPointsWonToken: "got <points> points"
+  recentActionWithChangesTemplate: "<description>: <list>"
   resetBoardButton: "Reset"
+  revealSingleTileActionDescription: Revealed a tile
+  revealTrustingFlagsActionDescription: Revealed unflagged tiles
+  setFlagAssertMineActionDescription: Marked a mine
+  setFlagMaybeMineActionDescription: Marked a possible mine
+  setFlagNoneActionDescription: Cleared a mine marker
   saveHighScoreButton: "Save"
   saveHighScoreDialogTextTemplate: "Your score: <points>"
   saveHighScoreDialogTitle: "You Won!"
@@ -138,6 +146,7 @@ strings:
   saveHighScoreDisabledButton: OK
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
+  showHintActionDescription: Got a hint
   showHintButton: Hint
   showHintErrorText: Can’t find any hints to show.
   stars1: "★☆☆☆☆"
