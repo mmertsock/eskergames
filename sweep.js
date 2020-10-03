@@ -806,12 +806,17 @@ class CycleFlagAction extends PointInputBasedAction {
 SweepAction.CycleFlagAction = CycleFlagAction;
 
 class AttemptSolverStepAction extends SweepAction {
+    static isValid(session) {
+        if (!session || !session.solver) return false;
+        return (session.state == GameState.playing);
+    }
+
     debugDescription() {
         return "<solverStep>"
     }
 
     perform(session) {
-        if (!this.assertIsValid(session, !!session.solver)) { return SweepAction.Result.noop; }
+        if (!this.assertIsValid(session, AttemptSolverStepAction.isValid(session))) { return SweepAction.Result.noop; }
         session.beginMove();
         session.isClean = false;
         let result = session.solver.tryStep();
@@ -1190,6 +1195,7 @@ class GameControlsView {
     render() {
         this.resetBoardButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
         this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
+        this.solverStepButton.isEnabled = AttemptSolverStepAction.isValid(this.session);
         if (this.debugModeButton) {
             this.debugModeButton.isSelected = this.session ? this.session.debugMode : false
         }

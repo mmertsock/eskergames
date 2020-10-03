@@ -96,58 +96,6 @@ class Solver {
     tryStep(session) {
         return null;
     }
-
-    // Helpers: tile visitors
-
-    // Returns an array of tiles. e.g. this.collectTiles(session, this.visitRevealedEdgeTiles)
-    collectTiles(session, visitFunc) {
-        let tiles = [];
-        visitFunc(session, tile => tiles.push(tile));
-        return tiles;
-    }
-
-    collectNeighbors(tile) {
-        let neighbors = [];
-        tile.visitNeighbors(neighbor => neighbors.push(neighbor));
-        return neighbors;
-    }
-
-    collectNeighborsOfTiles(tiles) {
-        let neighbors = [];
-        tiles.forEach(tile => tile.visitNeighbors(neighbor => {
-            if (!neighbors.contains(neighbor)) {
-                neighbors.push(neighbor);
-            }
-        }));
-        return neighbors;
-    }
-
-    visitAllTiles(session, block) {
-        session.game.board.visitTiles(null, tile => {
-            block(tile, session);
-            return true;
-        });
-    }
-
-    // Returns modification of visitFunc with a filter applied.
-    filterVisitor(visitFunc, block) {
-        return (s, b) => {
-            visitFunc(s, (tile, session) => {
-                if (block(tile, session)) {
-                    b(tile, session);
-                }
-            });
-        };
-    }
-
-    visitRevealedTilesAdjacentToCovered(session, block) {
-        let filtered = this.filterVisitor(this.visitAllTiles, tile => {
-            if (tile.isCovered) { return false; }
-            let anyCoveredNeighbor = this.collectNeighbors(tile).find(neighbor => neighbor.isCovered);
-            return !!anyCoveredNeighbor;
-        });
-        filtered(session, block);
-    }
 }
 
 class GuessAtStartSolver extends Solver {
@@ -178,26 +126,29 @@ class GuessAtStartSolver extends Solver {
 class ExactCoveredTileMatchSolver extends Solver {
     get name() { return "solverNameExactCoveredTileMatch"; }
 
-    // TODO use TileCollection and transforms instead
     tryStep(session) {
-        let sources = this.collectRevealedTilesWithExactCoveredMatch(session);
-        let candidates = this.collectNeighborsOfTiles(sources)
-            .filter(neighbor => neighbor.isCovered && !neighbor.flag.isPresent);
-        let toFlag = candidates.map(tile => new SweepAction.SetFlagAction({ tile: tile, flag: TileFlag.assertMine }));
-        let result = new SolverResult({ solver: this, debugTiles: sources, actions: toFlag });
-        return result.isSuccess ? result : null;
-    }
+        let candidates = TileCollection.allTiles(session)
+            // Revealed tiles with nonzero number
+            .applying(new TileTransform.RevealedTilesFilter())
+            .applying(TileTransform.MinedNeighborCountRangeFilter.hasAny)
+            // minedNeighborCount === number of covered neighbors
+            .applying(new TileTransform.HasNeighborsFilter({ condition: { filteredNeighborCountEqualsMinedNeighborCount: true }, transform: collection =>
+                collection.applying(new TileTransform.CoveredTilesFilter())
+            }))
+            .applying(new TileTransform.HasNeighborsFilter({ condition: { range: {min: 1, max: TileTransform.maxNeighbors} }, transform: collection =>
+                collection.applying(new TileTransform.CoveredTilesFilter())
+                    .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none, TileFlag.maybeMine]))
+            }))
+            .emitDebugTiles()
+            // collect covered unflagged neighbors
+            .applying(new TileTransform.CollectNeighborsTransform({ transform: collection => 
+                collection.applying(new TileTransform.CoveredTilesFilter())
+                    .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none, TileFlag.maybeMine]))
+            }));
 
-    // Number of covered neigbbors == number on the tile
-    collectRevealedTilesWithExactCoveredMatch(session) {
-        let filter = this.filterVisitor(this.visitRevealedTilesAdjacentToCovered.bind(this), tile => {
-            if (tile.minedNeighborCount < 1) { return false; }
-            let neighbors = this.collectNeighbors(tile).filter(neighbor => neighbor.isCovered);
-            let flagged = neighbors.filter(neighbor => neighbor.flag == TileFlag.assertMine);
-            return tile.minedNeighborCount == neighbors.length
-                && flagged.length < tile.minedNeighborCount;
-        });
-        return this.collectTiles(session, filter);
+        let toFlag = candidates.tiles.map(tile => new SweepAction.SetFlagAction({ tile: tile, flag: TileFlag.assertMine }));
+        let result = new SolverResult({ solver: this, debugTiles: candidates.debugTiles, actions: toFlag });
+        return result.isSuccess ? result : null;
     }
 }
 
@@ -215,7 +166,7 @@ class ClearFullyFlaggedTileSolver extends Solver {
             .applying(new TileTransform.HasNeighborsFilter({ condition: { range: {min: 1, max: TileTransform.maxNeighbors} }, transform: collection =>
                 collection.applying(new TileTransform.CoveredTilesFilter())
                 .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none]))
-                // .emitDebugTiles()
+                .emitDebugTiles()
             }));
 
         // TODO among the closer tiles, prefer ones that will clear the most neighbors?
