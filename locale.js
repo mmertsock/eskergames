@@ -55,11 +55,11 @@ Array.oxfordCommaList = function(items) {
     switch (items.length) {
         case 0: return "";
         case 1: return items[0];
-        case 2: return Strings.template("oxfordCommaTwoItemsTemplate", { first: items[0], last: items[1] });
+        case 2: return Gaming.Strings.template("oxfordCommaTwoItemsTemplate", { first: items[0], last: items[1] });
         default:
             let last = items.pop();
-            return Strings.template("oxfordCommaManyItemsTemplate", {
-                first: items.join(Strings.str("oxfordCommaManyItemsSeparator")),
+            return Gaming.Strings.template("oxfordCommaManyItemsTemplate", {
+                first: items.join(Gaming.Strings.str("oxfordCommaManyItemsSeparator")),
                 last: last
             });
     }

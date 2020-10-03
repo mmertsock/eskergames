@@ -21,6 +21,12 @@ class TileFlag {
     constructor(present) {
         this.isPresent = present;
     }
+
+    get debugDescription() {
+        if (self == TileFlag.assertMine) return "!";
+        if (self == TileFlag.maybeMine) return "?";
+        return "o";
+    }
 }
 TileFlag.none = new TileFlag(false);
 TileFlag.assertMine = new TileFlag(true);
@@ -39,6 +45,16 @@ class GameTile {
         this._flag = TileFlag.none;
     }
 
+    get debugDescription() {
+        let attrs = this._covered ? "^" : "_";
+        if (this._mined) {
+            attrs += "M";
+        } else if (this._minedNeighborCount > 0) {
+            attrs += `${this._minedNeighborCount}`
+        }
+        return `(${this.coord.debugDescription})${attrs}`;
+    }
+
     get minedNeighborCount() { return this._minedNeighborCount; }
     get isMined() { return this._mined; }
     set isMined(value) {
@@ -53,6 +69,7 @@ class GameTile {
     }
 
     get flag() { return this._flag; }
+    set flag(value) { this._flag = value; }
     clearFlag() {
         this._flag = TileFlag.none;
         return this;
@@ -62,24 +79,29 @@ class GameTile {
         return this;
     }
 
+    get neighbors() {
+        return this._neighbors;
+    }
+
     _boardConstructed() {
         this._minedNeighborCount = 0;
         this._covered = true;
         this._flag = TileFlag.none;
-        this.visitNeighbors(neighbor => {
-            if (neighbor.isMined) {
-                this._minedNeighborCount += 1;
+        this._neighbors = [];
+
+        let rect = new Rect(this.coord.x - 1, this.coord.y - 1, 3, 3);
+        this.board.visitTiles(rect, neighbor => {
+            if (neighbor != this) {
+                this._neighbors.push(neighbor);
+                if (neighbor.isMined) {
+                    this._minedNeighborCount += 1;
+                }
             }
         });
     }
 
     visitNeighbors(block) {
-        let rect = new Rect(this.coord.x - 1, this.coord.y - 1, 3, 3);
-        this.board.visitTiles(rect, tile => {
-            if (tile != this) {
-                block(tile, this);
-            }
-        });
+        this._neighbors.forEach(neighbor => block(neighbor, this));
     }
 } // end class GameTile
 
@@ -1325,7 +1347,7 @@ var initialize = async function() {
     Gaming.Strings.initialize(content.strings);
     Game.initialize(content);
     new NewGameDialog().show();
-}
+};
 
 return {
     initialize: initialize,
