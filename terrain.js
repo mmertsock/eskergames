@@ -45,11 +45,10 @@ const CanvasTileViewport = CitySim.CanvasTileViewport;
 const CityMap = CitySim.CityMap;
 const ConfirmDialog = CitySim.ConfirmDialog;
 const GameContent = Gaming.GameContent;
-const GameDialog = CitySim.GameDialog;
+const GameDialog = Gaming.GameDialog;
 const GameScriptEngine = Gaming.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
 const HelpDialog = CitySim.HelpDialog;
-const InputView = CitySim.InputView;
 const KeyInputController = CitySim.KeyInputController;
 const MapLayer = CitySim.MapLayer;
 const MapLayerViewModel = CitySim.MapLayerViewModel;
@@ -63,9 +62,11 @@ const Terrain = CitySim.Terrain;
 const TerrainSpriteSource = CitySim.TerrainSpriteSource;
 const TerrainTile = CitySim.TerrainTile;
 const TerrainType = CitySim.TerrainType;
-const TextInputView = CitySim.TextInputView;
-const TextLineView = CitySim.TextLineView;
-const ToolButton = CitySim.ToolButton;
+
+const InputView = Gaming.FormValueView.InputView;
+const TextInputView = Gaming.FormValueView.TextInputView;
+const TextLineView = Gaming.FormValueView.TextLineView;
+const ToolButton = Gaming.ToolButton;
 
 const _zeroToOne = { min: 0, max: 1 };
 

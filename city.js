@@ -10,6 +10,7 @@ const CircularArray = Gaming.CircularArray;
 const ChangeTokenBinding = Gaming.ChangeTokenBinding;
 const Easing = Gaming.Easing;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const GameDialog = Gaming.GameDialog;
 const Kvo = Gaming.Kvo;
 const Point = Gaming.Point;
 const Rect = Gaming.Rect;
@@ -23,6 +24,11 @@ const Vector = Gaming.Vector;
 
 const GameContent = Gaming.GameContent;
 const GameScriptEngine = Gaming.GameScriptEngine;
+
+const InputView = Gaming.FormValueView.InputView;
+const TextLineView = Gaming.FormValueView.TextLineView;
+const TextInputView = Gaming.FormValueView.TextInputView;
+const ToolButton = Gaming.ToolButton;
 
 // ########################### GLOBAL #######################
 
@@ -64,14 +70,6 @@ String.fromTemplate = function(template, data) {
         template = template.replace(_stringTemplateRegexes[pn], data[pn]);
     });
     return template;
-};
-
-EventTarget.prototype.addGameCommandEventListener = function(eventType, preventDefault, command, subject) {
-    this.addEventListener(eventType, (evt) => {
-        if (preventDefault) { evt.preventDefault(); }
-        if (!GameScriptEngine.shared) { return; }
-        GameScriptEngine.shared.execute(command, subject);
-    });
 };
 
 // ########################### MODELS #######################
@@ -1325,7 +1323,7 @@ class KeyInputController {
 
     get activeCodes() { return Object.getOwnPropertyNames(this.codeState); }
     get isActive() {
-        return this.hasPointer && !GameDialogManager.shared.hasFocus;
+        return this.hasPointer && !Gaming.GameDialogManager.shared.hasFocus;
     }
 
     isCodeActive(code) { return this.codeState.hasOwnProperty(code); }
@@ -1839,219 +1837,6 @@ MapToolController.Kvo = { activeSession: "_toolSession" };
 class UI {
     static fadeOpacity(currentAge, targetAge, duration) {
         return Math.clamp((targetAge - currentAge) / duration, _zeroToOne);
-    }
-}
-
-// Subclasses implement: get/set value().
-class FormValueView {
-    constructor(config, elem) {
-        this.elem = elem;
-        if (config.parent) { config.parent.append(this.elem); }
-    }
-
-    configure(block) {
-        block(this);
-        return this;
-    }
-}
-
-class InputView extends FormValueView {
-    static trimTransform(value) {
-        return (typeof(value) === 'string') ? value.trim() : value;
-    }
-
-    static integerTransform(value) { return parseInt(value); }
-    static floatTransform(value) { return parseFloat(value); }
-
-    static notEmptyOrWhitespaceRule(input) {
-        return !String.isEmptyOrWhitespace(input.value);
-    }
-
-    static makeNumericRangeRule(config) {
-        return input => {
-            let value = input.value;
-            return !isNaN(value) && value >= config.min && value <= config.max;
-        };
-    }
-
-    constructor(config, elem) {
-        super(config, elem);
-        this.valueElem = this.elem.querySelector("input");
-        this.transform = config.transform;
-        if (config.binding) {
-            this.binding = new Binding({ source: config.binding.source, target: this, sourceFormatter: config.binding.sourceFormatter });
-        }
-    }
-
-    get value() {
-        return this.transform ? this.transform(this.valueElem.value) : this.valueElem.value;
-    }
-    set value(newValue) { this.valueElem.value = newValue; }
-
-    // for Bindings
-    setValue(newValue) {
-        this.value = newValue;
-    }
-}
-
-class TextLineView extends InputView {
-    static createElement(config) {
-        var elem = document.createElement("label").addRemClass("textLine", true);
-        if (config.title) {
-            var title = document.createElement("span");
-            title.innerText = config.title;
-            elem.append(title);
-        }
-        var input = document.createElement("input");
-        input.type = "text";
-        input.readOnly = true;
-        elem.append(input);
-        return elem;
-    }
-
-    constructor(config, elem) {
-        super(config, elem || TextLineView.createElement(config));
-    }
-}
-
-class TextInputView extends InputView {
-    static createElement(config) {
-        var elem = document.createElement("label").addRemClass("textInput", true);
-        if (config.title) {
-            var title = document.createElement("span");
-            title.innerText = config.title;
-            elem.append(title);
-        }
-        var input = document.createElement("input");
-        input.type = "text";
-        input.placeholder = config.placeholder || "";
-        elem.append(input);
-        return elem;
-    }
-
-    constructor(config, elem) {
-        super(config, elem || TextInputView.createElement(config));
-        this.validationRules = config.validationRules || [];
-        this.valueElem.addEventListener("input", evt => this.revalidate());
-    }
-
-    revalidate() {
-        this.elem.addRemClass("invalid", !this.isValid);
-    }
-
-    get isValid() {
-        return this.validationRules.every(rule => rule(this));
-    }
-}
-
-class SingleChoiceInputView extends InputView {
-    static createElement(config) {
-        var elem = document.createElement("label").addRemClass("singleChoiceInput", true);
-        elem.append(document.createElement("input").configure(input => {
-            input.type = "radio";
-            input.name = config.collection.id;
-            input.value = config.value;
-            input.checked = !!config.selected;
-        }));
-        elem.append(document.createElement("span").configure(item => item.innerText = config.title));
-        return elem;
-    }
-
-    constructor(config, elem) {
-        super(config, elem || SingleChoiceInputView.createElement(config));
-        this.value = config.value;
-    }
-
-    get selected() { return this.valueElem.checked; }
-    set selected(value) { this.valueElem.checked = value; }
-}
-
-class SingleChoiceInputCollection extends FormValueView {
-    static selectionRequiredRule(collection) {
-        return collection.value !== null;
-    }
-
-    static createElement(config) {
-        var elem = document.createElement("div").addRemClass("singleChoiceInput", true);
-        if (config.title) {
-            elem.append(document.createElement("span").configure(item => item.innerText = config.title));
-        }
-        return elem;
-    }
-
-    constructor(config) {
-        super(config, SingleChoiceInputCollection.createElement(config));
-        this.id = config.id;
-        this.validationRules = config.validationRules || [];
-        this.choices = config.choices.map(item => new SingleChoiceInputView({
-            parent: this.elem,
-            collection: this,
-            title: item.title,
-            value: item.value,
-            selected: item.selected
-        }));
-    }
-
-    get isValid() {
-        return this.validationRules.every(rule => rule(this));
-    }
-
-    get value() {
-        var choice = this.choices.find(item => item.selected);
-        return choice ? choice.value : null;
-    }
-    set value(newValue) {
-        var choice = this.choices.find(item => item.value == newValue);
-        choice.selected = true;
-    }
-}
-
-class ToolButton {
-    static createElement(config) {
-        var elem = document.createElement("a")
-            .addRemClass("tool", true)
-            .addRemClass("glyph", !!config.isGlyph);
-        elem.href = "#";
-        var title = document.createElement("span");
-        title.innerText = config.title;
-        elem.append(title);
-        if (config.size) {
-            elem.style.width = `${config.size.width}px`;
-            elem.style.height = `${config.size.height}px`;
-        }
-        return elem;
-    }
-
-    constructor(config) {
-        this.id = config.id;
-        this.elem = ToolButton.createElement(config);
-        if (config.click) {
-            this.elem.addEventListener("click", evt => { evt.preventDefault(); config.click(this); });
-        } else if (config.clickScript) {
-            var subject = typeof(config.clickScriptSubject) === 'undefined' ? this : config.clickScriptSubject;
-            this.elem.addGameCommandEventListener("click", true, config.clickScript, subject);
-        }
-        if (config.parent) {
-            config.parent.append(this.elem);
-        }
-        this._selected = false;
-    }
-
-    configure(block) {
-        block(this);
-        return this;
-    }
-
-    get isSelected() { return this._selected; }
-    set isSelected(value) {
-        this._selected = value;
-        this.elem.addRemClass("selected", value);
-    }
-
-    get isEnabled() { return this._enabled; }
-    set isEnabled(value) {
-        this._enabled = value;
-        this.elem.addRemClass("disabled", !value);
     }
 }
 
@@ -3749,88 +3534,6 @@ Strings.randomCityName = () => { return "Metroville Acres" };
 Strings.randomPersonName = () => { return "Eustice von Honla" };
 Strings.randomTerrainName = () => { return "Blue Skipes" };
 
-class GameDialogManager {
-    constructor() {
-        this.containerElem = document.querySelector("#dialogs");
-        this.items = [];
-        this._updateArrangement();
-    }
-
-    get hasModal() { return this.containerElem.querySelector(".modal") != null; }
-    get hasFocus() {
-        return this.hasModal; // OR if any text input has focus (for disabling keyboard shortcuts)
-    }
-
-    show(dialog) {
-        if (!this.containerElem) { return; }
-        this.items.push(this);
-        this.containerElem.append(dialog.root);
-        this._updateArrangement();
-    }
-
-    dismiss(dialog) {
-        if (!this.containerElem) { return; }
-        var index = this.items.findIndex(item => item == dialog);
-        if (index >= 0) { this.items.removeItemAtIndex(index); }
-        this.containerElem.removeChild(dialog.root);
-        this._updateArrangement();
-    }
-
-    _updateArrangement() {
-        if (!this.containerElem) { return; }
-        this.containerElem.addRemClass("hidden", this.containerElem.childElementCount < 1);
-        this.containerElem.addRemClass("hasModal", this.hasModal);
-    }
-}
-if (!self.isWorkerScope) {
-    GameDialogManager.shared = new GameDialogManager();
-}
-
-// Subclass me. Subclasses should implement:
-// Required: get title() -> text
-// Required: get contentElem() -> DOM "content" element; cloned if needed
-// Required: get dialogButtons() -> array of DOM elements
-// Optional: get isModal() -> bool
-class GameDialog {
-    static createContentElem() { return document.createElement("content"); }
-    static createFormElem() { return document.createElement("gameForm"); }
-
-    constructor() {
-        this.manager = GameDialogManager.shared;
-    }
-
-    show() {
-        this.root = document.createElement("dialog").addRemClass("modal", this.isModal);
-        var header = document.createElement("header");
-        this.dismissButton = new ToolButton({
-            title: Strings.str("dialogDismissButton"),
-            click: () => this.dismissButtonClicked()
-        });
-        header.append(this.dismissButton.elem);
-        header.append(document.createElement("h2").configure(elem => {
-            elem.innerText = this.title;
-        }));
-        // So that the h2 remains centered:
-        header.append(this.dismissButton.elem.cloneNode(true).addRemClass("hidden", true));
-        this.root.append(header);
-        this.root.append(this.contentElem);
-        var nav = document.createElement("nav");
-        this.dialogButtons.forEach(elem => nav.append(elem));
-        this.root.append(nav);
-        this.manager.show(this);
-        return this;
-    }
-
-    // override if needed
-    dismissButtonClicked() {
-        this.dismiss();
-    }
-
-    dismiss() {
-        this.manager.dismiss(this);
-    }
-}
-
 class ConfirmDialog extends GameDialog {
     constructor(config) {
         super();
@@ -3884,11 +3587,11 @@ class NewGameDialog extends GameDialog {
             validationRules: [InputView.notEmptyOrWhitespaceRule]
         }).configure(input => input.value = Strings.randomPersonName());
 
-        this.difficulties = new SingleChoiceInputCollection({
+        this.difficulties = new Gaming.FormValueView.SingleChoiceInputCollection({
             id: "difficulty",
             parent: formElem,
             title: Strings.str("citySettingsDifficultyLabel"),
-            validationRules: [SingleChoiceInputCollection.selectionRequiredRule],
+            validationRules: [Gaming.FormValueView.SingleChoiceInputCollection.selectionRequiredRule],
             choices: Game.rules().difficulties.map(difficulty => { return {
                 title: Strings.template("difficultyChoiceLabelTemplate", Object.assign({formattedCash: Simoleon.format(difficulty.startingCash)}, difficulty)),
                 value: difficulty.index,
@@ -4056,14 +3759,11 @@ return {
     City: City,
     CityMap: CityMap,
     ConfirmDialog: ConfirmDialog,
-    FormValueView: FormValueView,
     Game: Game,
-    GameDialog: GameDialog,
     GameStorage: GameStorage,
     GridPainter: GridPainter,
     HelpDialog: HelpDialog,
     InputOption: InputOption,
-    InputView: InputView,
     KeyInputController: KeyInputController,
     MapLayer: MapLayer,
     MapLayerViewModel: MapLayerViewModel,
@@ -4077,7 +3777,6 @@ return {
     ScriptPainterStore: ScriptPainterStore,
     SimDate: SimDate,
     Simoleon: Simoleon,
-    SingleChoiceInputCollection: SingleChoiceInputCollection,
     Sprite: Sprite,
     SpriteMapLayerView: SpriteMapLayerView,
     SpriteMapView: SpriteMapView,
@@ -4090,9 +3789,6 @@ return {
     TerrainTile: TerrainTile,
     TerrainType: TerrainType,
     TileRenderContext: TileRenderContext,
-    TextInputView: TextInputView,
-    TextLineView: TextLineView,
-    ToolButton: ToolButton,
     Z: Z,
     Zone: Zone,
     ZoomSelector: ZoomSelector

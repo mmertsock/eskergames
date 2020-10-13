@@ -5,6 +5,7 @@ window.CitySimSprites = (function() {
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
 
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
+const GameDialog = Gaming.GameDialog;
 const Kvo = Gaming.Kvo;
 const PerfTimer = Gaming.PerfTimer;
 const Point = Gaming.Point;
@@ -16,9 +17,8 @@ const Vector = Gaming.Vector;
 const GameContent = CitySimContent.GameContent;
 const GameScriptEngine = CitySimContent.GameScriptEngine;
 
-const GameDialog = CitySim.GameDialog;
 const GridPainter = CitySim.GridPainter;
-const InputView = CitySim.InputView;
+const InputView = Gaming.FormValueView.InputView;
 const MapLayer = CitySim.MapLayer;
 const MapTile = CitySim.MapTile;
 const MapRenderer = CitySim.MapRenderer;
@@ -26,7 +26,7 @@ const ScriptPainter = CitySim.ScriptPainter;
 const ScriptPainterCollection = CitySim.ScriptPainterCollection;
 const ScriptPainterSession = CitySim.ScriptPainterSession;
 const ScriptPainterStore = CitySim.ScriptPainterStore;
-const SingleChoiceInputCollection = CitySim.SingleChoiceInputCollection;
+const SingleChoiceInputCollection = Gaming.FormValueView.SingleChoiceInputCollection;
 const Sprite = CitySim.Sprite;
 const SpriteRenderModel = CitySim.SpriteRenderModel;
 const Spritesheet = CitySim.Spritesheet;
@@ -37,8 +37,8 @@ const Terrain = CitySim.Terrain;
 const TerrainRenderer = CitySim.TerrainRenderer;
 const TerrainTile = CitySim.TerrainTile;
 const TerrainType = CitySim.TerrainType;
-const TextInputView = CitySim.TextInputView;
-const ToolButton = CitySim.ToolButton;
+const TextInputView = Gaming.FormValueView.TextInputView;
+const ToolButton = Gaming.ToolButton;
 
 // ----------------------------------- stuff that could go in city.js
 

@@ -6,16 +6,16 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAsser
 
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const GameContent = Gaming.GameContent;
-const GameDialog = CitySim.GameDialog;
-const InputView = CitySim.ControlViews.InputView;
+const GameDialog = Gaming.GameDialog;
+const InputView = Gaming.FormValueView.InputView;
 const Point = Gaming.Point;
 const Rect = Gaming.Rect;
 const SaveStateItem = Gaming.SaveStateItem;
 const SaveStateCollection = Gaming.SaveStateCollection;
 const Strings = Gaming.Strings;
-const TextInputView = CitySim.ControlViews.TextInputView;
+const TextInputView = Gaming.FormValueView.TextInputView;
 const TilePlane = Gaming.TilePlane;
-const ToolButton = CitySim.ControlViews.ToolButton;
+const ToolButton = Gaming.ToolButton;
 
 class TileFlag {
     constructor(present) {
@@ -1508,11 +1508,11 @@ class NewGameDialog extends GameDialog {
         if (!(defaultDifficultyIndex >= 0)) {
             defaultDifficultyIndex = difficultyRules.findIndex(difficulty => !!difficulty.isDefault);
         }
-        this.difficulties = new CitySim.ControlViews.SingleChoiceInputCollection({
+        this.difficulties = new Gaming.FormValueView.SingleChoiceInputCollection({
             id: "difficulty",
             parent: formElem,
             title: Strings.str("gameSettingsDifficultyLabel"),
-            validationRules: [CitySim.ControlViews.SingleChoiceInputCollection.selectionRequiredRule],
+            validationRules: [Gaming.FormValueView.SingleChoiceInputCollection.selectionRequiredRule],
             choices: difficultyRules.map(difficulty => { return {
                 title: Strings.template("difficultyChoiceLabelTemplate", difficulty),
                 value: difficulty.index,
