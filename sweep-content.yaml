@@ -111,7 +111,6 @@ strings:
   gameStatusLostTemplate: "Lost! <stars> <points> pts, <progressPercent> tiles completed"
   gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
   gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCount> mines cleared"
-  guessAtStartActionDescription: Guessed a tile to start the game
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   highScoresDialogTitle: "✷ High Scores ✷"
@@ -152,9 +151,9 @@ strings:
   showHintButton: Hint
   showHintErrorText: Can’t find any hints to show.
   solverGotStuckMessage: "I don’t know what to do!"
-  solverNameClearFullyFlaggedTile: "Clear fully flagged tile"
-  solverNameExactCoveredTileMatch: "Covered neighbor count matches tile number"
-  solverNameGuessAtStart: "Guess at game start"
+  solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
+  solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: flagged <length> known mines"
+  solverGuessAtStartActionDescription: Guessed a tile to start the game
   solverStepButton: Solve
   stars1: "★☆☆☆☆"
   stars2: "★★☆☆☆"

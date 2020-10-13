@@ -377,7 +377,6 @@ class GameSession {
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
         this.elems.boardContainer.addRemClass("hidden", false);
-        this.renderViews();
 
         if (SweepSolver) {
             let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
@@ -385,6 +384,7 @@ class GameSession {
         } else {
             this.solver = null;
         }
+        this.renderViews();
     }
 
     resetBoard() {
@@ -827,7 +827,7 @@ class AttemptSolverStepAction extends SweepAction {
                 message: Strings.str("solverGotStuckMessage"),
                 button: Strings.str("errorAlertDismissButton")
             }).perform(session);
-            return SweepAction.Result.ok;
+            return SweepAction.Result.noop;
         }
 
         session.debugTiles = result.debugTiles;
@@ -841,9 +841,9 @@ class AttemptSolverStepAction extends SweepAction {
                     session.checkForWin();
                 }
             });
+            session.mostRecentAction = result.actionResult;
         }
-        // TODO set mostRecentAction in session, to an aggregate result that describes the 
-        // overall solver attempted.
+        return SweepAction.Result.ok;
     }
 }
 SweepAction.AttemptSolverStepAction = AttemptSolverStepAction;

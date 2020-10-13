@@ -16,6 +16,7 @@ const GameTile = alias(Sweep.GameTile, {
 });
 const PerfTimer = Gaming.PerfTimer;
 const Strings = Gaming.Strings;
+const ActionResult = Sweep.ActionResult;
 const SweepAction = Sweep.SweepAction;
 const TileBasedAction = Sweep.SweepAction.TileBasedAction;
 const TileCollection = Sweep.TileCollection;
@@ -29,6 +30,7 @@ class SolverResult {
         this.solver = config.solver;
         this.debugTiles = config.debugTiles || [];
         this.actions = config.actions || [];
+        this.actionResult = config.actionResult;
     }
 
     get isSuccess() {
@@ -75,18 +77,13 @@ function mark__Solvers() {} // ~~~~~~ Solvers ~~~~~~
 class Solver {
     static initialize() {
         Solver.allSolvers = [
-            new ExactCoveredTileMatchSolver(),
             new ClearFullyFlaggedTileSolver(),
+            new ExactCoveredTileMatchSolver(),
             new GuessAtStartSolver()
         ];
     }
 
     // Abstract members
-
-    // Strings.str() key for localized name
-    get name() {
-        return "";
-    }
 
     get debugDescription() {
         return `<${this.constructor.name}>`;
@@ -99,8 +96,6 @@ class Solver {
 }
 
 class GuessAtStartSolver extends Solver {
-    get name() { return "solverNameGuessAtStart"; }
-
     tryStep(session) {
         let allTiles = TileCollection.allTiles(session);
         let covered = allTiles
@@ -108,14 +103,21 @@ class GuessAtStartSolver extends Solver {
             .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none]));
 
         if (covered.tiles.length == allTiles.tiles.length) {
+            let tile = allTiles.tiles.randomItem();
+            let action = new SweepAction.RevealTileAction({
+                reason: Strings.str("solverGuessAtStartActionDescription"),
+                tile: tile,
+                revealBehavior: GameSession.revealBehaviors.safe
+            });
             return new SolverResult({
                 solver: this,
                 debugTiles: [],
-                actions: [new SweepAction.RevealTileAction({
-                    reason: Strings.str("guessAtStartActionDescription"),
-                    tile: allTiles.tiles.randomItem(),
-                    revealBehavior: GameSession.revealBehaviors.safe
-                })]
+                actions: [action],
+                actionResult: new ActionResult({
+                    action: action,
+                    tile: tile,
+                    description: action.reason
+                })
             });
         } else {
             return null;
@@ -124,8 +126,6 @@ class GuessAtStartSolver extends Solver {
 }
 
 class ExactCoveredTileMatchSolver extends Solver {
-    get name() { return "solverNameExactCoveredTileMatch"; }
-
     tryStep(session) {
         let candidates = TileCollection.allTiles(session)
             // Revealed tiles with nonzero number
@@ -147,14 +147,22 @@ class ExactCoveredTileMatchSolver extends Solver {
             }));
 
         let toFlag = candidates.tiles.map(tile => new SweepAction.SetFlagAction({ tile: tile, flag: TileFlag.assertMine }));
-        let result = new SolverResult({ solver: this, debugTiles: candidates.debugTiles, actions: toFlag });
+        let nearestTile = new TileCollection(toFlag.flatMap(action => action.tile)).randomTileClosestTo(session.mostRecentAction.tile);
+        let result = new SolverResult({
+            solver: this,
+            debugTiles: candidates.debugTiles,
+            actions: toFlag,
+            actionResult: new ActionResult({
+                action: toFlag.first,
+                tile: nearestTile,
+                description: Strings.template("solverFlaggedExactCoveredTileMatchActionDescriptionTemplate", toFlag)
+            })
+        });
         return result.isSuccess ? result : null;
     }
 }
 
 class ClearFullyFlaggedTileSolver extends Solver {
-    get name() { return "solverNameClearFullyFlaggedTile"; }
-
     tryStep(session) {
         let candidates = TileCollection.allTiles(session)
             .applying(new TileTransform.RevealedTilesFilter())
@@ -170,14 +178,19 @@ class ClearFullyFlaggedTileSolver extends Solver {
             }));
 
         // TODO among the closer tiles, prefer ones that will clear the most neighbors?
-        let toClear = candidates.randomTileClosestTo(session.mostRecentAction.tile);
-        toClear = toClear ? [new SweepAction.RevealTileAction({ tile: toClear, revealBehavior: GameSession.revealBehaviors.assertTrustingFlags })] : [];
+        let tile = candidates.randomTileClosestTo(session.mostRecentAction.tile);
+        let toClear = tile ? [new SweepAction.RevealTileAction({ tile: tile, revealBehavior: GameSession.revealBehaviors.assertTrustingFlags })] : [];
 
         let result = new SolverResult({
             solver: this,
             // debugTiles: toClear.map(action => action.tile),
             debugTiles: candidates.debugTiles,
-            actions: toClear
+            actions: toClear,
+            actionResult: new ActionResult({
+                action: toClear[0],
+                tile: tile,
+                description: Strings.str("solverClearFullyFlaggedTileActionDescription")
+            })
         });
         return result;
     }
