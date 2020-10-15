@@ -91,10 +91,73 @@ gameTileViewState:
     fillColor: "hsla(120, 85%, 85%, 0.5)"
   debug:
     fillColor: "hsla(83, 100%, 50%, 0.2)"
+analysisView:
+  historyChart:
+    backgroundColor: "#ffffff"
+    chartColor: "#eeeeee"
+    defaultFont: bold 32px 'Gill Sans', monospace
+    series:
+      score:
+        lineWidth: 2
+        strokeStyle: &SCORESERIESCOLOR "#0033ff"
+      assertMineFlagCount:
+        lineWidth: 3
+        strokeStyle: &MINEFLAGSERIESCOLOR "#ff3300"
+    lineWidth: 3
+    titlePadding: 0
+    axes:
+      x:
+        strokeStyle: &AXISBORDERSTROKESTYLE "#000000"
+        lineWidth: &AXISLINEWIDTH 1
+        titlePadding: &AXISTITLEPADDING 4
+        titleFont: &AXISTITLEFONT 26px 'Gill Sans', monospace
+        textColor: *AXISBORDERSTROKESTYLE
+        valueLabels:
+          maxTickCount: 25
+          tickSize: &TICKSIZE 8
+          tickLineWidth: &TICKLINEWIDTH 1
+          showLabels: true
+          titleFont: &AXISLABELFONT 14px 'Gill Sans', monospace
+          textColor: *AXISBORDERSTROKESTYLE
+          titlePadding: &AXISLABELTITLEPADDING 2
+      y:
+        primary:
+          strokeStyle: *AXISBORDERSTROKESTYLE
+          lineWidth: *AXISLINEWIDTH
+          titlePadding: *AXISTITLEPADDING
+          titleFont: *AXISTITLEFONT
+          textColor: *SCORESERIESCOLOR
+          valueLabels:
+            maxTickCount: 9
+            tickSize: *TICKSIZE
+            tickLineWidth: *TICKLINEWIDTH
+            showLabels: true
+            titleFont: *AXISLABELFONT
+            textColor: *AXISBORDERSTROKESTYLE
+            titlePadding: *AXISLABELTITLEPADDING
+        secondary:
+          strokeStyle: *AXISBORDERSTROKESTYLE
+          lineWidth: *AXISLINEWIDTH
+          titlePadding: *AXISTITLEPADDING
+          titleFont: *AXISTITLEFONT
+          textColor: *MINEFLAGSERIESCOLOR
+          valueLabels:
+            maxTickCount: 13
+            tickSize: *TICKSIZE
+            tickLineWidth: *TICKLINEWIDTH
+            showLabels: true
+            titleFont: *AXISLABELFONT
+            textColor: *AXISBORDERSTROKESTYLE
+            titlePadding: *AXISLABELTITLEPADDING
 
 ################## STRINGS ################
 
 strings:
+  analysisViewTitle: Stats
+  analysisViewDismiss: Cool
+  analysisChartSeriesNameScore: Score
+  analysisChartSeriesNameAssertMineFlagCount: Mines Flagged
+  analysisChartMoveNumberLabel: Moves
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✖️"
   difficultyChoiceLabelTemplate: "<name>"
@@ -145,6 +208,7 @@ strings:
   saveHighScoreDialogTitle: "You Won!"
   saveHighScoreDisabledDialogTextTemplate: "Your score: <points>. But you can’t save your high score because you got help."
   saveHighScoreDisabledButton: OK
+  showAnalysisButton: Stats
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
   showHintActionDescription: Got a hint

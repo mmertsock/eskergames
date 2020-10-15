@@ -132,6 +132,22 @@ Array.prototype.map2D = function(block) {
         return row.map((item, x) => block(item, y, x));
     });
 };
+Array.prototype.maxElement = function() {
+    if (this.length == 0) { return undefined; }
+    return this.reduce((x, y) => Math.max(x, y), this[0]);
+};
+Array.prototype.minElement = function() {
+    if (this.length == 0) { return undefined; }
+    return this.reduce((x, y) => Math.min(x, y), this[0]);
+};
+
+Array.mapSequence = function(range, block) {
+    let values = [];
+    for (let i = range.min; i <= range.max; i += 1) {
+        values.push(block(i));
+    }
+    return values;
+};
 
 // Return false if already has value. Adds value and returns true otherwise.
 Set.prototype.addIfNotContains = function(value) {
@@ -213,6 +229,13 @@ HTMLCanvasElement.prototype.updateBounds = function() {
     var scale = HTMLCanvasElement.getDevicePixelScale();
     this.width = parseInt(cs.width) * scale;
     this.height = parseInt(cs.height) * scale;
+};
+
+CanvasRenderingContext2D.prototype.strokeLineSegment = function(start, end) {
+    this.beginPath();
+    this.moveTo(start.x, start.y);
+    this.lineTo(end.x, end.y);
+    this.stroke();
 };
 
 CanvasRenderingContext2D.prototype.rectClear = function(rect) {
@@ -865,6 +888,10 @@ class BoolArray {
     }
     fill(value) { this.array.fill(0xff); return this; }
 
+    getByte(index) {
+        return this.view.getUint8(index);
+    }
+
     get debugDescription() {
         var bytes = [];
         for (var i = 0; i < this.array.length; i += 1) {
@@ -1227,7 +1254,7 @@ class Rect {
     union(other) {
         if (!other) { return new Rect(this); }
         if (this.isEmpty()) return other;
-        if (other.isEmpty()) return this;
+        if (other.isEmpty()) return new Rect(this);
         var e1 = this.extremes;
         var e2 = other.extremes;
         return Rect.fromExtremes({
@@ -2580,16 +2607,21 @@ if (!self.isWorkerScope) {
 // Required: get contentElem() -> DOM "content" element; cloned if needed
 // Required: get dialogButtons() -> array of DOM elements
 // Optional: get isModal() -> bool
+// Optional: get rootElemClass() -> text
 class GameDialog {
     static createContentElem() { return document.createElement("content"); }
     static createFormElem() { return document.createElement("gameForm"); }
 
-    constructor() {
+    constructor(config) {
         this.manager = GameDialogManager.shared;
+        this.rootElemClass = config ? config.rootElemClass : null;
     }
 
     show() {
         this.root = document.createElement("dialog").addRemClass("modal", this.isModal);
+        if (this.rootElemClass) {
+            this.root.addRemClass(this.rootElemClass, true);
+        }
         var header = document.createElement("header");
         this.dismissButton = new ToolButton({
             title: Gaming.Strings.str("dialogDismissButton"),

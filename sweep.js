@@ -17,9 +17,18 @@ const TextInputView = Gaming.FormValueView.TextInputView;
 const TilePlane = Gaming.TilePlane;
 const ToolButton = Gaming.ToolButton;
 
+const ChartDataSeries = Charts.ChartDataSeries;
+const ChartDataSeriesPresentation = Charts.ChartDataSeriesPresentation;
+const ChartAxisPresentation = Charts.ChartAxisPresentation;
+const ChartView = Charts.ChartView;
+
 class TileFlag {
     constructor(present) {
         this.isPresent = present;
+    }
+
+    get objectForSerialization() {
+        return TileFlag.sz.indexOf(this);
     }
 
     get debugDescription() {
@@ -34,6 +43,7 @@ TileFlag.maybeMine = new TileFlag(true);
 TileFlag.none.next = TileFlag.assertMine;
 TileFlag.assertMine.next = TileFlag.maybeMine;
 TileFlag.maybeMine.next = TileFlag.none;
+TileFlag.sz = [TileFlag.none, TileFlag.assertMine, TileFlag.maybeMine];
 
 class GameTile {
     constructor(coord, board) {
@@ -43,6 +53,51 @@ class GameTile {
         this._minedNeighborCount = 0;
         this._covered = true;
         this._flag = TileFlag.none;
+    }
+
+    get objectForSerialization() {
+        // easy game: about 8.5 KB for entire board
+        return {
+            coord: { x: this.coord.x, y: this.coord.y },
+            isMined: this.isMined,
+            minedNeighborCount: this.minedNeighborCount,
+            isCovered: this.isCovered,
+            flag: this.flag.objectForSerialization
+        };
+    }
+
+    get compactSerialized() {
+        // isMined, isCovered are 2 bits
+        // flag can be up to 2 bits
+        // minedNeighborCount is up to 3 bits
+        let bits = new Gaming.BoolArray(8);
+        bits.setValue(0, this.isMined);
+        bits.setValue(1, this.isCovered);
+        // Support flag values 0...3: two bits
+        let value = this.flag.objectForSerialization;
+        bits.setValue(2, this.bitValue(value, 0));
+        bits.setValue(3, this.bitValue(value, 1));
+        // Support mine values 0...8: 4 bits
+        value = this.minedNeighborCount;
+        bits.setValue(4, this.bitValue(value, 0));
+        bits.setValue(5, this.bitValue(value, 1));
+        bits.setValue(6, this.bitValue(value, 2));
+        bits.setValue(7, this.bitValue(value, 3));
+
+        // easy game: about 243 bytes for enitre board
+        return bits.getByte(0);
+
+        // easy game: about 1 KB for entire board.
+        // return [
+        //     this.isMined ? 1 : 0,
+        //     this.minedNeighborCount,
+        //     this.isCovered ? 1 : 0,
+        //     this.flag.objectForSerialization
+        // ];
+    }
+
+    bitValue(value, position) {
+        return (value & (0x1 << position)) ? true : false;
     }
 
     get debugDescription() {
@@ -120,6 +175,32 @@ class GameBoard {
         this.shuffle();
     }
 
+    get compactSerialized() {
+        let tiles = [];
+        this.visitTiles(null, tile => {
+            tiles.push(tile.compactSerialized);
+        });
+        return {
+            schemaVersion: GameBoard.schemaVersion,
+            size: { width: this.size.width, height: this.size.height },
+            mineCount: this.mineCount,
+            tiles: tiles
+        };
+    }
+
+    get objectForSerialization() {
+        let tiles = [];
+        this.visitTiles(null, tile => {
+            tiles.push(tile.objectForSerialization);
+        });
+        return {
+            schemaVersion: GameBoard.schemaVersion,
+            size: { width: this.size.width, height: this.size.height },
+            mineCount: this.mineCount,
+            tiles: tiles
+        };
+    }
+
     tileAtCoord(coord) {
         let row = this._tiles[coord.y];
         return row ? row[coord.x] : null;
@@ -152,6 +233,7 @@ class GameBoard {
         debugLog(Game.debugSummary(this));
     }
 } // end class GameBoard
+GameBoard.schemaVersion = 1;
 
 class Game {
     static initialize(content) {
@@ -163,6 +245,7 @@ class Game {
         GameBoardView.initialize(content.gameBoardView);
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
+        GameAnalysisDialog.initialize(content.analysisView);
     }
 
     static rules() {
@@ -205,6 +288,14 @@ class Game {
     constructor(config) {
         this.difficulty = config.difficulty;
         this.board = new GameBoard({ size: config.difficulty, mineCount: config.difficulty.mineCount });
+    }
+
+    get objectForSerialization() {
+        return {
+            difficulty: this.difficulty,
+            board: this.board.compactSerialized,
+            statistics: this.statistics
+        };
     }
 
     get mineCount() { return this.board.mineCount; }
@@ -334,6 +425,167 @@ if (!self.isWorkerScope) {
     GameStorage.shared = new GameStorage();
 }
 
+class GameHistory {
+    static userFacingMoveNumber(moveNumber) { return moveNumber + 1; }
+
+    constructor() {
+        this.moveNumber = GameHistory.firstMoveNumber;
+        this.serializedMoves = [];
+        this.lastMove = null;
+    }
+
+    get isEmpty() { return this.serializedMoves.length < 1; }
+
+    // Deletes entire existing history data
+    reset() {
+        this.moveNumber = GameHistory.firstMoveNumber;
+        this.serializedMoves = [];
+        this.lastMove = null;
+    }
+
+    serializedMoveAtIndex(index) {
+        return this.serializedMoves.safeItemAtIndex(index);
+    }
+
+    setCurrentMove(moment) { // MoveHistoryMoment
+        if (!moment) { return; }
+
+        if (!this.lastMove || (moment.objectForSerialization != this.lastMove.objectForSerialization)) {
+            // TODO only increment if game state has changed since last time
+            let object = moment.bestSerialization(this.lastMove);
+            let data = JSON.stringify(object);
+            debugLog(`move ${this.moveNumber}: storing ${data.length} bytes, ${object.format}`);
+            this.serializedMoves[this.moveNumber] = data;
+            this.moveNumber = this.moveNumber + 1;
+            this.lastMove = moment;
+        }
+    }
+
+    visitHistory(block) {
+        let previous = null;
+        for (let i = 0; i < this.serializedMoves.length; i += 1) {
+            let moment = MoveHistoryMoment.fromCompactSerialization(JSON.parse(this.serializedMoves[i]), previous);
+            if (moment) {
+                block(moment, i);
+                previous = moment;
+            }
+        }
+    }
+}
+GameHistory.firstMoveNumber = 0;
+
+class MoveHistoryMoment {
+    static fromDeserializedWrapper(data, schemaVersion) {
+        return new MoveHistoryMoment({ dz: JSON.parse(data), schemaVersion: schemaVersion });
+    }
+
+    static fromCompactSerialization(object, previous) {
+        if (object.format == "full") {
+            return new MoveHistoryMoment({ dz: object.data })
+        } else {
+            let game = MoveHistoryMoment.rehydrateGame(object.data, previous);
+            return new MoveHistoryMoment({ dz: {
+                game: game,
+                gameState: previous.gameState,
+                moveNumber: object.data.moveNumber
+            }});
+        }
+    }
+
+    static rehydrateGame(data, previous) {
+        let tiles = Array.from(previous.game.board.tiles);
+        for (var i = 0; i < data.diffs.length; i += 2) {
+            let index = data.diffs[i];
+            let value = data.diffs[i + 1];
+            tiles[index] = value;
+        }
+        let stats = {
+            assertMineFlagCount: data.stats[0],
+            clearedTileCount: data.stats[1],
+            points: data.stats[2]
+        };
+        // TODO static method to calculate this so we don't duplicate code
+        stats.progress = (stats.clearedTileCount + stats.assertMineFlagCount) / previous.game.statistics.totalTileCount;
+
+        return Object.assign({}, previous.game, {
+            board: { tiles: tiles },
+            difficulty: previous.game.difficulty,
+            statistics: Object.assign({}, previous.game.statistics, stats)
+        });
+    }
+
+    constructor(config) {
+        if (config.dz) {
+            this.game = config.dz.game;
+            this.gameState = config.dz.gameState;
+            this.moveNumber = config.dz.moveNumber;
+        } else {
+            this.game = config.session.game.objectForSerialization;
+            this.gameState = config.session.state;
+            this.moveNumber = config.session.history.moveNumber;
+        }
+    }
+
+    get objectForSerialization() {
+        return {
+            schemaVersion: MoveHistoryMoment.schemaVersion,
+            game: this.game,
+            gameState: this.gameState,
+            moveNumber: this.moveNumber
+        };
+    }
+
+    bestSerialization(previous) {
+        if (!previous || (this.gameState != previous.gameState)) {
+            return this.fullSerialization();
+        }
+
+        // ~5.2 bytes per diff; 2 array entries per diff.
+        // ~2.4 bytes per tile in full format
+        let diffs = this.diff(previous);
+        if (!diffs || ((2.6 * diffs.length) > (2.4 * this.game.board.size.width * this.game.board.size.height))) {
+            return this.fullSerialization();
+        } else {
+            return {
+                format: "diff",
+                data: {
+                    diffs: diffs,
+                    moveNumber: this.moveNumber,
+                    stats: [this.game.statistics.assertMineFlagCount, this.game.statistics.clearedTileCount, this.game.statistics.points]
+                }
+            };
+        }
+    }
+
+    diff(previous) {
+        if (!previous) { return null; }
+        let diffs = [];
+        for (let i = 0; i < this.game.board.tiles.length; i += 1) {
+            let tile = this.game.board.tiles[i];
+            if (tile != previous.game.board.tiles[i]) {
+                diffs.push(i); diffs.push(tile);
+            }
+        }
+        return diffs;
+    }
+
+    fullSerialization() {
+        return {
+            format: "full",
+            data: {
+                game: {
+                    board: this.game.board,
+                    statistics: this.game.statistics,
+                    difficulty: this.game.difficulty
+                },
+                gameState: this.gameState,
+                moveNumber: this.moveNumber
+            }
+        };
+    }
+}
+MoveHistoryMoment.schemaVersion = 1;
+
 class GameSession {
     static quit(prompt) {
         if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
@@ -346,7 +598,7 @@ class GameSession {
         this.state = GameState.playing;
         this.moveState = MoveState.ready;
         this.debugMode = false;
-        this.isFirstMove = true;
+        this.history = new GameHistory();
         this.isClean = !this.debugMode; // false if cheated, etc.
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
@@ -372,7 +624,7 @@ class GameSession {
         this.moveState = MoveState.ready;
         this.startTime = Date.now();
         this.endTime = null;
-        this.isFirstMove = true;
+        this.history.reset();
         this.isClean = !this.debugMode;
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
@@ -385,6 +637,10 @@ class GameSession {
             this.solver = null;
         }
         this.renderViews();
+    }
+
+    get hasMoved() {
+        return this.history.moveNumber > GameHistory.firstMoveNumber;
     }
 
     resetBoard() {
@@ -429,18 +685,24 @@ class GameSession {
     // contexts like tile clearing.
     beginMove() {
         if (this.moveState == MoveState.pending) {
-            this.isFirstMove = false;
+            this.recordGameState();
             this.hintTile = null;
             this.debugTiles = [];
             this.moveState = MoveState.active;
         }
+    }
+
+    recordGameState() {
+        // TODO also call this after winning/losing
+        this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
+        // TODO auto-save
     }
     
     attemptRevealTile(tile, revealBehavior) {
         if (this.state != GameState.playing) { return; }
         if (!tile) { return; }
 
-        while (this.isFirstMove && tile.isMined) {
+        while (!this.hasMoved && tile.isMined) {
             debugLog("Clicked a mine on first move. Shuffling.");
             this.game.board.shuffle();
         }
@@ -1170,6 +1432,11 @@ class GameControlsView {
             title: Strings.str("showHighScoresButton"),
             click: () => this.showHighScores()
         });
+        this.showAnalysisButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("showAnalysisButton"),
+            click: () => this.showAnalysis()
+        });
         this.showHintButton = new ToolButton({
             parent: this.elem,
             title: Strings.str("showHintButton"),
@@ -1194,6 +1461,7 @@ class GameControlsView {
 
     render() {
         this.resetBoardButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
+        this.showAnalysisButton.isEnabled = GameAnalysisDialog.isValid(this.session);
         this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
         this.solverStepButton.isEnabled = AttemptSolverStepAction.isValid(this.session);
         if (this.debugModeButton) {
@@ -1222,6 +1490,12 @@ class GameControlsView {
             difficulty = this.session.game.difficulty;
         }
         HighScoresDialog.showHighScores(GameStorage.shared, difficulty);
+    }
+
+    showAnalysis() {
+        if (GameAnalysisDialog.isValid(this.session)) {
+            new GameAnalysisDialog({ history: this.session.history }).show();
+        }
     }
 
     showHint() {
@@ -1380,13 +1654,13 @@ class GameTileView {
             ctx.beginPath();
             ctx.moveTo(ext.min.x, ext.min.y);
             ctx.lineTo(ext.min.x, ext.max.y);
-            ctx.stroke()
+            ctx.stroke();
         }
         if (this.model.coord.y > 0) {
             ctx.beginPath();
             ctx.moveTo(ext.min.x, ext.max.y);
             ctx.lineTo(ext.max.x, ext.max.y);
-            ctx.stroke()
+            ctx.stroke();
         }
 
         if (this.model.isCovered) {
@@ -1760,6 +2034,113 @@ class HelpDialog extends GameDialog {
     get title() { return Strings.str("helpDialogTitle"); }
     get dialogButtons() { return [this.x.elem]; }
 }
+
+class GameAnalysisDialog extends GameDialog {
+    static initialize(config) {
+        GameAnalysisDialog.metrics = config;
+    }
+
+    static isValid(session) {
+        return !!session && !session.history.isEmpty;
+    }
+
+    constructor(config) {
+        super({ rootElemClass: "analysis" });
+
+        this.history = config.history; // GameHistory
+
+        this.contentElem = GameDialog.createContentElem();
+        let elem = document.querySelector("body > analysis")
+            .cloneNode(true).addRemClass("hidden", false);
+        this.contentElem.append(elem);
+
+        this.x = new ToolButton({
+            title: Strings.str("analysisViewDismiss"), // TODO
+            click: () => this.dismiss()
+        });
+
+        this.buildChartView(elem);
+        // this.buildRainbowBoard(elem);
+    }
+
+    get isModal() { return false; }
+    get title() { return Strings.str("analysisViewTitle"); }
+    get dialogButtons() { return [this.x.elem]; }
+
+    buildChartView(elem) {
+        let data = {
+            score: new ChartDataSeries({ name: Strings.str("analysisChartSeriesNameScore") }),
+            assertMineFlagCount: new ChartDataSeries({ name: Strings.str("analysisChartSeriesNameAssertMineFlagCount") })
+        };
+        // TODO have first element of each series be a 0,0 value?
+        // Then element index 1 == moveNumber 0 == userFacingMoveNumber 1
+        this.history.visitHistory((moment, moveNumber) => {
+            data.score.push(moveNumber, moment.game.statistics.points);
+            data.assertMineFlagCount.push(moveNumber, moment.game.statistics.assertMineFlagCount);
+        });
+
+        let metrics = GameAnalysisDialog.metrics.historyChart;
+        let presentation = [
+            new ChartDataSeriesPresentation({
+                series: data.score,
+                style: Object.assign({ type: ChartDataSeriesPresentation.Type.line }, metrics.series.score)
+            })
+        ];
+        let showMineSeries = data.assertMineFlagCount.range.max > 0;
+        if (showMineSeries) {
+            presentation.unshift(new ChartDataSeriesPresentation({
+                series: data.assertMineFlagCount,
+                style: Object.assign({ type: ChartDataSeriesPresentation.Type.line }, metrics.series.assertMineFlagCount)
+            }));
+        }
+
+        let axes = {
+            x: new ChartAxisPresentation(Object.assign({}, metrics.axes.x, {
+                labels: data.score.values.map(value => {
+                    return Number.uiInteger(GameHistory.userFacingMoveNumber(value.x))
+                }),
+                title: Strings.str("analysisChartMoveNumberLabel"),
+            })),
+            y: {
+                primary: new ChartAxisPresentation(Object.assign({}, metrics.axes.y.primary, {
+                    series: data.score,
+                    title: data.score.name
+                })),
+                secondary: null
+            }
+        };
+
+        let formatter = value => Number.uiInteger(Math.round(value));
+        if (axes.y.primary.hasValueLabels) {
+            axes.y.primary.valueLabels.formatter = formatter;
+        }
+        if (showMineSeries) {
+            let range = { min: 0, max: data.assertMineFlagCount.values.map(value => value.y).maxElement() };
+            axes.y.secondary = new ChartAxisPresentation(Object.assign({}, metrics.axes.y.secondary, {
+                labels: Array.mapSequence(range, value => Number.uiInteger(value)),
+                title: data.assertMineFlagCount.name
+            }));
+        }
+        debugLog(axes);
+
+        this.chartView = new ChartView({
+            elem: elem.querySelector(".history-chart canvas"),
+            title: "HENLO", // TODO
+            series: presentation,
+            axes: axes,
+            style: metrics
+        });
+    }
+
+    show() {
+        super.show();
+        this.render();
+    }
+
+    render() {
+        this.chartView.render();
+    }
+} // end class GameAnalysisDialog
 
 class HighScoresDialog extends GameDialog {
     static showHighScores(storage, difficulty) {

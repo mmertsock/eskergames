@@ -10,6 +10,7 @@
     <script defer src="g.js"></script>
     <script defer src="locale.js"></script>
     <script defer src="game-content.js"></script>
+    <script defer src="charts.js"></script>
     <script defer src="sweep.js"></script>
     <script defer src="sweep-solver.js"></script>
 
@@ -97,6 +98,26 @@ p.message {
     text-align: center;
 }
 
+dialog.analysis {
+    width: 80%;
+}
+
+analysis {
+    display: block;
+    padding: 0.;
+}
+
+analysis .history-chart {
+    padding: 0.5em;
+}
+
+analysis .history-chart canvas {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 300px;
+}
+
 </style>
 
 </head>
@@ -144,6 +165,12 @@ p.message {
         <p>No High Scores</p>
     </scoreTemplate>
 </highScores>
+
+<analysis class="hidden">
+    <!-- div class="moment-info"></div -->
+    <div class="history-chart"><canvas></canvas></div>
+    <!-- div class="history-viz"></div -->
+</analysis>
 
 </body>
 </html>
