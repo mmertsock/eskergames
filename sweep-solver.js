@@ -155,7 +155,7 @@ class ExactCoveredTileMatchSolver extends Solver {
             actionResult: new ActionResult({
                 action: toFlag.first,
                 tile: nearestTile,
-                description: Strings.template("solverFlaggedExactCoveredTileMatchActionDescriptionTemplate", toFlag)
+                description: Strings.template("solverFlaggedExactCoveredTileMatchActionDescriptionTemplate", { length: { value: toFlag.length, formatted: Number.uiInteger(toFlag.length) }})
             })
         });
         return result.isSuccess ? result : null;

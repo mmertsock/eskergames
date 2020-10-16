@@ -20,6 +20,7 @@ const RandomLineGenerator = Gaming.RandomLineGenerator;
 const Rect = Gaming.Rect;
 const Rng = Gaming.Rng;
 const SaveStateItem = Gaming.SaveStateItem;
+const Strings = Gaming.Strings;
 const TaskQueue = Gaming.TaskQueue;
 const TilePlane = Gaming.TilePlane;
 const UndoStack = Gaming.UndoStack;
@@ -670,8 +671,59 @@ var randomTest = function() {
     }).build()({ iterations: 1000 }, null);
 }
 
-var stringTemplateTest = function() {
-    new UnitTest("StringFromTemplate", function() {
+var stringsTest = function() {
+    let l10n = {
+        hello: "henlo",
+        helloTemplate: "henlo, <first> x. <last> of <last>land",
+        pluralsTemplate: "henlo <first>: <mineCountCleared#mineCount> and <customPlaceholder#hashtags>",
+        pluralsTemplateFormattedMagnitude: "henlo <first>: <mineCountCleared#mineCount#formattedMineCount> and <customPlaceholder#hashtags#formatMyHashtags>"
+    };
+    let l10ns = {
+        mineCountCleared: ["# mines cleared", "1 mine cleared", "# mines cleared"],
+        customPlaceholder: ["created no #hashtags", "created one #hashtag", "created N #hashtags", "N"]
+    };
+    Strings.initialize(l10n, l10ns);
+
+    new UnitTest("Strings.str", function() {
+        this.assertEqual(Strings.str("bogus"), "?bogus?");
+        this.assertEqual(Strings.str("hello"), "henlo");
+    }).build()(null, null);
+
+    new UnitTest("Strings.template", function() {
+        this.assertEqual(Strings.template("hello"), "henlo");
+        this.assertEqual(Strings.template("hello", { hello: "no" }), "henlo");
+        this.assertEqual(Strings.template("helloTemplate"), "henlo, <first> x. <last> of <last>land");
+        this.assertEqual(Strings.template("helloTemplate", { bogus: "no" }), "henlo, <first> x. <last> of <last>land");
+        this.assertEqual(Strings.template("helloTemplate", { first: "bugs" }), "henlo, bugs x. <last> of <last>land");
+        this.assertEqual(Strings.template("helloTemplate", { last: "bunny" }), "henlo, <first> x. bunny of bunnyland");
+        this.assertEqual(Strings.template("helloTemplate", { first: "bugs", bogus: "no", last: "bunny" }), "henlo, bugs x. bunny of bunnyland");
+    }).build()(null, null);
+
+    new UnitTest("Strings.pluralize", function() {
+        this.assertEqual(Strings.pluralize("hello", 1), "?hello/1?");
+        this.assertEqual(Strings.pluralize("mineCountCleared", 0), "0 mines cleared");
+        this.assertEqual(Strings.pluralize("mineCountCleared", 1), "1 mine cleared");
+        this.assertEqual(Strings.pluralize("mineCountCleared", 2), "2 mines cleared");
+        this.assertEqual(Strings.pluralize("mineCountCleared", 3775), "3775 mines cleared");
+        this.assertEqual(Strings.pluralize("mineCountCleared", 0, "zero"), "zero mines cleared");
+        this.assertEqual(Strings.pluralize("mineCountCleared", 1, "nope"), "1 mine cleared");
+        this.assertEqual(Strings.pluralize("mineCountCleared", 1732, "1,732"), "1,732 mines cleared");
+        this.assertEqual(Strings.pluralize("customPlaceholder", 0), "created no #hashtags");
+        this.assertEqual(Strings.pluralize("customPlaceholder", 1), "created one #hashtag");
+        this.assertEqual(Strings.pluralize("customPlaceholder", 2), "created 2 #hashtags");
+    }).build()(null, null);
+
+    new UnitTest("Strings.template plurals", function() {
+        this.assertEqual(Strings.template("pluralsTemplate", {}), "henlo <first>: <mineCountCleared#mineCount> and <customPlaceholder#hashtags>");
+        let data = { first: "bugs", mineCount: 0, hashtags: 1732, formattedMineCount: "zero", formatMyHashtags: "1,732", mineCountCleared: "X", customPlaceholder: "X", formattedHashtags: "X" };
+        this.assertEqual(Strings.template("pluralsTemplate", data), "henlo bugs: 0 mines cleared and created 1732 #hashtags");
+        this.assertEqual(Strings.template("pluralsTemplateFormattedMagnitude", data), "henlo bugs: zero mines cleared and created 1,732 #hashtags");
+        data = { first: "bugs", mineCount: { value: 3, formatted: "three" }, hashtags: { value: 1733, formatted: "1,733"}, formattedMineCount: "X", formatMyHashtags: "X"};
+        this.assertEqual(Strings.template("pluralsTemplateFormattedMagnitude", data), "henlo bugs: three mines cleared and created 1,733 #hashtags");
+        this.assertEqual(Strings.template("pluralsTemplate", data), "henlo bugs: three mines cleared and created 1,733 #hashtags");
+    }).build()(null, null);
+
+    new UnitTest("String.fromTemplate", function() {
         var metadata = { foo: "iamfoo", bar: 123 };
         this.assertEqual(String.fromTemplate(null, null), null);
         this.assertEqual(String.fromTemplate(null, metadata), null);
@@ -683,6 +735,24 @@ var stringTemplateTest = function() {
         this.assertEqual(String.fromTemplate("test <foo> <iamfoo> <bar>", null), "test <foo> <iamfoo> <bar>");
         this.assertEqual(String.fromTemplate("test <foo> <iamfoo> <bar>", metadata), "test iamfoo <iamfoo> 123");
         this.assertEqual(String.fromTemplate("<bar><bar><bar>", metadata), "123123123");
+    }).build()(null, null);
+
+    new UnitTest("String.pluralize", function() {
+        this.assertEqual(String.pluralize(null, null, null), null);
+        this.assertEqual(String.pluralize("# mine cleared", "#", 1), "1 mine cleared");
+        this.assertEqual(String.pluralize("There are # around #", "#", "buns"), "There are buns around buns");
+        this.assertEqual(String.pluralize("created N #hashtags", "N", 73), "created 73 #hashtags");
+    }).build()(null, null);
+
+    new UnitTest("String.fromTemplate plurals", function() {
+        let template = "henlo <first>: <mineCountCleared#mineCount> and <customPlaceholder#hashtags>";
+        let data = { first: "bugs", mineCount: 0, hashtags: 1732, formattedMineCount: "zero", formatMyHashtags: "1,732", mineCountCleared: "X", customPlaceholder: "X", formattedHashtags: "X" };
+        this.assertEqual(String.fromTemplate(template, data), "henlo bugs: 0 mines cleared and created 1732 #hashtags");
+        template = "henlo <first>: <mineCountCleared#mineCount#formattedMineCount> and <customPlaceholder#hashtags#formatMyHashtags>";
+        this.assertEqual(String.fromTemplate(template, data), "henlo bugs: zero mines cleared and created 1,732 #hashtags");
+        data = { first: "bugs", mineCount: { value: 3, formatted: "three" }, hashtags: { value: 1733, formatted: "1,733"}, formattedMineCount: "X", formatMyHashtags: "X"};
+        this.assertEqual(String.fromTemplate(template, data), "henlo bugs: three mines cleared and created 1,733 #hashtags");
+        this.assertEqual(String.fromTemplate("henlo <something>", { something: { value: 3, formatted: "three" } }), "henlo three");
     }).build()(null, null);
 };
 
@@ -2055,7 +2125,7 @@ let standardSuite = new TestSession([
     randomBlobTest,
     randomLineTest,
     rectTest,
-    stringTemplateTest,
+    stringsTest,
     selectableListTest,
     saveStateTest,
     dispatchTest,
@@ -2070,7 +2140,7 @@ let standardSuite = new TestSession([
 ]);
 
 let taskSuite = new TestSession([
-    taskQueueTest
+    stringsTest
     ]);
 
 TestSession.current = taskSuite;

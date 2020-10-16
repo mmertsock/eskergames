@@ -33,7 +33,6 @@ const ToolButton = Gaming.ToolButton;
 // ########################### GLOBAL #######################
 
 const radiansPerDegree = Math.PI / 180;
-const _stringTemplateRegexes = {};
 const _zeroToOne = { min: 0, max: 1 };
 const _1x1 = { width: 1, height: 1 };
 
@@ -59,17 +58,6 @@ Rect.prototype.clampedWithinTileBounds = function(bounds) {
     if (myExtremes.max.y > theirExtremes.max.y) { dy = theirExtremes.max.y - myExtremes.max.y; }
     if (myExtremes.min.y < theirExtremes.min.y) { dy = theirExtremes.min.y - myExtremes.min.y; }
     return new Rect(this.x + dx, this.y + dy, this.width, this.height);
-};
-
-String.fromTemplate = function(template, data) {
-    if (!template || !data || template.indexOf("<") < 0) { return template; }
-    Object.getOwnPropertyNames(data).forEach((pn) => {
-        if (!_stringTemplateRegexes[pn]) {
-            _stringTemplateRegexes[pn] = new RegExp(`<${pn}>`, "g");
-        }
-        template = template.replace(_stringTemplateRegexes[pn], data[pn]);
-    });
-    return template;
 };
 
 // ########################### MODELS #######################

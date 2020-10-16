@@ -67,6 +67,67 @@ class GameTile {
         };
     }
 
+    static testCompactSerialization() {
+        let specs = [
+            [false, false, TileFlag.none, 0, "____"],
+            [true,  false, TileFlag.none, 0, "m___"],
+            [true,  true, TileFlag.none, 0, "_c__"],
+            [true,  true, TileFlag.none, 0, "mc__"],
+            [false,  false, TileFlag.assertMine, 0, "__!_"],
+            [false,  false, TileFlag.maybeMine, 0, "__?_"],
+            [false,  false, TileFlag.none, 1, "___1"],
+            [false,  false, TileFlag.none, 2, "___2"],
+            [false,  false, TileFlag.none, 3, "___3"],
+            [false,  false, TileFlag.none, 4, "___4"],
+            [false,  false, TileFlag.none, 5, "___5"],
+            [false,  false, TileFlag.none, 6, "___6"],
+            [false,  false, TileFlag.none, 7, "___7"],
+            [false,  false, TileFlag.none, 8, "___8"],
+            [true,   true,  TileFlag.none, 5, "mc_5"]
+        ];
+        specs.forEach(item => {
+            let tile = new GameTile();
+            tile._mined = item[0];
+            tile._covered = item[1];
+            tile._flag = item[2];
+            tile._minedNeighborCount = item[3];
+            // debugLog(tile);
+            GameTile.testSzEqual(tile, GameTile.fromCompactSerialization(tile.compactSerialized), item[4]);
+        });
+    }
+
+    static testSzEqual(tile, config, message) {
+        let fails = 0;
+        fails += GameTile.assertSzEqual(tile.isMined, config.isMined, "isMined", message);
+        fails += GameTile.assertSzEqual(tile.isCovered, config.isCovered, "isCovered", message);
+        fails += GameTile.assertSzEqual(tile.flag.debugDescription, config.flag.debugDescription, "flag", message);
+        fails += GameTile.assertSzEqual(tile.minedNeighborCount, config.minedNeighborCount, "minedNeighborCount", message);
+        if (fails > 0) {
+            debugLog(`${fails} failures: ${message}`);
+        } else {
+            debugLog(`Passed: ${message}`);
+        }
+    }
+
+    static assertSzEqual(a, b, item, message) {
+        if (a != b) {
+            debugWarn(`${item}: ${a} != ${b}: ${message}`);
+            return 1;
+        }
+        return 0;
+    }
+
+    // returns metadata, not a full GameTile
+    static fromCompactSerialization(data) {
+        let flag = (data & 0xc) >> 2;
+        return {
+            isMined: !!(data & 0x1),
+            isCovered: !!(data & 0x1 << 1),
+            flag: TileFlag.sz[flag],
+            minedNeighborCount: (data & 0xf0) >> 4
+        };
+    }
+
     get compactSerialized() {
         // isMined, isCovered are 2 bits
         // flag can be up to 2 bits
@@ -285,11 +346,15 @@ class Game {
         });
         stats.tileMineRatio = stats.totalTileCount / stats.totalMineCount;
         stats.histogram = stats.histogram.map((count, index) => `${index}:${count}`).join(", ");
-        return Strings.template("gameBoardDebugSummaryTemplate", stats);
+        return Strings.template("gameBoardDebugSummaryTemplate", Game.formatStatistics(stats));
     }
 
     static pointsValue(tile) {
         return Math.pow(2, tile.minedNeighborCount);
+    }
+
+    static progress(clearedTileCount, assertMineFlagCount, totalTileCount) {
+        return (clearedTileCount + assertMineFlagCount) / totalTileCount;
     }
 
     static starCount(stats) {
@@ -332,11 +397,25 @@ class Game {
                 stats.points += Game.pointsValue(tile);
             }
         });
-        stats.progress = (stats.clearedTileCount + stats.assertMineFlagCount) / stats.totalTileCount;
+        stats.progress = Game.progress(stats.clearedTileCount, stats.assertMineFlagCount, stats.totalTileCount);
         stats.progressPercent = Number.uiFormatWithPercent(Math.floor(100 * stats.progress));
         stats.starCount = Game.starCount(stats);
         stats.stars = Strings.str(`stars${stats.starCount}`);
         return stats;
+    }
+
+    static integerFormatObject(magnitude) {
+        return { value: magnitude, formatted: Number.uiInteger(magnitude) };
+    }
+
+    static formatStatistics(statistics) {
+        let data = Object.assign({}, statistics);
+        data.mineCount = Game.integerFormatObject(data.mineCount);
+        data.totalTileCount = Game.integerFormatObject(data.totalTileCount);
+        data.assertMineFlagCount = Game.integerFormatObject(data.assertMineFlagCount);
+        data.clearedTileCount = Game.integerFormatObject(data.clearedTileCount);
+        data.starCount = Game.integerFormatObject(data.starCount);
+        return data;
     }
 } // end class Game
 
@@ -526,8 +605,7 @@ class MoveHistoryMoment {
             clearedTileCount: data.stats[1],
             points: data.stats[2]
         };
-        // TODO static method to calculate this so we don't duplicate code
-        stats.progress = (stats.clearedTileCount + stats.assertMineFlagCount) / previous.game.statistics.totalTileCount;
+        stats.progress = Game.progress(stats.clearedTileCount, stats.assertMineFlagCount, previous.game.statistics.totalTileCount);
 
         return Object.assign({}, previous.game, {
             board: { tiles: tiles },
@@ -722,7 +800,6 @@ class GameSession {
     }
 
     recordGameState() {
-        // TODO also call this after winning/losing
         this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
         // TODO auto-save
     }
@@ -804,9 +881,10 @@ class GameSession {
         tile.reveal(this.history.moveNumber);
         this.state = GameState.lost;
         this.endTime = Date.now();
+        this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
         new AlertDialog({
             title: Strings.str("lostAlertTitle"),
-            message: Strings.template("lostAlertDialogTextTemplate", this.game.statistics),
+            message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.game.statistics)),
             button: Strings.str("lostAlertButton")
         }).show();
     }
@@ -827,6 +905,7 @@ class GameSession {
         if (!anyUnfinished) {
             this.state = GameState.won;
             this.endTime = Date.now();
+            this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
             new SaveHighScoreDialog(this).show();
         }
     }
@@ -856,6 +935,14 @@ class ActionResult {
             progress: end.progress - start.progress,
             points: end.points - start.points
         };
+    }
+
+    static formatChange(change) {
+        let data = Object.assign({}, change);
+        data.assertMineFlagCount = Game.integerFormatObject(data.assertMineFlagCount);
+        data.clearedTileCount = Game.integerFormatObject(data.clearedTileCount);
+        data.points = Game.integerFormatObject(data.points);
+        return data;
     }
 }
 
@@ -1567,13 +1654,13 @@ class ActionDescriptionView {
             return;
         }
         let change = this.session.mostRecentAction.change;
+        let formatted = ActionResult.formatChange(change);
         let tokens = [];
-        // TODO p11n
         if (change && change.clearedTileCount > 0) {
-            tokens.push(Strings.template("recentActionClearedTileCountToken", change));
+            tokens.push(Strings.template("recentActionClearedTileCountToken", formatted));
         }
         if (change && change.points > 0) {
-            tokens.push(Strings.template("recentActionPointsWonToken", change));
+            tokens.push(Strings.template("recentActionPointsWonToken", formatted));
         }
         if (tokens.length > 0) {
             let data = Object.assign({}, this.session.mostRecentAction, { list: Array.oxfordCommaList(tokens) });
@@ -1591,7 +1678,7 @@ class GameStatusView {
     }
 
     render() {
-        this.elem.innerText = Strings.template(this.statusTemplate, this.session.game.statistics);
+        this.elem.innerText = Strings.template(this.statusTemplate, Game.formatStatistics(this.session.game.statistics));
     }
 
     get statusTemplate() {
@@ -2021,7 +2108,7 @@ class SaveHighScoreDialog extends GameDialog {
 
         let textElem = document.createElement("p").addRemClass("message", true);
         let template = this.isEnabled ? "saveHighScoreDialogTextTemplate" : "saveHighScoreDisabledDialogTextTemplate";
-        textElem.innerText = Strings.template(template, this.session.game.statistics);
+        textElem.innerText = Strings.template(template, Game.formatStatistics(this.session.game.statistics));
         formElem.append(textElem);
 
         if (this.isEnabled) {
@@ -2121,7 +2208,7 @@ class GameAnalysisDialog extends GameDialog {
         this.contentElem.append(elem);
 
         this.x = new ToolButton({
-            title: Strings.str("analysisViewDismiss"), // TODO
+            title: Strings.str("analysisViewDismiss"),
             click: () => this.dismiss()
         });
 
@@ -2190,7 +2277,7 @@ class GameAnalysisDialog extends GameDialog {
 
         this.chartView = new ChartView({
             canvas: elem.querySelector(".history-chart canvas"),
-            title: "HENLO", // TODO
+            title: Strings.str("analysisViewChartTitle"),
             series: presentation,
             axes: axes,
             style: metrics
@@ -2291,7 +2378,7 @@ var initialize = async function() {
         return;
     }
 
-    Gaming.Strings.initialize(content.strings);
+    Gaming.Strings.initialize(content.strings, content.pluralStrings);
     Game.initialize(content);
     new NewGameDialog().show();
 };

@@ -169,11 +169,12 @@ analysisView:
 ################## STRINGS ################
 
 strings:
-  analysisViewTitle: Stats
-  analysisViewDismiss: Cool
-  analysisChartSeriesNameScore: Score
-  analysisChartSeriesNameAssertMineFlagCount: Mines Flagged
   analysisChartMoveNumberLabel: Moves
+  analysisChartSeriesNameAssertMineFlagCount: Mines Flagged
+  analysisChartSeriesNameScore: Score
+  analysisViewChartTitle: HENLO
+  analysisViewDismiss: Cool
+  analysisViewTitle: Stats
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✖️"
   difficultyChoiceLabelTemplate: "<name>"
@@ -187,16 +188,17 @@ strings:
   gameDifficultyExpert: Expert
   gameDifficultyIntermediate: Intermediate
   gameSettingsDifficultyLabel: "Difficulty"
+  # TODO pluralization: technically possible to get 1 point
   gameStatusLostTemplate: "Lost! <stars> <points> pts, <progressPercent> tiles completed"
   gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
-  gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCount> mines cleared"
+  gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCountCleared#mineCount#formattedMineCount>"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   highScoresDialogTitle: "✷ High Scores ✷"
   highScoresDismiss: "Done"
-  lostAlertTitle: You Lost
-  lostAlertDialogTextTemplate: "Your score: <points>"
   lostAlertButton: Bummer
+  lostAlertDialogTextTemplate: "Your score: <points>"
+  lostAlertTitle: You Lost
   newGameButton: "New Game"
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
@@ -210,29 +212,29 @@ strings:
   oxfordCommaTwoItemsTemplate: "<first> and <last>"
   playerNameInputTitle: "Your Name"
   quitGameConfirmPrompt: "Are you sure you want to quit?"
-  recentActionClearedTileCountToken: "cleared <clearedTileCount> tiles"
-  recentActionPointsWonToken: "got <points> points"
+  recentActionClearedTileCountToken: "<clearedTileCountPhrase#clearedTileCount#formattedClearedTileCount>"
+  recentActionPointsWonToken: "<gotPoints#points#formattedPoints>"
   recentActionWithChangesTemplate: "<description>: <list>"
   resetBoardButton: "Reset"
   revealSingleTileActionDescription: Revealed a tile
   revealTrustingFlagsActionDescription: Revealed unflagged tiles
-  setFlagAssertMineActionDescription: Marked a mine
-  setFlagMaybeMineActionDescription: Marked a possible mine
-  setFlagNoneActionDescription: Cleared a mine marker
   saveHighScoreButton: "Save"
   saveHighScoreDialogTextTemplate: "Your score: <points>"
   saveHighScoreDialogTitle: "You Won!"
-  saveHighScoreDisabledDialogTextTemplate: "Your score: <points>. But you can’t save your high score because you got help."
   saveHighScoreDisabledButton: OK
+  saveHighScoreDisabledDialogTextTemplate: "Your score: <points>. But you can’t save your high score because you got help."
+  setFlagAssertMineActionDescription: Marked a mine
+  setFlagMaybeMineActionDescription: Marked a possible mine
+  setFlagNoneActionDescription: Cleared a mine marker
   showAnalysisButton: Stats
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
   showHintActionDescription: Got a hint
   showHintButton: Hint
   showHintErrorText: Can’t find any hints to show.
-  solverGotStuckMessage: "I don’t know what to do!"
   solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
-  solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: flagged <length> known mines"
+  solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: <flaggedKnownMines#length#formattedLength>"
+  solverGotStuckMessage: "I don’t know what to do!"
   solverGuessAtStartActionDescription: Guessed a tile to start the game
   solverStepButton: Solve
   stars1: "★☆☆☆☆"
@@ -242,3 +244,10 @@ strings:
   stars5: "★★★★★"
   toggleDebugModeButton: "Debug"
   toggleRainbowButton: "🌈"
+
+# arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
+pluralStrings:
+  clearedTileCountPhrase: ["cleared 0 tiles", "cleared a tile", "cleared # tiles"]
+  gotPoints: ["got 0 points", "got 1 point", "got # points"]
+  mineCountCleared: ["0 mines cleared", "1 mine cleared", "# mines cleared"]
+  flaggedKnownMines: ["flagged 0 known mines", "flagged a known mine", "flagged # known mines"]
