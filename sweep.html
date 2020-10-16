@@ -107,7 +107,7 @@ analysis {
     padding: 0.;
 }
 
-analysis .history-chart {
+analysis .history-chart, analysis .rainbow-board {
     padding: 0.5em;
 }
 
@@ -116,6 +116,13 @@ analysis .history-chart canvas {
     padding: 0;
     width: 100%;
     height: 300px;
+}
+
+analysis .rainbow-board canvas {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 450px;
 }
 
 </style>
@@ -167,9 +174,8 @@ analysis .history-chart canvas {
 </highScores>
 
 <analysis class="hidden">
-    <!-- div class="moment-info"></div -->
     <div class="history-chart"><canvas></canvas></div>
-    <!-- div class="history-viz"></div -->
+    <!-- div class="rainbow-board"><canvas></canvas></div -->
 </analysis>
 
 </body>

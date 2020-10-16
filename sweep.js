@@ -53,6 +53,7 @@ class GameTile {
         this._minedNeighborCount = 0;
         this._covered = true;
         this._flag = TileFlag.none;
+        this.rainbow = { cleared: -1, flagged: -1 };
     }
 
     get objectForSerialization() {
@@ -118,20 +119,32 @@ class GameTile {
     }
 
     get isCovered() { return this._covered; }
-    set isCovered(value) {
-        this._covered = value;
-        this._flag = TileFlag.none;
+    reveal(moveNumber) {
+        if (this._covered) {
+            this._covered = false;
+            this.rainbow.cleared = moveNumber;
+        }
+        return this.clearFlag();
     }
 
     get flag() { return this._flag; }
-    set flag(value) { this._flag = value; }
     clearFlag() {
         this._flag = TileFlag.none;
+        this.rainbow.flagged = -1;
         return this;
     }
-    cycleFlag() {
-        this._flag = this._flag.next;
+    setFlag(value, moveNumber) {
+        if (this._flag == value) { return this; }
+        this._flag = value;
+        if (this._flag == TileFlag.assertMine) {
+            this.rainbow.flagged = moveNumber;
+        } else {
+            this.rainbow.flagged = -1;
+        }
         return this;
+    }
+    cycleFlag(moveNumber) {
+        return this.setFlag(this._flag.next, moveNumber);
     }
 
     get neighbors() {
@@ -143,6 +156,7 @@ class GameTile {
         this._covered = true;
         this._flag = TileFlag.none;
         this._neighbors = [];
+        this.rainbow = { cleared: -1, flagged: -1 };
 
         let rect = new Rect(this.coord.x - 1, this.coord.y - 1, 3, 3);
         this.board.visitTiles(rect, neighbor => {
@@ -414,6 +428,14 @@ class GameStorage {
         this.setPreference("lastPlayerName", value);
     }
 
+    get rainbowMode() {
+        let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
+        return item ? !!item.data.rainbowMode : false;
+    }
+    set rainbowMode(value) {
+        this.setPreference("rainbowMode", value);
+    }
+
     setPreference(key, value) {
         let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
         let data = item ? item.data : { };
@@ -598,6 +620,7 @@ class GameSession {
         this.state = GameState.playing;
         this.moveState = MoveState.ready;
         this.debugMode = false;
+        this.rainbowMode = GameStorage.shared.rainbowMode;
         this.history = new GameHistory();
         this.isClean = !this.debugMode; // false if cheated, etc.
         this.mostRecentAction = new ActionResult();
@@ -660,6 +683,12 @@ class GameSession {
         if (this.debugMode) {
             this.isClean = false;
         }
+        this.renderViews();
+    }
+
+    toggleRainbowMode() {
+        this.rainbowMode = !this.rainbowMode;
+        GameStorage.shared.rainbowMode = this.rainbowMode;
         this.renderViews();
     }
 
@@ -745,9 +774,9 @@ class GameSession {
         if (tile.minedNeighborCount == 0) {
             var toClear = [];
             this.revealClearArea(tile, toClear);
-            toClear.forEach(tile => { tile.isCovered = false; });
+            toClear.forEach(tile => { tile.reveal(this.history.moveNumber); });
         } else {
-            tile.isCovered = false;
+            tile.reveal(this.history.moveNumber);
         }
         if (revealBehavior == GameSession.revealBehaviors.assertTrustingFlags) {
             tile.visitNeighbors(neighbor => {
@@ -772,7 +801,7 @@ class GameSession {
     }
 
     mineTriggered(tile) {
-        tile.isCovered = false;
+        tile.reveal(this.history.moveNumber);
         this.state = GameState.lost;
         this.endTime = Date.now();
         new AlertDialog({
@@ -1036,7 +1065,7 @@ class SetFlagAction extends TileBasedAction {
             return SweepAction.Result.noop;
         }
         session.beginMove();
-        this.tile.flag = this.flag;
+        this.tile.setFlag(this.flag, session.history.moveNumber);
         session.mostRecentAction = new ActionResult({
             action: this,
             tile: this.tile,
@@ -1056,7 +1085,7 @@ class CycleFlagAction extends PointInputBasedAction {
         let tile = this.assertIsValidWithTile(session);
         if (!tile || !tile.isCovered) { return SweepAction.Result.noop; }
         session.beginMove();
-        tile.cycleFlag();
+        tile.cycleFlag(session.history.moveNumber);
         session.mostRecentAction = new ActionResult({
             action: this,
             tile: this.tile,
@@ -1447,6 +1476,11 @@ class GameControlsView {
             title: Strings.str("solverStepButton"),
             click: () => this.solverStep()
         });
+        this.toggleRainbowButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("toggleRainbowButton"),
+            click: () => this.toggleRainbowMode()
+        });
 
         if (Game.rules().allowDebugMode) {
             this.debugModeButton = new ToolButton({
@@ -1464,6 +1498,7 @@ class GameControlsView {
         this.showAnalysisButton.isEnabled = GameAnalysisDialog.isValid(this.session);
         this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
         this.solverStepButton.isEnabled = AttemptSolverStepAction.isValid(this.session);
+        this.toggleRainbowButton.isSelected = this.session ? this.session.rainbowMode : false;
         if (this.debugModeButton) {
             this.debugModeButton.isSelected = this.session ? this.session.debugMode : false
         }
@@ -1510,10 +1545,12 @@ class GameControlsView {
         }
     }
 
+    toggleRainbowMode() {
+        if (this.session) { this.session.toggleRainbowMode(); }
+    }
+
     toggleDebugMode() {
-        if (this.session) {
-            this.session.toggleDebugMode();
-        }
+        if (this.session) { this.session.toggleDebugMode(); }
     }
 }
 
@@ -1617,8 +1654,24 @@ class GameBoardView {
             ctx: ctx,
             tilePlane: this.tilePlane,
             session: this.session,
-            showAllMines: (this.session.state != GameState.playing)
+            showAllMines: (this.session.state != GameState.playing),
+            rainbow: null
         };
+
+        if (this.session.rainbowMode && !this.session.history.isEmpty) {
+            context.rainbow = {
+                moves: { min: 0, max: this.session.history.serializedMoves.length - 1 },
+                hue: Object.assign({}, GameBoardView.metrics.rainbow.hue),
+                cleared: Object.assign({}, GameBoardView.metrics.rainbow.cleared),
+                flagged: Object.assign({}, GameBoardView.metrics.rainbow.flagged)
+            };
+            // Limit the amount of color change per move early in the game
+            let colors = Math.abs(context.rainbow.hue.max - context.rainbow.hue.min);
+            let interval = colors / this.session.history.serializedMoves.length;
+            if ((context.rainbow.hue.maxInterval > 0) && (interval > context.rainbow.hue.maxInterval)) {
+                context.rainbow.hue.max = context.rainbow.hue.maxInterval * this.session.history.serializedMoves.length;
+            }
+        }
         ctx.rectClear(this.tilePlane.viewportScreenBounds);
         this.tileViews.forEach(tile => tile.render(context));
     }
@@ -1733,7 +1786,7 @@ class GameTileViewState {
         GameTileViewState.assertMine = new GameTileViewState(config.assertMine);
         GameTileViewState.maybeMine = new GameTileViewState(config.maybeMine);
         GameTileViewState.clear = new GameTileViewState(config.clear);
-        GameTileViewState.safe = new GameTileViewState(Object.assign(config.safe, { glyph: tile => `${tile.minedNeighborCount}` }));
+        GameTileViewState.safe = new GameTileViewState(Object.assign({}, config.safe, { glyph: tile => `${tile.minedNeighborCount}` }));
         GameTileViewState.mineTriggered = new GameTileViewState(config.mineTriggered);
         GameTileViewState.mineRevealed = new GameTileViewState(config.mineRevealed);
         GameTileViewState.incorrectFlag = new GameTileViewState(config.incorrectFlag);
@@ -1750,10 +1803,17 @@ class GameTileViewState {
         }
         this.textColor = config.textColor;
         this.numberTextColors = config.numberTextColors;
+        this.showsRainbow = !!config.showsRainbow;
     }
 
     render(context, rect, tile) {
-        context.ctx.fillStyle = this.fillColor;
+        if (!!context.rainbow && this.showsRainbow && tile.rainbow.cleared >= 0) {
+            let hue = Math.scaleValueLinear(tile.rainbow.cleared, context.rainbow.moves, context.rainbow.hue) % 360;
+            let color = `hsl(${hue},${context.rainbow.cleared.saturation},${context.rainbow.cleared.lightness})`;
+            context.ctx.fillStyle = color;
+        } else {
+            context.ctx.fillStyle = this.fillColor;
+        }
         context.ctx.rectFill(rect);
         let textValue = this.glyph(tile);
         if (textValue) {
@@ -2121,10 +2181,9 @@ class GameAnalysisDialog extends GameDialog {
                 title: data.assertMineFlagCount.name
             }));
         }
-        debugLog(axes);
 
         this.chartView = new ChartView({
-            elem: elem.querySelector(".history-chart canvas"),
+            canvas: elem.querySelector(".history-chart canvas"),
             title: "HENLO", // TODO
             series: presentation,
             axes: axes,

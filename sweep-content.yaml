@@ -48,6 +48,14 @@ rules:
 
 gameBoardView:
   tileWidth: 24
+  rainbow:
+    hue:
+      min: 0
+      max: 350
+      maxInterval: 5
+    cleared:
+      saturation: "45%"
+      lightness: "85%"
 gameTileView:
   font: bold 32px monospace
   borderStrokeStyle: "#444444"
@@ -61,7 +69,7 @@ gameTileViewState:
   covered:
     fillColor: *COVEREDCOLOR
   assertMine:
-    glyph: "▲"
+    glyph: &ASSERTMINEGLYPH "▲"
     textColor: "#ff3300"
     fillColor: *COVEREDCOLOR
   maybeMine:
@@ -70,11 +78,13 @@ gameTileViewState:
     fillColor: *COVEREDCOLOR
   clear:
     fillColor: *REVEALEDCOLOR
+    showsRainbow: true
   safe:
     textColor: "#666666"
     # numbers 1 through 8: blue -> red
     numberTextColors: ["#666666", "hsl(217, 50%, 40%)", "hsl(186, 50%, 40%)", "hsl(155, 50%, 40%)", "hsl(124, 50%, 40%)", "hsl(93, 50%, 40%)", "hsl(62, 50%, 40%)", "hsl(31, 50%, 40%)", "hsl(0, 50%, 40%)"]
     fillColor: *REVEALEDCOLOR
+    showsRainbow: true
   mineTriggered:
     glyph: "✸"
     textColor: "#990000"
@@ -149,6 +159,7 @@ analysisView:
             titleFont: *AXISLABELFONT
             textColor: *AXISBORDERSTROKESTYLE
             titlePadding: *AXISLABELTITLEPADDING
+  # end analysisView.historyChart
 
 ################## STRINGS ################
 
@@ -225,3 +236,4 @@ strings:
   stars4: "★★★★☆"
   stars5: "★★★★★"
   toggleDebugModeButton: "Debug"
+  toggleRainbowButton: "🌈"

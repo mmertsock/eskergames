@@ -99,7 +99,7 @@ class ChartAxisPresentation {
 
 class ChartView {
     constructor(config) {
-        this.canvas = config.elem;
+        this.canvas = config.canvas;
         this.title = config.title || null;
         this.series = config.series; // [ChartDataSeriesPresentation]
         // ChartAxisPresentation objects
