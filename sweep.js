@@ -136,7 +136,7 @@ class GameTile {
     setFlag(value, moveNumber) {
         if (this._flag == value) { return this; }
         this._flag = value;
-        if (this._flag == TileFlag.assertMine) {
+        if (this._flag != TileFlag.none) {
             this.rainbow.flagged = moveNumber;
         } else {
             this.rainbow.flagged = -1;
@@ -1660,7 +1660,7 @@ class GameBoardView {
 
         if (this.session.rainbowMode && !this.session.history.isEmpty) {
             context.rainbow = {
-                moves: { min: 0, max: this.session.history.serializedMoves.length - 1 },
+                moves: { min: 0, max: this.session.history.serializedMoves.length },
                 hue: Object.assign({}, GameBoardView.metrics.rainbow.hue),
                 cleared: Object.assign({}, GameBoardView.metrics.rainbow.cleared),
                 flagged: Object.assign({}, GameBoardView.metrics.rainbow.flagged)
@@ -1804,6 +1804,7 @@ class GameTileViewState {
         this.textColor = config.textColor;
         this.numberTextColors = config.numberTextColors;
         this.showsRainbow = !!config.showsRainbow;
+        this.showsRainbowGlyph = !!config.showsRainbowGlyph;
     }
 
     render(context, rect, tile) {
@@ -1815,10 +1816,15 @@ class GameTileViewState {
             context.ctx.fillStyle = this.fillColor;
         }
         context.ctx.rectFill(rect);
+        
         let textValue = this.glyph(tile);
         if (textValue) {
             if (this.numberTextColors && tile.minedNeighborCount > 0) {
                 context.ctx.fillStyle = this.numberTextColors[tile.minedNeighborCount];
+            } else if (!!context.rainbow && this.showsRainbowGlyph && tile.rainbow.flagged >= 0) {
+                let hue = Math.scaleValueLinear(tile.rainbow.flagged, context.rainbow.moves, context.rainbow.hue) % 360;
+                let color = `hsl(${hue},${context.rainbow.flagged.saturation},${context.rainbow.flagged.lightness})`;
+                context.ctx.fillStyle = color;
             } else {
                 context.ctx.fillStyle = this.textColor;
             }

@@ -56,6 +56,9 @@ gameBoardView:
     cleared:
       saturation: "45%"
       lightness: "85%"
+    flagged:
+      saturation: "75%"
+      lightness: "40%"
 gameTileView:
   font: bold 32px monospace
   borderStrokeStyle: "#444444"
@@ -72,10 +75,12 @@ gameTileViewState:
     glyph: &ASSERTMINEGLYPH "▲"
     textColor: "#ff3300"
     fillColor: *COVEREDCOLOR
+    showsRainbowGlyph: true
   maybeMine:
     glyph: "?"
     textColor: "#0033ff"
     fillColor: *COVEREDCOLOR
+    showsRainbowGlyph: true
   clear:
     fillColor: *REVEALEDCOLOR
     showsRainbow: true
