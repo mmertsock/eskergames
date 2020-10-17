@@ -256,7 +256,7 @@ class GameBoard {
             tiles.push(tile.compactSerialized);
         });
         return {
-            schemaVersion: GameBoard.schemaVersion,
+            schemaVersion: Game.schemaVersion,
             size: { width: this.size.width, height: this.size.height },
             mineCount: this.mineCount,
             tiles: tiles
@@ -269,7 +269,7 @@ class GameBoard {
             tiles.push(tile.objectForSerialization);
         });
         return {
-            schemaVersion: GameBoard.schemaVersion,
+            schemaVersion: Game.schemaVersion,
             size: { width: this.size.width, height: this.size.height },
             mineCount: this.mineCount,
             tiles: tiles
@@ -308,7 +308,6 @@ class GameBoard {
         debugLog(Game.debugSummary(this));
     }
 } // end class GameBoard
-GameBoard.schemaVersion = 1;
 
 class Game {
     static initialize(content) {
@@ -418,6 +417,7 @@ class Game {
         return data;
     }
 } // end class Game
+Game.schemaVersion = 1;
 
 GameState = {
     playing: 0,
@@ -628,7 +628,7 @@ class MoveHistoryMoment {
 
     get objectForSerialization() {
         return {
-            schemaVersion: MoveHistoryMoment.schemaVersion,
+            schemaVersion: Game.schemaVersion,
             game: this.game,
             gameState: this.gameState,
             moveNumber: this.moveNumber
@@ -684,7 +684,6 @@ class MoveHistoryMoment {
         };
     }
 }
-MoveHistoryMoment.schemaVersion = 1;
 
 class GameSession {
     static quit(prompt) {
@@ -1041,7 +1040,7 @@ class AttemptHintAction extends SweepAction {
     static isValid(session) {
         if (!session) return false;
         return (session.state == GameState.playing)
-            && !(session.mostRecentAction.action instanceof ShowHintAction);
+            && !session.hintTile;
     }
 
     get debugDescription() {
@@ -1195,8 +1194,6 @@ class AttemptSolverStepAction extends SweepAction {
 
     perform(session) {
         if (!this.assertIsValid(session, AttemptSolverStepAction.isValid(session))) { return SweepAction.Result.noop; }
-        session.beginMove();
-        session.isClean = false;
         let result = session.solver.tryStep();
         debugLog(result);
         if (!result || !result.isSuccess) {

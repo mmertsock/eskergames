@@ -2534,7 +2534,12 @@ class ToolButton {
         this.id = config.id;
         this.elem = ToolButton.createElement(config);
         if (config.click) {
-            this.elem.addEventListener("click", evt => { evt.preventDefault(); config.click(this); });
+            this.elem.addEventListener("click", evt => {
+                evt.preventDefault();
+                if (this.isEnabled) {
+                    config.click(this);
+                }
+            });
         } else if (config.clickScript) {
             var subject = typeof(config.clickScriptSubject) === 'undefined' ? this : config.clickScriptSubject;
             this.elem.addGameCommandEventListener("click", true, config.clickScript, subject);
@@ -2543,6 +2548,7 @@ class ToolButton {
             config.parent.append(this.elem);
         }
         this._selected = false;
+        this._enabled = true;
     }
 
     configure(block) {

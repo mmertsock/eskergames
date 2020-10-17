@@ -47,14 +47,18 @@ class SolverAgent {
         this.session = config.session;
         this.solvers = config.solvers;
         this.debugMode = !!config.debugMode;
+        this.hintTile = null;
     }
 
     tryStep() {
         if (this.solvers.length == 0) { return null; }
+        this.hintTile = this.session.hintTile;
+        this.session.beginMove();
+        this.session.isClean = false;
         let timer = new PerfTimer("SolverAgent.tryStep").start();
         for (let i = 0; i < this.solvers.length; i += 1) {
             let solver = this.solvers[i];
-            let result = solver.tryStep(this.session);
+            let result = solver.tryStep(this.session, this);
             if (result && result.isSuccess) {
                 return this.completeAttempt(result, timer);
             }
@@ -63,6 +67,7 @@ class SolverAgent {
     }
 
     completeAttempt(result, timer) {
+        this.hintTile = null;
         debugLog(timer.end().summary);
         if (result) {
             result.debugMode = this.debugMode;
@@ -77,6 +82,7 @@ function mark__Solvers() {} // ~~~~~~ Solvers ~~~~~~
 class Solver {
     static initialize() {
         Solver.allSolvers = [
+            new ClearHintedTileSolver(),
             new ClearFullyFlaggedTileSolver(),
             new ExactCoveredTileMatchSolver(),
             new GuessAtStartSolver()
@@ -90,8 +96,35 @@ class Solver {
     }
 
     // Return a SolverResult or null
-    tryStep(session) {
+    tryStep(session, agent) {
         return null;
+    }
+}
+
+// Solver may get stuck. User may ask for a hint and then use the solver 
+// again to avoid actually clicking any tiles.
+class ClearHintedTileSolver extends Solver {
+    tryStep(session, agent) {
+        if (!agent.hintTile) {
+            return null;
+        }
+
+        let action = new SweepAction.RevealTileAction({
+            reason: Strings.str("solverClearHintedTileActionDescription"),
+            tile: agent.hintTile,
+            revealBehavior: GameSession.revealBehaviors.safe
+        });
+
+        return new SolverResult({
+            solver: this,
+            debugTiles: [],
+            actions: [action],
+            actionResult: new ActionResult({
+                action: action,
+                tile: action.tile,
+                description: action.reason
+            })
+        });
     }
 }
 

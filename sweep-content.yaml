@@ -233,6 +233,7 @@ strings:
   showHintButton: Hint
   showHintErrorText: Can’t find any hints to show.
   solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
+  solverClearHintedTileActionDescription: "Solver: cleared tile indicated by last hint"
   solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: <flaggedKnownMines#length#formattedLength>"
   solverGotStuckMessage: "I don’t know what to do!"
   solverGuessAtStartActionDescription: Guessed a tile to start the game
