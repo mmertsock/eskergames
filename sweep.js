@@ -1080,8 +1080,8 @@ class AttemptHintAction extends SweepAction {
         if (!this.assertIsValid(session, AttemptHintAction.isValid(session))) { return SweepAction.Result.noop; }
 
         // Try to find a safe covered tile adjacent to a cleared tile
-        let candidates = TileCollection.allTiles(session)
-            .applying(new RevealedTilesFilter())
+        let revealed = TileCollection.allTiles(session).applying(new RevealedTilesFilter());
+        let candidates = revealed
             .applying(new CollectNeighborsTransform({ transform: collection =>
                 collection.applying(new CoveredTilesFilter())
                     .applying(new MineFilter(false))
@@ -1090,13 +1090,34 @@ class AttemptHintAction extends SweepAction {
         // Fall back: find any safe covered tile
         // TODO how about a filter that only applies if the collection is empty?
         // so you can chain all of this onto the above and make it declarative etc.
-        if (candidates.tiles.length == 0) {
+        if (candidates.isEmpty) {
             candidates = TileCollection.allTiles(session)
                 .applying(new CoveredTilesFilter())
                 .applying(new MineFilter(false));
         }
-        
-        let tile = candidates.randomTileClosestTo(session.mostRecentAction.tile)
+
+        let tile = null;
+        let closest = candidates.tilesClosestTo(session.mostRecentAction.tile);
+        let debugTiles = [];
+        if (closest.length > 0 && !revealed.isEmpty) {
+            // multiple tiles closest to mostRecentAction:
+            // prefer ones nearby to the most cleared tiles.
+            closest = closest.map(tile => {
+                let item = { tile: tile, score: 0 };
+                revealed.tiles.forEach(nearby => {
+                    item.score += (1 / tile.coord.manhattanDistanceFrom(nearby.coord).magnitude);
+                });
+                return item;
+            });
+            let highScore = closest.map(item => item.score).maxElement();
+            tile = closest
+                .filter(item => item.score >= highScore)
+                .map(item => item.tile)
+                .randomItem();
+        } else {
+            tile = closest.randomItem();
+        }
+
         if (tile) {
             new ShowHintAction({ tile: tile }).perform(session);
         } else {
@@ -1283,19 +1304,11 @@ class AttemptSolverStepAction extends SweepAction {
         }
 
         session.debugTiles = result.debugTiles;
-        if (!result.debugMode) {
-            result.actions.forEach(action => {
-                if (session.state == GameState.playing) {
-                    // TODO append action.tile to a list of solverActionTiles. Render them with a
-                    // highlight similar to hint tiles
-                    debugLog(`Perform: ${action.debugDescription}`);
-                    let actionResult = action.perform(session);
-                    session.checkForWin();
-                }
-            });
-            session.mostRecentAction = result.actionResult;
+        if (result.debugMode) {
+            return SweepAction.Result.ok;
+        } else {
+            return session.performActions(result.actions, result.actionResult);
         }
-        return SweepAction.Result.ok;
     }
 }
 SweepAction.AttemptSolverStepAction = AttemptSolverStepAction;
@@ -1339,9 +1352,9 @@ class TileCollection {
         return collection;
     }
 
-    randomTileClosestTo(origin) {
+    tilesClosestTo(origin) {
         if (!origin || this.tiles.length == 0) {
-            return this.tiles.randomItem();
+            return this.tiles;
         }
 
         let min = -1;
@@ -1351,7 +1364,12 @@ class TileCollection {
             return { tile: tile, distance: distance };
         });
         
-        return items.filter(item => item.distance == min).randomItem().tile;
+        return items.filter(item => item.distance == min)
+            .map(item => item.tile);
+    }
+
+    randomTileClosestTo(origin) {
+        return this.tilesClosestTo(origin).randomItem();
     }
 
     emitDebugTiles() {
