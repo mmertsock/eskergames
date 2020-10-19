@@ -181,6 +181,7 @@ strings:
   errorAlertDismissButton: Bummer
   errorAlertTitle: "Oh No!"
   failedToLoadGameMessage: There was a problem loading the game data.
+  flagAllNeighborsActionTemplate: "<flaggedKnownMines#length#formattedLength>"
   gameBoardDebugSummaryTemplate: "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
   gameDifficultyAdvanced: Advanced
   gameDifficultyBeginner: Beginner

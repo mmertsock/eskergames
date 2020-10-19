@@ -555,7 +555,7 @@ class GameHistory {
             // TODO only increment if game state has changed since last time
             let object = moment.bestSerialization(this.lastMove);
             let data = JSON.stringify(object);
-            debugLog(`move ${this.moveNumber}: storing ${data.length} bytes, ${object.format}`);
+            // debugLog(`move ${this.moveNumber}: storing ${data.length} bytes, ${object.format}`);
             this.serializedMoves[this.moveNumber] = data;
             this.moveNumber = this.moveNumber + 1;
             this.lastMove = moment;
@@ -782,6 +782,21 @@ class GameSession {
         this.pendingMove = MoveState.ready;
         this.mostRecentAction.setStatistics(start, this.game.statistics);
         this.renderViews();
+    }
+
+    performActions(actions, actionResult) {
+        let result = SweepAction.Result.noop;
+        actions.forEach(action => {
+            if (this.state == GameState.playing) {
+                debugLog(`Perform: ${action.debugDescription}`);
+                result = action.perform(this);
+                this.checkForWin();
+            }
+        });
+        if (actions.length > 0) {
+            this.mostRecentAction = actionResult;
+        }
+        return result;
     }
 
     // Can be called safely at any time by an action within a performAction scope,
@@ -1162,6 +1177,20 @@ class SetFlagAction extends TileBasedAction {
 }
 SweepAction.SetFlagAction = SetFlagAction;
 
+class FlaggingAction extends PointInputBasedAction {
+    get debugDescription() { return `<flagging ${this.point.debugDescription}>` };
+
+    perform(session) {
+        let tile = this.assertIsValidWithTile(session);
+        if (!tile) { return SweepAction.Result.noop; }
+        if (tile.isCovered) {
+            return new CycleFlagAction({ point: this.point, tile: tile }).perform(session);
+        } else {
+            return new FlagAllNeighborsAction({ point: this.point, tile: tile, safe: true }).perform(session);
+        }
+    }
+}
+
 class CycleFlagAction extends PointInputBasedAction {
     get debugDescription() {
         return `<cycleFlag ${this.point.debugDescription}>`;
@@ -1182,6 +1211,40 @@ class CycleFlagAction extends PointInputBasedAction {
 }
 SweepAction.CycleFlagAction = CycleFlagAction;
 
+class FlagAllNeighborsAction extends PointInputBasedAction {
+    get debugDescription() {
+        return `<flagAllNeighbors ${this.point.debugDescription}>`;
+    }
+
+    perform(session) {
+        let tile = this.assertIsValidWithTile(session);
+        if (!tile || tile.isCovered || tile.minedNeighborCount < 1) { return SweepAction.Result.noop; }
+
+        let neighbors = new TileCollection([tile])
+            .applying(new TileTransform.CollectNeighborsTransform({ transform: collection => 
+                collection.applying(new TileTransform.CoveredTilesFilter())
+            }));
+        if (neighbors.tiles.length != tile.minedNeighborCount) {
+            debugWarn("covered neighbor count != minedNeighborCount");
+            // TODO show this warning (and other invalid moves) to the user in the result view
+            return SweepAction.Result.noop;
+        }
+        neighbors = neighbors.applying(new TileTransform.FlaggedTilesFilter([TileFlag.none, TileFlag.maybeMine]));
+        if (neighbors.isEmpty) {
+            debugLog("all neighbors are already mined");
+            return SweepAction.Result.noop;
+        }
+
+        let toFlag = neighbors.tiles.map(tile => new SetFlagAction({ tile: tile, flag: TileFlag.assertMine }));
+        let actionResult = new ActionResult({
+            action: toFlag.first,
+            tile: tile,
+            description: Strings.template("flagAllNeighborsActionTemplate", { length: Game.integerFormatObject(toFlag.length) })
+        });
+        return session.performActions(toFlag, actionResult);
+    }
+}
+
 class AttemptSolverStepAction extends SweepAction {
     static isValid(session) {
         if (!session || !session.solver) return false;
@@ -1195,7 +1258,7 @@ class AttemptSolverStepAction extends SweepAction {
     perform(session) {
         if (!this.assertIsValid(session, AttemptSolverStepAction.isValid(session))) { return SweepAction.Result.noop; }
         let result = session.solver.tryStep();
-        debugLog(result);
+        // debugLog(result);
         if (!result || !result.isSuccess) {
             new ShowAlertDialogAction({
                 title: Strings.str("errorAlertTitle"),
@@ -1513,7 +1576,7 @@ class GameBoardController {
         let modelCoord = this.view.tilePlane.modelTileForScreenPoint(point);
         if (modelCoord) {
             if (inputSequence.latestEvent.shiftKey) {
-                this.session.performAction(new CycleFlagAction({ point: modelCoord }));
+                this.session.performAction(new FlaggingAction({ point: modelCoord }));
             } else {
                 let assertTrustingFlags = inputSequence.latestEvent.altKey || inputSequence.latestEvent.metaKey;
                 let revealBehavior = assertTrustingFlags ? GameSession.revealBehaviors.assertTrustingFlags : GameSession.revealBehaviors.safe;
@@ -2213,7 +2276,6 @@ class GameAnalysisDialog extends GameDialog {
         });
 
         this.buildChartView(elem);
-        // this.buildRainbowBoard(elem);
     }
 
     get isModal() { return false; }
