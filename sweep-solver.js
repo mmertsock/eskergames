@@ -131,30 +131,39 @@ class ClearHintedTileSolver extends Solver {
 class GuessAtStartSolver extends Solver {
     tryStep(session) {
         let allTiles = TileCollection.allTiles(session);
-        let covered = allTiles
+
+        let candidates = allTiles
             .applying(new TileTransform.CoveredTilesFilter())
             .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none]));
-
-        if (covered.tiles.length == allTiles.tiles.length) {
-            let tile = allTiles.tiles.randomItem();
-            let action = new SweepAction.RevealTileAction({
-                reason: Strings.str("solverGuessAtStartActionDescription"),
-                tile: tile,
-                revealBehavior: GameSession.revealBehaviors.safe
-            });
-            return new SolverResult({
-                solver: this,
-                debugTiles: [],
-                actions: [action],
-                actionResult: new ActionResult({
-                    action: action,
-                    tile: tile,
-                    description: action.reason
-                })
-            });
-        } else {
+        if (candidates.tiles.length != allTiles.tiles.length) {
             return null;
         }
+
+        candidates = candidates.applying(new TileTransform.MineFilter(false));
+        if (candidates.isEmpty) {
+            debugLog("Weird, there are no unmined tiles in the entire board?");
+            return;
+        }
+
+        // Prefer tiles with zero neighbors
+        let zeroNeighbors = candidates.applying(TileTransform.MinedNeighborCountRangeFilter.zero);
+
+        let tile = zeroNeighbors.tiles.randomItem() || candidates.tiles.randomItem();
+        let action = new SweepAction.RevealTileAction({
+            reason: Strings.str("solverGuessAtStartActionDescription"),
+            tile: tile,
+            revealBehavior: GameSession.revealBehaviors.safe
+        });
+        return new SolverResult({
+            solver: this,
+            debugTiles: [],
+            actions: [action],
+            actionResult: new ActionResult({
+                action: action,
+                tile: tile,
+                description: action.reason
+            })
+        });
     }
 }
 

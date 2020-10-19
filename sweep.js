@@ -1241,6 +1241,8 @@ class TileCollection {
         return `<${this.tiles.length} tiles>`;
     }
 
+    get isEmpty() { return this.tiles.length == 0; }
+
     applying(transform) {
         let applied = this.tiles.flatMap(tile => {
             let mapped = transform.map(tile, this);
@@ -1397,6 +1399,7 @@ class MinedNeighborCountRangeFilter extends TileTransform {
     }
 }
 MinedNeighborCountRangeFilter.hasAny = new MinedNeighborCountRangeFilter({ min: 1, max: TileTransform.maxNeighbors });
+MinedNeighborCountRangeFilter.zero = new MinedNeighborCountRangeFilter({ min: 0, max: 0 });
 TileTransform.MinedNeighborCountRangeFilter = MinedNeighborCountRangeFilter;
 
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
