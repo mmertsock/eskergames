@@ -537,6 +537,12 @@ class GameHistory {
 
     get isEmpty() { return this.serializedMoves.length < 1; }
 
+    get difficulty() {
+        if (this.isEmpty) { return null; }
+        let moment =  MoveHistoryMoment.fromCompactSerialization(JSON.parse(this.serializedMoves[0]), null);
+        return moment.game.difficulty;
+    }
+
     // Deletes entire existing history data
     reset() {
         this.moveNumber = GameHistory.firstMoveNumber;
@@ -714,7 +720,11 @@ class GameSession {
         this.views = [this.controlsView, this.mostRecentActionView, this.boardView, this.statusView];
     }
 
-    start() {
+    start(newGame) {
+        if (newGame) {
+            this.game = newGame;
+            this.boardView.game = this.game;
+        }
         GameStorage.shared.lastDifficultyIndex = this.game.difficulty.index;
         if (this.game.difficulty.isCustom) {
             GameStorage.shared.lastCustomDifficultyConfig = this.game.difficulty;
@@ -735,6 +745,10 @@ class GameSession {
             this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
         } else {
             this.solver = null;
+        }
+
+        if (newGame) {
+            this.boardView.game = this.game;
         }
         this.renderViews();
     }
@@ -1763,7 +1777,23 @@ class GameBoardView {
 
     constructor(config) {
         this.session = config.session;
+        this.tileViews = [];
+        this.canvas = config.boardContainer.querySelector("canvas");
         this.game = config.session.game;
+        this.controller = new GameBoardController(this);
+    }
+
+    get game() { return this._game; }
+    set game(newGame) {
+        this._game = newGame;
+        this.configure();
+    }
+
+    getContext() {
+        return this.canvas.getContext("2d");
+    }
+
+    configure() {
         // iteration 1. point input controller doubles things wrong though
         // tileplane size == raw device pixel size (240)
         // canvas.width/height == raw device pixel size (240)
@@ -1773,7 +1803,6 @@ class GameBoardView {
         // tilePlane size = raw device pixel size (240)
         // canvas style width/height = 240
         // canvas.width/height == 240
-        this.canvas = config.boardContainer.querySelector("canvas");
         const pixelScale = HTMLCanvasElement.getDevicePixelScale();
         const tileDeviceWidth = GameBoardView.metrics.tileWidth * pixelScale;
         this.tilePlane = new TilePlane(this.game.difficulty, tileDeviceWidth);
@@ -1785,17 +1814,11 @@ class GameBoardView {
         this.canvas.width = canvasDeviceSize.width;
         this.canvas.height = canvasDeviceSize.height;
 
+        this.tileViews.forEach(view => view.remove());
         this.tileViews = [];
         this.game.board.visitTiles(null, (tile) => {
             this.tileViews.push(new GameTileView(tile, this));
         });
-        this.render();
-
-        this.controller = new GameBoardController(this);
-    }
-
-    getContext() {
-        return this.canvas.getContext("2d");
     }
 
     render() {
@@ -1835,7 +1858,12 @@ class GameTileView {
 
     constructor(model, boardView) {
         this.model = model; // GameTile
-        this.boardView = boardView;
+        this.boardView = boardView; // GameBoardView
+    }
+
+    remove() {
+        this.model = null;
+        this.boardView = null;
     }
 
     render(context) {
@@ -2126,8 +2154,12 @@ class NewGameDialog extends GameDialog {
         }
         this.dismiss();
         let game = new Game({ difficulty: this.difficulty });
-        Sweep.session = new GameSession({ game: game });
-        Sweep.session.start();
+        if (Sweep.session) {
+            Sweep.session.start(game);
+        } else {
+            Sweep.session = new GameSession({ game: game });
+            Sweep.session.start();
+        }
     }
 
     dismissButtonClicked() {
