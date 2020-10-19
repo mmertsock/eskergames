@@ -246,6 +246,11 @@ strings:
   stars5: "★★★★★"
   toggleDebugModeButton: "Debug"
   toggleRainbowButton: "🌈"
+  warningAbortRevealNeighborsIncorrectFlagCount: "Won’t clear this area: incorrect flag count"
+  warningAbortRevealNeighborsMaybeFlags: "Won’t clear this area: unsafe around “?” flags"
+  warningAbortRevealNeighborsNoCandidates: No tiles to clear in this area
+  warningAllNeighborsAlreadyFlagged: All tiles in this area are already flagged
+  warningIncorrectUncoveredTileCount: "Can’t flag this area: incorrect number of covered tiles"
 
 # arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
 pluralStrings:

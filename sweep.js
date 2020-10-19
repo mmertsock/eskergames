@@ -558,7 +558,6 @@ class GameHistory {
         if (!moment) { return; }
 
         if (!this.lastMove || (moment.objectForSerialization != this.lastMove.objectForSerialization)) {
-            // TODO only increment if game state has changed since last time
             let object = moment.bestSerialization(this.lastMove);
             let data = JSON.stringify(object);
             // debugLog(`move ${this.moveNumber}: storing ${data.length} bytes, ${object.format}`);
@@ -738,6 +737,7 @@ class GameSession {
         this.isClean = !this.debugMode;
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
+        this.warningMessage = null;
         this.elems.boardContainer.addRemClass("hidden", false);
 
         if (SweepSolver) {
@@ -823,6 +823,7 @@ class GameSession {
             this.recordGameState();
             this.hintTile = null;
             this.debugTiles = [];
+            this.warningMessage = null;
             this.moveState = MoveState.active;
         }
     }
@@ -836,37 +837,45 @@ class GameSession {
         if (this.state != GameState.playing) { return; }
         if (!tile) { return; }
 
+        let dots = ".";
         while (!this.hasMoved && tile.isMined) {
-            debugLog("Clicked a mine on first move. Shuffling.");
+            debugLog("Clicked a mine on first move. Shuffling" + dots);
+            dots += ".";
             this.game.board.shuffle();
         }
         this.beginMove();
 
         switch (revealBehavior) {
         case GameSession.revealBehaviors.safe:
-            if (!tile.isCovered || tile.flag.isPresent) return;
+            if (!tile.isCovered || tile.flag.isPresent) return SweepAction.Result.noop;
             // debugLog(`Revealing (safe) ${tile.coord.debugDescription}`);
             break;
         case GameSession.revealBehaviors.assertFlag:
             if (!tile.isCovered) return;
-            if (tile.isMined && tile.flag == TileFlag.assertMine) return;
+            if (tile.isMined && tile.flag == TileFlag.assertMine) return SweepAction.Result.noop;
             // debugLog(`Revealing (asserting) ${tile.coord.debugDescription}`);
             break;
         case GameSession.revealBehaviors.assertTrustingFlags:
-            if (tile.isCovered || tile.flag.isPresent) return;
+            if (tile.isCovered || tile.flag.isPresent) return SweepAction.Result.noop;
             var assertFlagCount = 0;
             var anyMaybeFlagNeighbors = false;
+            let candidates = 0;
             tile.visitNeighbors(neighbor => {
                 if (neighbor.flag == TileFlag.maybeMine) { anyMaybeFlagNeighbors = true; }
                 if (neighbor.flag == TileFlag.assertMine) { assertFlagCount += 1; }
+                if (neighbor.isCovered && neighbor.flag != TileFlag.assertMine) { candidates += 1; }
             });
             if (anyMaybeFlagNeighbors) {
-                debugLog("Don't attempt force-reveal with maybe-flag neighbors");
-                return;
+                this.warningMessage = Strings.str("warningAbortRevealNeighborsMaybeFlags");
+                return SweepAction.Result.failure;
             }
             if (assertFlagCount != tile.minedNeighborCount) {
-                debugLog("Don't attempt force-reveal with wrong flag count");
-                return;
+                this.warningMessage = Strings.str("warningAbortRevealNeighborsIncorrectFlagCount");
+                return SweepAction.Result.failure;
+            }
+            if (candidates == 0) {
+                this.warningMessage = Strings.str("warningAbortRevealNeighborsNoCandidates");
+                return SweepAction.Result.noop;
             }
             // debugLog(`Revealing (trusting flags) ${tile.coord.debugDescription}`);
             break;
@@ -874,7 +883,7 @@ class GameSession {
 
         if (tile.isMined) {
             this.mineTriggered(tile);
-            return;
+            return SweepAction.Result.mineTriggered;
         }
         if (tile.minedNeighborCount == 0) {
             var toClear = [];
@@ -889,6 +898,7 @@ class GameSession {
                 this.attemptRevealTile(neighbor, GameSession.revealBehaviors.assertFlag);
             });
         }
+        return this.state == GameState.lost ? SweepAction.Result.mineTriggered : SweepAction.Result.ok;
     }
 
     // assumes tile isCovered and has minedNeighborCount == 0
@@ -999,7 +1009,8 @@ class SweepAction {
 SweepAction.Result = {
     noop: 0,
     ok: 1,
-    mineTriggered: 2
+    mineTriggered: 2,
+    failure: 3
 };
 
 class TileBasedAction extends SweepAction {
@@ -1048,12 +1059,15 @@ class RevealTileAction extends PointInputBasedAction {
     perform(session) {
         let tile = this.assertIsValidWithTile(session);
         if (!tile) { return SweepAction.Result.noop; }
-        session.attemptRevealTile(tile, this.revealBehavior);
-        session.mostRecentAction = new ActionResult({
-            action: this,
-            tile: tile,
-            description: this.reason ? this.reason : this.actionDescription
-        });
+        let result = session.attemptRevealTile(tile, this.revealBehavior);
+        if (result != SweepAction.Result.noop) {
+            session.mostRecentAction = new ActionResult({
+                action: this,
+                tile: tile,
+                description: this.reason ? this.reason : this.actionDescription
+            });
+        }
+        return result;
     }
 
     get actionDescription() {
@@ -1260,14 +1274,13 @@ class FlagAllNeighborsAction extends PointInputBasedAction {
                 collection.applying(new TileTransform.CoveredTilesFilter())
             }));
         if (neighbors.tiles.length != tile.minedNeighborCount) {
-            debugWarn("covered neighbor count != minedNeighborCount");
-            // TODO show this warning (and other invalid moves) to the user in the result view
-            return SweepAction.Result.noop;
+            session.warningMessage = Strings.str("warningIncorrectUncoveredTileCount");
+            return SweepAction.Result.failure;
         }
         neighbors = neighbors.applying(new TileTransform.FlaggedTilesFilter([TileFlag.none, TileFlag.maybeMine]));
         if (neighbors.isEmpty) {
-            debugLog("all neighbors are already mined");
-            return SweepAction.Result.noop;
+            session.warningMessage = Strings.str("warningAllNeighborsAlreadyFlagged");
+            return SweepAction.Result.failure;
         }
 
         let toFlag = neighbors.tiles.map(tile => new SetFlagAction({ tile: tile, flag: TileFlag.assertMine }));
@@ -1743,7 +1756,10 @@ class ActionDescriptionView {
     }
 
     render() {
-        let description = this.session.mostRecentAction ? this.session.mostRecentAction.description : null;
+        let description = this.session.warningMessage;
+        if (!description) {
+            description = this.session.mostRecentAction ? this.session.mostRecentAction.description : null;
+        }
         if (!description) {
             this.elem.innerHTML = "&nbsp;";
             return;
