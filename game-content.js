@@ -8,6 +8,7 @@ var once = Gaming.once;
 class GameScriptEngine {
     constructor() {
         this._commandRegistry = {};
+        this.debug = false;
     }
 
     get allCommandIDs() {
@@ -18,11 +19,11 @@ class GameScriptEngine {
         this._commandRegistry[id] = block;
     }
 
-    execute(id, subject) {
+    execute(id, subject, evt) {
         var command = this._commandRegistry[id];
         if (command) {
-            debugLog("Execute command " + id);
-            return command(subject);
+            if (this.debug) { debugLog("Execute command " + id); }
+            return command(subject, evt);
         }
 
         // TODO look for a script in YAML

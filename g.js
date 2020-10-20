@@ -2313,6 +2313,192 @@ class FlexCanvasGrid {
 
 // ----------------------------------------------------------------------
 
+function mark__Keyboard_Management() {} // ~~~~~~ Keyboard Management ~~~~~~
+
+class KeyInputShortcut {
+    constructor(config) {
+        this.code = config.code;
+        this.shift = config.shift;
+        this.callbacks = [];
+        this.fired = false;
+        this.score = this.shift ? 2 : 1;
+    }
+
+    get debugDescription() {
+        return `<KeyInputShortcut${this.score} ${this.shift ? "Shift+" : ""}${this.code}${this.fired ? " (fired)" : ""}>`;
+    }
+
+    addCallback(callback) { this.callbacks.push(callback); }
+
+    handlesConfig(config) {
+        return this.code == config.code
+            && this.shift == config.shift;
+    }
+
+    isReady(controller) {
+        return !this.fired && this.isMatch(controller);
+    }
+
+    isMatch(controller) {
+        if (!controller.isCodeActive(this.code)) return false;
+        if (this.shift && !controller.isCodeActive(KeyInputController.Codes.anyShift)) return false;
+        return true;
+    }
+
+    reset() { this.fired = false; }
+
+    resetIfNotMatch(controller) {
+        if (!this.isMatch(controller))
+            this.reset();
+    }
+
+    fire(controller, evt) {
+        this.fired = true;
+        this.callbacks.forEach(item => item(controller, this, evt));
+    }
+
+    blockIfSupersededBy(shortcut) {
+        if (this != shortcut && shortcut.code == this.code) {
+            this.fired = true;
+        }
+    }
+}
+
+class KeyInputController {
+    constructor() {
+        document.addEventListener("keydown", e => this.keydown(e));
+        document.addEventListener("keyup", e => this.keyup(e));
+        window.addEventListener("blur", e => this.blur(e));
+        window.addEventListener("focus", e => this.focus(e));
+        this.codeState = {}; // code => keydown timestamp
+        // this.currentCodes = new Set();
+        this.shortcuts = [];
+        this.hasPointer = true;
+        this.debug = false;
+    }
+
+    get activeCodes() { return Object.getOwnPropertyNames(this.codeState); }
+    get isActive() {
+        return this.hasPointer && !Gaming.GameDialogManager.shared.hasFocus;
+    }
+
+    isCodeActive(code) { return this.codeState.hasOwnProperty(code); }
+
+    timeSinceFirstCode(codes, evt) {
+        let min = codes
+            .map(code => this.isCodeActive(code) ? this.codeState[code] : Number.MAX_SAFE_INTEGER)
+            .reduce((i, j) => Math.min(i, j), evt.timeStamp);
+        let value = evt.timeStamp - min;
+        return value > 0 ? value : 0;
+    }
+
+    // settings.keyPressShortcuts: array of arrays:
+    // [keyCodes, script, optional subject, localization key]
+    addShortcutsFromSettings(settings) {
+        settings.keyPressShortcuts.forEach(item => {
+            item = Array.from(item);
+            let tokens = item.shift().split("+");
+            let script = item[0], subject = item[1];
+            if (tokens.length == 2) {
+                if (tokens[0] == "Shift") {
+                    this.addGameScriptShortcut(tokens[1], true, script, subject);
+                } else {
+                    debugWarn(`Unhandled shortcut config ${tokens[0]}+${tokens[1]}`);
+                }
+            } else {
+                this.addGameScriptShortcut(tokens[0], false, script, subject);
+            }
+        });
+    }
+
+    addGameScriptShortcut(code, shift, script, subject) {
+        // TODO build a help menu automatically
+        this.addShortcutListener({ code: code, shift: shift }, (controller, shortcut, evt) => {
+            Gaming.GameScriptEngine.shared.execute(script, subject, evt);
+        });
+    }
+
+    addShortcutListener(options, callback) {
+        let shortcut = this.shortcuts.find(item => item.handlesConfig(options));
+        if (!shortcut) {
+            shortcut = new KeyInputShortcut(options);
+            this.shortcuts.push(shortcut);
+            // Higher-scored shortcuts take priority
+            this.shortcuts.sort((a, b) => b.score - a.score);
+        }
+        return shortcut.addCallback(callback);
+    }
+
+    codesFromEvent(evt) {
+        let codes = [evt.code];
+        switch (evt.code) {
+            case "ShiftLeft":
+            case "ShiftRight":
+                codes.push(KeyInputController.Codes.anyShift); break;
+        }
+        return codes;
+    }
+
+    keydown(evt) {
+        if (!this.isActive) return;
+        let codes = this.codesFromEvent(evt);
+        // codes.forEach(code => this.currentCodes.add(code));
+        codes.forEach(code => {
+            if (!this.isCodeActive(code)) this.codeState[code] = evt.timeStamp;
+        });
+        this.forEachDelegate(delegate => {
+            delegate.keyStateDidChange(this, { evt: evt, down: codes, up: [] });
+        });
+
+        let shortcut = this.shortcuts.find(item => item.isReady(this));
+        if (shortcut) {
+            shortcut.fire(this, evt);
+            this.shortcuts.forEach(item => item.blockIfSupersededBy(shortcut));
+        }
+    }
+
+    keyup(evt) {
+        if (!this.isActive) return;
+        if (this.debug) {
+            debugLog(evt);
+        }
+        let codes = this.codesFromEvent(evt);
+        // codes.forEach(code => this.currentCodes.delete(code));
+        codes.forEach(code => { delete this.codeState[code]; });
+        this.forEachDelegate(delegate => {
+            delegate.keyStateDidChange(this, { evt: evt, down: [], up: codes });
+        });
+
+        this.shortcuts.forEach(item => item.resetIfNotMatch(this));
+    }
+
+    focus(evt) {
+        this.hasPointer = true;
+    }
+
+    blur(evt) {
+        this.hasPointer = false;
+        this.clear(evt);
+    }
+
+    clear(evt) {
+        let codes = this.activeCodes;
+        this.codeState = {};
+        // this.currentCodes.clear();
+        this.forEachDelegate(delegate => {
+            delegate.keyStateDidChange(this, { evt: evt, down: [], up: codes });
+        });
+        this.shortcuts.forEach(item => item.reset());
+    }
+}
+KeyInputController.Codes = {
+    anyShift: "*Shift"
+};
+Mixins.Gaming.DelegateSet(KeyInputController);
+// if (!self.isWorkerScope) {
+//     KeyInputController.shared = new KeyInputController();
+// }
+
 function mark__UI_Controls() {} // ~~~~~~ UI Controls ~~~~~~
 
 // Subclasses implement: get/set value().
@@ -2785,6 +2971,8 @@ return {
     GameDialog: GameDialog,
     GameTask: GameTask,
     KeyboardState: KeyboardState,
+    KeyInputShortcut,
+    KeyInputController,
     Kvo: Kvo,
     PerfTimer: PerfTimer,
     PeriodicRandomComponent: PeriodicRandomComponent,

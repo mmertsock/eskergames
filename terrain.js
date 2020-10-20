@@ -23,6 +23,7 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAsser
 const Binding = Gaming.Binding;
 const BoolArray = Gaming.BoolArray;
 const CircularArray = Gaming.CircularArray;
+const KeyInputController = Gaming.KeyInputController;
 const Kvo = Gaming.Kvo;
 const PerfTimer = Gaming.PerfTimer;
 const PeriodicRandomComponent = Gaming.PeriodicRandomComponent;
@@ -49,7 +50,6 @@ const GameDialog = Gaming.GameDialog;
 const GameScriptEngine = Gaming.GameScriptEngine;
 const GameStorage = CitySim.GameStorage;
 const HelpDialog = CitySim.HelpDialog;
-const KeyInputController = CitySim.KeyInputController;
 const MapLayer = CitySim.MapLayer;
 const MapLayerViewModel = CitySim.MapLayerViewModel;
 const RealtimeInteractionView = CitySim.RealtimeInteractionView;
