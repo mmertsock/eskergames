@@ -2625,9 +2625,11 @@ class GameDialog {
 
     show() {
         this.root = document.createElement("dialog").addRemClass("modal", this.isModal);
-        if (this.rootElemClass) {
-            this.root.addRemClass(this.rootElemClass, true);
-        }
+        (this.rootElemClass || "").split(" ").forEach(item => {
+            if (item.length > 0) {
+                this.root.addRemClass(item, true);
+            }
+        })
         var header = document.createElement("header");
         this.dismissButton = new ToolButton({
             title: Gaming.Strings.str("dialogDismissButton"),

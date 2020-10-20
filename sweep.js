@@ -697,6 +697,15 @@ class GameSession {
         }
     }
 
+    static begin(game) {
+        if (Sweep.session) {
+            Sweep.session.start(game);
+        } else {
+            Sweep.session = new GameSession({ game: game });
+            Sweep.session.start();
+        }
+    }
+
     constructor(config) {
         this.game = config.game;
         this.state = GameState.playing;
@@ -757,6 +766,7 @@ class GameSession {
         return this.history.moveNumber > GameHistory.firstMoveNumber;
     }
 
+    // debug only
     resetBoard() {
         if (this.state != GameState.playing) { return; }
         this.hintTile = null;
@@ -922,7 +932,7 @@ class GameSession {
         new AlertDialog({
             title: Strings.str("lostAlertTitle"),
             message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.game.statistics)),
-            button: Strings.str("lostAlertButton")
+            buttons: [{ title: Strings.str("lostAlertButton") }]
         }).show();
     }
 
@@ -1173,9 +1183,6 @@ class ShowAlertDialogAction extends SweepAction {
     constructor(config) {
         super();
         this.config = config;
-        this.title = config.title;
-        this.message = config.message;
-        this.button = config.button;
     }
 
     get requiresGameStatePlaying() { return false; }
@@ -1185,7 +1192,7 @@ class ShowAlertDialogAction extends SweepAction {
         new AlertDialog({
             title: this.config.title,
             message: this.config.message,
-            button: this.config.button
+            buttons: [{ title: this.config.button }]
         }).show();
     }
 }
@@ -1638,12 +1645,12 @@ class GameControlsView {
         this.newGameButton = new ToolButton({
             parent: this.elem,
             title: Strings.str("newGameButton"),
-            click: () => this.newGame()
+            click: () => this.newGame(true)
         });
-        this.resetBoardButton = new ToolButton({
+        this.showNewGameDialogButton = new ToolButton({
             parent: this.elem,
-            title: Strings.str("resetBoardButton"),
-            click: () => this.resetBoard()
+            title: Strings.str("showNewGameDialogButton"),
+            click: () => this.showNewGameDialog()
         });
         this.showHelpButton = new ToolButton({
             parent: this.elem,
@@ -1688,7 +1695,6 @@ class GameControlsView {
     }
 
     render() {
-        this.resetBoardButton.isEnabled = this.session ? (this.session.state == GameState.playing) : false;
         this.showAnalysisButton.isEnabled = GameAnalysisDialog.isValid(this.session);
         this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
         this.solverStepButton.isEnabled = AttemptSolverStepAction.isValid(this.session);
@@ -1698,15 +1704,30 @@ class GameControlsView {
         }
     }
 
-    newGame() {
-        new NewGameDialog().show();
+    newGame(prompt) {
+        if (!this.session) { return debugWarn("no session"); }
+        if (prompt && (this.session.state == GameState.playing && this.session.hasMoved)) {
+            new AlertDialog({
+                title: Strings.str("newGameDialogTitle"),
+                message: Strings.str("newGameWhilePlayingPrompt"),
+                buttons: [
+                    { title: Strings.str("continuePlayingButton") },
+                    {
+                        title: Strings.str("newGameDialogStartButton"),
+                        click: dialog => {
+                            dialog.dismiss();
+                            this.newGame(false);
+                        }
+                    }
+                ]
+            }).show();
+        } else {
+            GameSession.begin(new Game({ difficulty: this.session.game.difficulty }));
+        }
     }
 
-    resetBoard() {
-        if (this.session) {
-            // TODO prompt are you sure
-            this.session.resetBoard();
-        }
+    showNewGameDialog() {
+        new NewGameDialog().show();
     }
 
     showHelp() {
@@ -2213,13 +2234,7 @@ class NewGameDialog extends GameDialog {
             return;
         }
         this.dismiss();
-        let game = new Game({ difficulty: this.difficulty });
-        if (Sweep.session) {
-            Sweep.session.start(game);
-        } else {
-            Sweep.session = new GameSession({ game: game });
-            Sweep.session.start();
-        }
+        GameSession.begin(new Game({ difficulty: this.difficulty }));
     }
 
     dismissButtonClicked() {
@@ -2236,17 +2251,33 @@ class NewGameDialog extends GameDialog {
 
 class AlertDialog extends GameDialog {
     constructor(config) {
-        super();
+        super(Object.assign(config, { rootElemClass: `prompt buttons-${config.buttons.length}` }));
         this.title = config.title;
         this.contentElem = GameDialog.createContentElem();
-        this.x = new ToolButton({ title: config.button, click: () => this.dismiss() });
+        // buttons: [{ title: "", block: dialog => {} }]
+        // if block non-null, should call dialog.dismiss() if needed
+        this.buttons = config.buttons.map(item => {
+            let button = new ToolButton({
+                title: item.title,
+                click: () => this.clicked(item.click)
+            });
+            return button.elem;
+        });
         let message = document.createElement("p").addRemClass("message", true);
         message.innerText = config.message;
         this.contentElem.append(message);
     }
 
     get isModal() { return true; }
-    get dialogButtons() { return [this.x.elem]; }
+    get dialogButtons() { return this.buttons; }
+
+    clicked(block) {
+        if (typeof(block) == 'function') {
+            block(this);
+        } else {
+            this.dismiss();
+        }
+    }
 }
 
 class SaveHighScoreDialog extends GameDialog {

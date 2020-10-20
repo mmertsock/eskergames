@@ -176,6 +176,8 @@ strings:
   analysisViewChartTitle: HENLO
   analysisViewDismiss: Cool
   analysisViewTitle: Stats
+  beginNewGameButton: Begin New Game
+  continuePlayingButton: Cancel
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✖️"
   difficultyChoiceLabelTemplate: "<name>"
@@ -190,7 +192,6 @@ strings:
   gameDifficultyExpert: Expert
   gameDifficultyIntermediate: Intermediate
   gameSettingsDifficultyLabel: "Difficulty"
-  # TODO pluralization: technically possible to get 1 point
   gameStatusLostTemplate: "Lost! <stars> <points> pts, <progressPercent> tiles completed"
   gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
   gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCountCleared#mineCount#formattedMineCount>"
@@ -201,13 +202,14 @@ strings:
   lostAlertButton: Bummer
   lostAlertDialogTextTemplate: "Your score: <points>"
   lostAlertTitle: You Lost
-  newGameButton: "New Game"
+  newGameButton: New
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
   newGameHeightInputLabelTemplate: "Height (<min>–<max>)"
   newGameMineCountInputLabelTemplate: "Mines (<min>–<max>)"
   newGameMineCountPlaceholder: "# Mines"
   newGameTileCountPlaceholder: "# Tiles"
+  newGameWhilePlayingPrompt: "Ready to start a new game?"
   newGameWidthInputLabelTemplate: "Width (<min>–<max>)"
   oxfordCommaManyItemsSeparator: ", "
   oxfordCommaManyItemsTemplate: "<first>, and <last>"
@@ -217,7 +219,6 @@ strings:
   recentActionClearedTileCountToken: "<clearedTileCountPhrase#clearedTileCount#formattedClearedTileCount>"
   recentActionPointsWonToken: "<gotPoints#points#formattedPoints>"
   recentActionWithChangesTemplate: "<description>: <list>"
-  resetBoardButton: "Reset"
   revealSingleTileActionDescription: Revealed a tile
   revealTrustingFlagsActionDescription: Revealed unflagged tiles
   saveHighScoreButton: "Save"
@@ -234,6 +235,7 @@ strings:
   showHintActionDescription: Got a hint
   showHintButton: Hint
   showHintErrorText: Can’t find any hints to show.
+  showNewGameDialogButton: Options
   solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
   solverClearHintedTileActionDescription: "Solver: cleared tile indicated by last hint"
   solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: <flaggedKnownMines#length#formattedLength>"
