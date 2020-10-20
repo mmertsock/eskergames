@@ -46,6 +46,17 @@ rules:
 
 #################### UI ###################
 
+keyboard:
+  keyPressShortcuts:
+    - [Escape, escapePressed, null, helpKeyboardEscapePressed]
+    - [Slash, showHelp, null, helpKeyboardShowHelp]
+    - [KeyN, newGame, true, helpKeyboardNewGame]
+    - [Shift+KeyN, showNewGameDialog, null, helpKeyboardShowNewGameDialog]
+    - [Digit8, showHighScores, null, helpKeyboardShowHighScores] # asterisk
+    - [Digit3, showAnalysis, null, helpKeyboardShowAnalysis] # pound
+    - [Shift+Digit1, showHint, null, helpKeyboardShowHint] # bang
+    - [Shift+Digit4, solverStep, null, helpKeyboardSolverStep] # dollar
+    - [KeyQ, toggleRainbowMode]
 gameBoardView:
   tileWidth: 24
   rainbow:
@@ -197,6 +208,14 @@ strings:
   gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCountCleared#mineCount#formattedMineCount>"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
+  helpKeyboardEscapePressed: "esc|: Close popups, etc."
+  helpKeyboardNewGame: "N|: New game"
+  helpKeyboardShowAnalysis: "#|: Show game stats"
+  helpKeyboardShowHelp: "?|: Show help"
+  helpKeyboardShowHighScores: "*|: Show high scores"
+  helpKeyboardShowHint: "!|: Get a hint"
+  helpKeyboardShowNewGameDialog: "⇧ + N|: Show options for new game"
+  helpKeyboardSolverStep: "$|: Auto-solve"
   highScoresDialogTitle: "✷ High Scores ✷"
   highScoresDismiss: "Done"
   lostAlertButton: Bummer

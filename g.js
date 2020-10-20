@@ -2769,6 +2769,10 @@ class GameDialogManager {
         return this.hasModal; // OR if any text input has focus (for disabling keyboard shortcuts)
     }
 
+    get currentDialog() {
+        return this.items.length > 0 ? this.items[this.items.length - 1] : null;
+    }
+
     show(dialog) {
         if (!this.containerElem) { return; }
         this.items.push(dialog);

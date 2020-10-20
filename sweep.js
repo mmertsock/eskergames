@@ -7,6 +7,7 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAsser
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const GameContent = Gaming.GameContent;
 const GameDialog = Gaming.GameDialog;
+const GameScriptEngine = Gaming.GameScriptEngine;
 const InputView = Gaming.FormValueView.InputView;
 const Point = Gaming.Point;
 const Rect = Gaming.Rect;
@@ -706,6 +707,10 @@ class GameSession {
         }
     }
 
+    static isShowingDialog() {
+        return !!Gaming.GameDialogManager.shared.currentDialog;
+    }
+
     constructor(config) {
         this.game = config.game;
         this.state = GameState.playing;
@@ -721,6 +726,7 @@ class GameSession {
         this.elems = {
             boardContainer: document.querySelector("board")
         };
+        this.inputController = new InputController();
         this.controlsView = new GameControlsView({ session: this, elem: document.querySelector("header row") });
         this.mostRecentActionView = new ActionDescriptionView({ session: this, elem: document.querySelector("message") });
         this.boardView = new GameBoardView({ session: this, boardContainer: this.elems.boardContainer });
@@ -1092,7 +1098,8 @@ class AttemptHintAction extends SweepAction {
     static isValid(session) {
         if (!session) return false;
         return (session.state == GameState.playing)
-            && !session.hintTile;
+            && !session.hintTile
+            && !GameSession.isShowingDialog();
     }
 
     get debugDescription() {
@@ -1302,10 +1309,11 @@ class FlagAllNeighborsAction extends PointInputBasedAction {
 class AttemptSolverStepAction extends SweepAction {
     static isValid(session) {
         if (!session || !session.solver) return false;
-        return (session.state == GameState.playing);
+        return (session.state == GameState.playing)
+            && !GameSession.isShowingDialog();
     }
 
-    debugDescription() {
+    get debugDescription() {
         return "<solverStep>"
     }
 
@@ -1518,6 +1526,26 @@ TileTransform.MinedNeighborCountRangeFilter = MinedNeighborCountRangeFilter;
 
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
 
+class InputController {
+    constructor() {
+        GameScriptEngine.shared = new GameScriptEngine();
+        this.keyController = new Gaming.KeyInputController();
+        this.keyController.addShortcutsFromSettings(Game.content.keyboard);
+        this.keyController.debug = true;
+
+        let gse = GameScriptEngine.shared;
+        gse.registerCommand("escapePressed", (subject, evt) => { this.dismissDialog(evt); });
+    }
+
+    dismissDialog(evt) {
+        let currentDialog = Gaming.GameDialogManager.shared.currentDialog;
+        if (currentDialog && !currentDialog.isModal) {
+            evt.preventDefault();
+            currentDialog.dismiss();
+        }
+    }
+}
+
 class PointInputSequence {
     constructor(firstEvent) {
         this.events = [firstEvent];
@@ -1692,6 +1720,16 @@ class GameControlsView {
         } else {
             this.debugModeButton = null;
         }
+
+        let gse = GameScriptEngine.shared;
+        gse.registerCommand("newGame", prompt => this.newGame(prompt));
+        gse.registerCommand("showNewGameDialog", () => this.showNewGameDialog());
+        gse.registerCommand("showHelp", () => this.showHelp());
+        gse.registerCommand("showHighScores", () => this.showHighScores());
+        gse.registerCommand("showAnalysis", () => this.showAnalysis());
+        gse.registerCommand("showHint", () => this.showHint());
+        gse.registerCommand("solverStep", () => this.solverStep());
+        gse.registerCommand("toggleRainbowMode", () => this.toggleRainbowMode());
     }
 
     render() {
@@ -1727,14 +1765,17 @@ class GameControlsView {
     }
 
     showNewGameDialog() {
+        if (GameSession.isShowingDialog()) { return; }
         new NewGameDialog().show();
     }
 
     showHelp() {
+        if (GameSession.isShowingDialog()) { return; }
         new HelpDialog().show();
     }
 
     showHighScores() {
+        if (GameSession.isShowingDialog()) { return; }
         let difficulty = null;
         if (this.session && this.session.game) {
             difficulty = this.session.game.difficulty;
@@ -1743,6 +1784,7 @@ class GameControlsView {
     }
 
     showAnalysis() {
+        if (GameSession.isShowingDialog()) { return; }
         if (GameAnalysisDialog.isValid(this.session)) {
             new GameAnalysisDialog({ history: this.session.history }).show();
         }
@@ -2173,7 +2215,7 @@ class NewGameDialog extends GameDialog {
         return !!Sweep.session;
     }
 
-    get isModal() { return true; }
+    get isModal() { return !this.isDismissable; }
 
     get title() { return Strings.str("newGameDialogTitle"); }
 
@@ -2268,8 +2310,16 @@ class AlertDialog extends GameDialog {
         this.contentElem.append(message);
     }
 
-    get isModal() { return true; }
+    get isModal() { return false; }
     get dialogButtons() { return this.buttons; }
+
+    show() {
+        let currentDialog = Gaming.GameDialogManager.shared.currentDialog;
+        if (currentDialog && !currentDialog.isModal) {
+            currentDialog.dismiss();
+        }
+        super.show();
+    }
 
     clicked(block) {
         if (typeof(block) == 'function') {
@@ -2355,6 +2405,23 @@ class HelpDialog extends GameDialog {
         this.contentElem = GameDialog.createContentElem();
         let elem = document.querySelector("body > help")
             .cloneNode(true).addRemClass("hidden", false);
+        Game.content.keyboard.keyPressShortcuts.forEach(item => {
+            if (item.length < 4) { return; }
+            let config = Strings.str(item[item.length - 1]);
+            if (!config) { return; }
+            config = config.split("|");
+            if (config.length == 1) {
+                config.push("???");
+            }
+            let content = document.createElement("li");
+            let child = document.createElement("kbd");
+            child.innerText = config[0];
+            content.append(child);
+            child = document.createElement("span");
+            child.innerText = config[1];
+            content.append(child);
+            elem.querySelector(".shortcuts").append(content);
+        });
         this.contentElem.append(elem);
         this.x = new ToolButton({
             title: Strings.str("helpDismiss"),

@@ -62,6 +62,13 @@ dialog content help ul {
     list-style-type: disc;
 }
 
+help li kbd {
+    padding: 0 2pt;
+    border-radius: 2pt;
+    border: 1px solid #999999;
+    background-color: #f3f3f3;
+}
+
 highScores controls {
     background-color: transparent;
 }
@@ -170,6 +177,8 @@ analysis .rainbow-board canvas {
         <li><kbd>⇧ + click</kbd> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the tile clicked</li>
         <li><kbd>⌥ + click or ⌘ + click</kbd>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any "?" flags are nearby, or if the number of flagged neighbors does match the number on the clicked tile</li>
     </ul>
+    <h3>Keyboard shortcuts</h3>
+    <ul class="shortcuts"></ul>
 </help>
 
 <highScores class="hidden">
