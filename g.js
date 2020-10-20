@@ -2317,6 +2317,7 @@ function mark__Keyboard_Management() {} // ~~~~~~ Keyboard Management ~~~~~~
 
 class KeyInputShortcut {
     constructor(config) {
+        this.id = config.id || null;
         this.code = config.code;
         this.shift = config.shift;
         this.callbacks = [];
@@ -2413,7 +2414,7 @@ class KeyInputController {
 
     addGameScriptShortcut(code, shift, script, subject) {
         // TODO build a help menu automatically
-        this.addShortcutListener({ code: code, shift: shift }, (controller, shortcut, evt) => {
+        this.addShortcutListener({ id: script, code: code, shift: shift }, (controller, shortcut, evt) => {
             Gaming.GameScriptEngine.shared.execute(script, subject, evt);
         });
     }
@@ -2455,6 +2456,12 @@ class KeyInputController {
             shortcut.fire(this, evt);
             this.shortcuts.forEach(item => item.blockIfSupersededBy(shortcut));
         }
+
+        this.forEachDelegate(delegate => {
+            if (typeof(delegate.keyStateShortcutsCompleted) == 'function') {
+                delegate.keyStateShortcutsCompleted(this, { evt: evt, down: codes, up: [], fired: shortcut });
+            }
+        });
     }
 
     keyup(evt) {

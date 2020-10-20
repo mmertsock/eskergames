@@ -57,6 +57,8 @@ keyboard:
     - [Shift+Digit1, showHint, null, helpKeyboardShowHint] # bang
     - [Shift+Digit4, solverStep, null, helpKeyboardSolverStep] # dollar
     - [KeyQ, toggleRainbowMode]
+    - [KeyM, moo, m]
+    - [KeyO, moo, o]
 gameBoardView:
   tileWidth: 24
   rainbow:
@@ -221,6 +223,7 @@ strings:
   lostAlertButton: Bummer
   lostAlertDialogTextTemplate: "Your score: <points>"
   lostAlertTitle: You Lost
+  mooActionDescription: "🐮🐄🐮🐄🐮🐄🐮🐄🐮"
   newGameButton: New
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"

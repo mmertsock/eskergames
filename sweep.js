@@ -752,6 +752,7 @@ class GameSession {
         this.isClean = !this.debugMode;
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
+        MooAction.append("x");
         this.warningMessage = null;
         this.elems.boardContainer.addRemClass("hidden", false);
 
@@ -841,6 +842,7 @@ class GameSession {
             this.debugTiles = [];
             this.warningMessage = null;
             this.moveState = MoveState.active;
+            MooAction.append("x");
         }
     }
 
@@ -927,6 +929,18 @@ class GameSession {
             } else {
                 this.revealClearArea(neighbor, revealed);
             }
+        });
+    }
+
+    eatMine(tile) {
+        if (!tile.isMined || this.game.board.mineCount <= 1) { return; }
+        this.boardView.eatMine(tile, () => {
+            if (!tile.isMined || this.game.board.mineCount <= 1) { return; }
+            tile.isMined = false;
+            tile._boardConstructed();
+            tile.visitNeighbors(neighbor => neighbor._boardConstructed());
+            this.game.board.mineCount -= 1;
+            this.renderViews();
         });
     }
 
@@ -1340,6 +1354,54 @@ class AttemptSolverStepAction extends SweepAction {
 }
 SweepAction.AttemptSolverStepAction = AttemptSolverStepAction;
 
+class MooAction extends SweepAction {
+    static append(value) {
+        switch (value) {
+        case "m":
+            MooAction.value = "m";
+            return;
+        case "o":
+            if (MooAction.value == "m" || MooAction.value == "mo") {
+                MooAction.value += "o";
+                return;
+            }
+        }
+        MooAction.value = "";
+    }
+
+    static isReady() {
+        return MooAction.value == "moo";
+    }
+
+    perform(session) {
+        if (!this.assertIsValid(session)) { return SweepAction.Result.noop; }
+        MooAction.value = "";
+        let candidates = TileCollection.allTiles(session)
+            .applying(new TileTransform.CoveredTilesFilter())
+            .applying(new TileTransform.MineFilter(true))
+            .applying(new TileTransform.FlaggedTilesFilter([TileFlag.none, TileFlag.maybeMine]));
+        // try not to eat flags
+        let unflagged = candidates
+            .applying(new HasNeighborsFilter({ condition: { range: {min: 0, max: 0} }, transform: collection => {
+                return collection.applying(new TileTransform.FlaggedTilesFilter([TileFlag.assertMine]));
+            } }));
+        let tile = unflagged.randomTileClosestTo(session.mostRecentAction.tile) || candidates.randomTileClosestTo(session.mostRecentAction.tile);
+        if (!tile) {
+            return null;
+        }
+        session.beginMove();
+        session.eatMine(tile);
+        session.mostRecentAction = new ActionResult({
+            action: this,
+            tile: tile,
+            description: Strings.str("mooActionDescription")
+        });
+        return SweepAction.Result.ok;
+    }
+}
+MooAction.value = "";
+SweepAction.MooAction = MooAction;
+
 function mark__Tile_Collections_and_Transforms() {} // ~~~~~~ Tile Collections and Transforms ~~~~~~
 
 class TileCollection {
@@ -1531,7 +1593,8 @@ class InputController {
         GameScriptEngine.shared = new GameScriptEngine();
         this.keyController = new Gaming.KeyInputController();
         this.keyController.addShortcutsFromSettings(Game.content.keyboard);
-        this.keyController.debug = true;
+        this.keyController.addDelegate(this);
+        // this.keyController.debug = true;
 
         let gse = GameScriptEngine.shared;
         gse.registerCommand("escapePressed", (subject, evt) => { this.dismissDialog(evt); });
@@ -1542,6 +1605,14 @@ class InputController {
         if (currentDialog && !currentDialog.isModal) {
             evt.preventDefault();
             currentDialog.dismiss();
+        }
+    }
+
+    keyStateDidChange() { }
+
+    keyStateShortcutsCompleted(controller, data) {
+        if (!data.fired || (data.fired.id != "moo")) {
+            MooAction.append("x");
         }
     }
 }
@@ -1730,6 +1801,7 @@ class GameControlsView {
         gse.registerCommand("showHint", () => this.showHint());
         gse.registerCommand("solverStep", () => this.solverStep());
         gse.registerCommand("toggleRainbowMode", () => this.toggleRainbowMode());
+        gse.registerCommand("moo", value => this.eatMine(value));
     }
 
     render() {
@@ -1804,6 +1876,13 @@ class GameControlsView {
 
     toggleRainbowMode() {
         if (this.session) { this.session.toggleRainbowMode(); }
+    }
+
+    eatMine(value) {
+        MooAction.append(value);
+        if (MooAction.isReady()) {
+            this.session.performAction(new MooAction());
+        }
     }
 
     toggleDebugMode() {
@@ -1956,6 +2035,38 @@ class GameBoardView {
         if (hintTile) {
             hintTile.renderHintTile(context);
         }
+    }
+
+    eatMine(tile, completion) {
+        let view = this.tileViews.find(item => item.model == tile);
+        if (!view) { return; }
+        let origin = new Point(this.canvas.getBoundingClientRect()).integral();
+        let center = this.tilePlane.screenRectForModelTile(view.model.coord).center;
+        center = new Point(center.x / this.pixelScale, center.y / this.pixelScale).adding(origin);
+
+        let agent = document.createElement("moo");
+        agent.innerText = "🐄";
+        document.body.append(agent);
+        agent.style.top = `${center.y + 300}px`;
+        agent.style.left = `${document.body.getBoundingClientRect().width + 100}px`;
+
+        setTimeout(() => {
+            let agent = document.querySelector("moo");
+            if (!agent) { return; }
+            agent.style.top = `${center.y}px`;
+            agent.style.left = `${center.x - 0.5 * agent.clientWidth}px`;
+            setTimeout(() => {
+                completion();
+                let agent = document.querySelector("moo");
+                if (!agent) { return; }
+                agent.style.top = `${center.y - 300}px`;
+                agent.style.left = "-100px"; 
+                setTimeout(() => {
+                    let agent = document.querySelector("moo");
+                    if (agent) { agent.remove(); }
+                }, 1000);
+            }, 1250);
+        }, 10);
     }
 }
 // end class GameBoardView
