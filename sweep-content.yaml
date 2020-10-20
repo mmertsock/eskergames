@@ -64,9 +64,9 @@ gameTileView:
   borderStrokeStyle: "#444444"
   borderStrokeWidth: 1
   coveredBevelStyle: "#eeeeee"
-  coveredBevelWidth: 1
+  coveredBevelWidth: 2
 gameTileViewState:
-  coveredColor: &COVEREDCOLOR "#cecece"
+  coveredColor: &COVEREDCOLOR "#c0c0c0"
   revealedColor: &REVEALEDCOLOR "#ececec"
   incorrectColor: &INCORRECTCOLOR "#ffcccc"
   covered:
@@ -103,7 +103,8 @@ gameTileViewState:
     textColor: "#990000"
     fillColor: *INCORRECTCOLOR
   hintTile:
-    fillColor: "hsla(120, 85%, 85%, 0.5)"
+    strokeStyle: "hsla(120, 65%, 65%, 1)"
+    borderStrokeWidth: 3
   debug:
     fillColor: "hsla(83, 100%, 50%, 0.2)"
 analysisView:

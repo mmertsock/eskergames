@@ -830,7 +830,6 @@ class GameSession {
 
     recordGameState() {
         this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
-        // TODO auto-save
     }
     
     attemptRevealTile(tile, revealBehavior) {
@@ -1837,8 +1836,8 @@ class GameBoardView {
         // tilePlane size = raw device pixel size (240)
         // canvas style width/height = 240
         // canvas.width/height == 240
-        const pixelScale = HTMLCanvasElement.getDevicePixelScale();
-        const tileDeviceWidth = GameBoardView.metrics.tileWidth * pixelScale;
+        this.pixelScale = HTMLCanvasElement.getDevicePixelScale();
+        const tileDeviceWidth = GameBoardView.metrics.tileWidth * this.pixelScale;
         this.tilePlane = new TilePlane(this.game.difficulty, tileDeviceWidth);
         this.tilePlane.viewportSize = { width: this.tilePlane.size.width * tileDeviceWidth, height: this.tilePlane.size.height * tileDeviceWidth };
 
@@ -1859,6 +1858,7 @@ class GameBoardView {
         let ctx = this.getContext();
         let context = {
             ctx: ctx,
+            pixelScale: this.pixelScale,
             tilePlane: this.tilePlane,
             session: this.session,
             showAllMines: (this.session.state != GameState.playing),
@@ -1880,7 +1880,19 @@ class GameBoardView {
             }
         }
         ctx.rectClear(this.tilePlane.viewportScreenBounds);
-        this.tileViews.forEach(tile => tile.render(context));
+
+        let hintTile = null;
+        this.tileViews.forEach(tile => {
+            if (this.session.hintTile == tile.model) {
+                hintTile = tile;
+            }
+            tile.render(context);
+        });
+
+        // Render hintTile last for z-order purposes
+        if (hintTile) {
+            hintTile.renderHintTile(context);
+        }
     }
 }
 // end class GameBoardView
@@ -1941,13 +1953,14 @@ class GameTileView {
             ctx.stroke();
         }
 
-        if (context.session.hintTile == this.model) {
-            this.renderContent(context, rect, GameTileViewState.hintTile);
-        }
-
         if (Game.rules().allowDebugMode && context.session.debugTiles && context.session.debugTiles.contains(this.model)) {
             this.renderContent(context, rect, GameTileViewState.debug);
         }
+    }
+
+    renderHintTile(context) {
+        const rect = context.tilePlane.screenRectForModelTile(this.model.coord);
+        this.renderContent(context, rect, GameTileViewState.hintTile);
     }
 
     renderCovered(context, rect) {
@@ -2008,6 +2021,8 @@ class GameTileViewState {
 
     constructor(config) {
         this.fillColor = config.fillColor;
+        this.strokeStyle = config.strokeStyle;
+        this.borderStrokeWidth = config.borderStrokeWidth;
         if (typeof(config.glyph) === 'function') {
             this.glyph = config.glyph;
         } else {
@@ -2020,14 +2035,25 @@ class GameTileViewState {
     }
 
     render(context, rect, tile) {
+        let fillColor = null;
         if (!!context.rainbow && this.showsRainbow && tile.rainbow.cleared >= 0) {
             let hue = Math.scaleValueLinear(tile.rainbow.cleared, context.rainbow.moves, context.rainbow.hue) % 360;
             let color = `hsl(${hue},${context.rainbow.cleared.saturation},${context.rainbow.cleared.lightness})`;
-            context.ctx.fillStyle = color;
+            fillColor = color;
         } else {
-            context.ctx.fillStyle = this.fillColor;
+            fillColor = this.fillColor;
         }
-        context.ctx.rectFill(rect);
+        if (fillColor) {
+            context.ctx.fillStyle = fillColor;
+            context.ctx.rectFill(rect);
+        }
+
+        if (this.borderStrokeWidth > 0) {
+            context.ctx.lineJoin = "round";
+            context.ctx.strokeStyle = this.strokeStyle;
+            context.ctx.lineWidth = this.borderStrokeWidth * context.pixelScale;
+            context.ctx.rectStroke(rect);
+        }
         
         let textValue = this.glyph(tile);
         if (textValue) {
