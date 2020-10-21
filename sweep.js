@@ -321,6 +321,7 @@ class Game {
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
         GameAnalysisDialog.initialize(content.analysisView);
+        Moo.initialize(content.moo);
     }
 
     static rules() {
@@ -732,6 +733,7 @@ class GameSession {
         this.boardView = new GameBoardView({ session: this, boardContainer: this.elems.boardContainer });
         this.statusView = new GameStatusView({ session: this, elem: document.querySelector("footer") });
         this.views = [this.controlsView, this.mostRecentActionView, this.boardView, this.statusView];
+        this.moo = new Moo({ session: this, elem: document.querySelector("moo"), boardView: this.boardView, inputController: this.inputController });
     }
 
     start(newGame) {
@@ -752,7 +754,7 @@ class GameSession {
         this.isClean = !this.debugMode;
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
-        MooAction.append("x");
+        this.moo.beginMove();
         this.warningMessage = null;
         this.elems.boardContainer.addRemClass("hidden", false);
 
@@ -842,7 +844,7 @@ class GameSession {
             this.debugTiles = [];
             this.warningMessage = null;
             this.moveState = MoveState.active;
-            MooAction.append("x");
+            this.moo.beginMove();
         }
     }
 
@@ -934,14 +936,10 @@ class GameSession {
 
     eatMine(tile) {
         if (!tile.isMined || this.game.board.mineCount <= 1) { return; }
-        this.boardView.eatMine(tile, () => {
-            if (!tile.isMined || this.game.board.mineCount <= 1) { return; }
-            tile.isMined = false;
-            tile._boardConstructed();
-            tile.visitNeighbors(neighbor => neighbor._boardConstructed());
-            this.game.board.mineCount -= 1;
-            this.renderViews();
-        });
+        tile.isMined = false;
+        tile._boardConstructed();
+        tile.visitNeighbors(neighbor => neighbor._boardConstructed());
+        this.game.board.mineCount -= 1;
     }
 
     mineTriggered(tile) {
@@ -1014,7 +1012,7 @@ class ActionResult {
 }
 
 class SweepAction {
-    get debugDescription() { return ""; }
+    get debugDescription() { return `<${this.constructor.name}>`; }
     get actionDescription() { return null; }
     get requiresGameStatePlaying() { return true; }
 
@@ -1046,6 +1044,10 @@ class TileBasedAction extends SweepAction {
     constructor(config) {
         super();
         this.tile = config.tile;
+    }
+
+    get debugDescription() {
+        return `<${this.constructor.name} @${this.tile.debugDescription}>`;
     }
 }
 SweepAction.TileBasedAction = TileBasedAction;
@@ -1354,28 +1356,19 @@ class AttemptSolverStepAction extends SweepAction {
 }
 SweepAction.AttemptSolverStepAction = AttemptSolverStepAction;
 
-class MooAction extends SweepAction {
-    static append(value) {
-        switch (value) {
-        case "m":
-            MooAction.value = "m";
-            return;
-        case "o":
-            if (MooAction.value == "m" || MooAction.value == "mo") {
-                MooAction.value += "o";
-                return;
-            }
+class MooAction extends TileBasedAction {
+    static isValid(session) {
+        if (!session || (session.state != GameState.playing) || (session.game.mineCount <= 1)) {
+            return false;
+        } else {
+            return true;
         }
-        MooAction.value = "";
     }
 
-    static isReady() {
-        return MooAction.value == "moo";
-    }
-
-    perform(session) {
-        if (!this.assertIsValid(session)) { return SweepAction.Result.noop; }
-        MooAction.value = "";
+    static action(session) {
+        if (!MooAction.isValid(session)) {
+            return null;
+        }
         let candidates = TileCollection.allTiles(session)
             .applying(new TileTransform.CoveredTilesFilter())
             .applying(new TileTransform.MineFilter(true))
@@ -1386,20 +1379,24 @@ class MooAction extends SweepAction {
                 return collection.applying(new TileTransform.FlaggedTilesFilter([TileFlag.assertMine]));
             } }));
         let tile = unflagged.randomTileClosestTo(session.mostRecentAction.tile) || candidates.randomTileClosestTo(session.mostRecentAction.tile);
-        if (!tile) {
-            return null;
-        }
-        session.beginMove();
-        session.eatMine(tile);
+        return tile ? new MooAction({ tile: tile }) : null;
+    }
+
+    isValid(session) {
+        return MooAction.isValid(session) && this.tile.isCovered && this.tile.isMined && this.tile.flag != TileFlag.assertMine;
+    }
+
+    perform(session) {
+        if (!this.isValid(session)) { return SweepAction.Result.noop; }
+        session.eatMine(this.tile);
         session.mostRecentAction = new ActionResult({
             action: this,
-            tile: tile,
+            tile: this.tile,
             description: Strings.str("mooActionDescription")
         });
         return SweepAction.Result.ok;
     }
 }
-MooAction.value = "";
 SweepAction.MooAction = MooAction;
 
 function mark__Tile_Collections_and_Transforms() {} // ~~~~~~ Tile Collections and Transforms ~~~~~~
@@ -1593,7 +1590,6 @@ class InputController {
         GameScriptEngine.shared = new GameScriptEngine();
         this.keyController = new Gaming.KeyInputController();
         this.keyController.addShortcutsFromSettings(Game.content.keyboard);
-        this.keyController.addDelegate(this);
         // this.keyController.debug = true;
 
         let gse = GameScriptEngine.shared;
@@ -1605,14 +1601,6 @@ class InputController {
         if (currentDialog && !currentDialog.isModal) {
             evt.preventDefault();
             currentDialog.dismiss();
-        }
-    }
-
-    keyStateDidChange() { }
-
-    keyStateShortcutsCompleted(controller, data) {
-        if (!data.fired || (data.fired.id != "moo")) {
-            MooAction.append("x");
         }
     }
 }
@@ -1801,7 +1789,6 @@ class GameControlsView {
         gse.registerCommand("showHint", () => this.showHint());
         gse.registerCommand("solverStep", () => this.solverStep());
         gse.registerCommand("toggleRainbowMode", () => this.toggleRainbowMode());
-        gse.registerCommand("moo", value => this.eatMine(value));
     }
 
     render() {
@@ -1876,13 +1863,6 @@ class GameControlsView {
 
     toggleRainbowMode() {
         if (this.session) { this.session.toggleRainbowMode(); }
-    }
-
-    eatMine(value) {
-        MooAction.append(value);
-        if (MooAction.isReady()) {
-            this.session.performAction(new MooAction());
-        }
     }
 
     toggleDebugMode() {
@@ -1964,6 +1944,11 @@ class GameBoardView {
         this.configure();
     }
 
+    getScreenRect(tile) {
+        let view = this.tileViews.find(item => item.model == tile);
+        return view ? this.tilePlane.screenRectForModelTile(view.model.coord) : null;
+    }
+
     getContext() {
         return this.canvas.getContext("2d");
     }
@@ -2035,38 +2020,6 @@ class GameBoardView {
         if (hintTile) {
             hintTile.renderHintTile(context);
         }
-    }
-
-    eatMine(tile, completion) {
-        let view = this.tileViews.find(item => item.model == tile);
-        if (!view) { return; }
-        let origin = new Point(this.canvas.getBoundingClientRect()).integral();
-        let center = this.tilePlane.screenRectForModelTile(view.model.coord).center;
-        center = new Point(center.x / this.pixelScale, center.y / this.pixelScale).adding(origin);
-
-        let agent = document.createElement("moo");
-        agent.innerText = "🐄";
-        document.body.append(agent);
-        agent.style.top = `${center.y + 300}px`;
-        agent.style.left = `${document.body.getBoundingClientRect().width + 100}px`;
-
-        setTimeout(() => {
-            let agent = document.querySelector("moo");
-            if (!agent) { return; }
-            agent.style.top = `${center.y}px`;
-            agent.style.left = `${center.x - 0.5 * agent.clientWidth}px`;
-            setTimeout(() => {
-                completion();
-                let agent = document.querySelector("moo");
-                if (!agent) { return; }
-                agent.style.top = `${center.y - 300}px`;
-                agent.style.left = "-100px"; 
-                setTimeout(() => {
-                    let agent = document.querySelector("moo");
-                    if (agent) { agent.remove(); }
-                }, 1000);
-            }, 1250);
-        }, 10);
     }
 }
 // end class GameBoardView
@@ -2244,6 +2197,153 @@ class GameTileViewState {
         }
     }
 }
+// end class GameTileViewState
+
+class Moo {
+    static initialize(config) {
+        Moo.config = config;
+        Moo.state = {
+            ready: "ready",
+            m: "m",
+            mo: "mo",
+            moo: "moo",
+            preparing: "preparing",
+            performing: "performing",
+            finishing: "finising"
+        };
+        Moo.transitions = {
+            ready: { "m": Moo.state.m },
+            m: { "o": Moo.state.mo, "m": Moo.state.m },
+            mo: { "o": Moo.state.moo, "m": Moo.state.m }
+        };
+    }
+
+    constructor(config) {
+        this.session = config.session
+        this.elem = config.elem;
+        this.boardView = config.boardView;
+        this.state = Moo.state.ready;
+        this.debug = false;
+        config.inputController.keyController.addDelegate(this);
+        GameScriptEngine.shared.registerCommand("moo", value => this.advance(value));
+    }
+
+    get debugDescription() {
+        return `<moo@${this.state}>`;
+    }
+
+    beginMove() {
+        this.advance("beginMove");
+    }
+
+    // private
+
+    keyStateDidChange() { }
+
+    keyStateShortcutsCompleted(controller, data) {
+        if (!data.fired || (data.fired.id != "moo")) {
+            this.advance("invalidated");
+        }
+    }
+
+    advance(value) {
+        if (this.debug) { debugLog(`${this.debugDescription} advance ${value}`); }
+        let transitions = Moo.transitions[this.state];
+        if (!transitions) {
+            // ignore input while preparing/finishing
+            return this;
+        }
+        let state = transitions[value] || Moo.state.ready;
+        return (state == Moo.state.moo) ? this.prepare() : this.readyState(state);
+    }
+
+    readyState(value) {
+        if (this.debug) { debugLog(`${this.debugDescription} readyState ${value}`); }
+        this.action = null;
+        this.elem.style.top = "";
+        this.elem.style.left = "";
+        this.elem.querySelector(".m").innerText = Moo.config.thoughts.randomItem();
+        this.elem.querySelector(".mo").innerText = Moo.config.thoughts.randomItem();
+        return this.setState(value);
+    }
+
+    prepare() {
+        this.action = MooAction.action(this.session);
+        let rect = this.action ? this.boardView.getScreenRect(this.action.tile) : null;
+        if (!rect) { return this.readyState(Moo.state.ready); }
+
+        let center = rect.center;
+        center = new Point(center.x / this.boardView.pixelScale, center.y / this.boardView.pixelScale)
+            .adding(new Point(this.boardView.canvas.getBoundingClientRect())).integral();
+
+        if (this.debug) { debugLog(`${this.debugDescription} prepare ${this.action.tile.debugDescription} => ${center.debugDescription}`); }
+        this.setState(Moo.state.preparing);
+        this.elem.style.top = `${center.y}px`;
+        this.elem.style.left = `${center.x - 0.5 * this.elem.clientWidth}px`;
+        this.configureBombs(null, center, 0);
+        this.animate(Moo.config.duration, () => this.perform(center));
+        return this;
+    }
+
+    perform(center) {
+        if (!this.action.isValid(this.session)) {
+            debugWarn(`${this.debugDescription} action not valid ${this.action.debugDescription}`);
+            return this.finish();
+        }
+        if (this.debug) { debugLog(`${this.debugDescription} perform ${this.action.tile.debugDescription}`); }
+        this.configureBombs("preparing", center, 0);
+        this.setState(Moo.state.performing);
+        this.session.performAction(this.action);
+        return this.animate(25, () => this.finish(center));
+    }
+
+    finish(center) {
+        if (this.debug) { debugLog(`${this.debugDescription} finish`); }
+        this.setState(Moo.state.finishing);
+        this.elem.style.top = "";
+        this.elem.style.left = "";
+        this.animate(25, () => {
+            this.configureBombs("performing", center, Moo.config.mines.spread);
+            this.animate(Moo.config.mines.duration, () => this.configureBombs(null, null));
+        });
+        return this.animate(Moo.config.duration, () => this.readyState(Moo.state.ready));
+    }
+
+    setState(value) {
+        this.state = value;
+        this.elem.className = value;
+        return this;
+    }
+
+    setClassName(value) {
+        this.elem.className = value;
+        return this;
+    }
+
+    animate(interval, block) {
+        setTimeout(block, interval);
+        return this;
+    }
+
+    configureBombs(state, center, offset) {
+        if (this.debug) { debugLog([state, center, offset]); }
+        document.querySelectorAll(".moo-mine").forEach((item, index) => {
+            item.addRemClass("preparing", state == "preparing");
+            item.addRemClass("performing", state == "performing");
+            if (center) {
+                let end = Gaming.Vector.unitsByDirection[index].scaled(offset);
+                item.style.top = `${center.y + end.y}px`;
+                item.style.left = `${center.x + end.x}px`;
+            } else {
+                item.style.top = "";
+                item.style.left = "";
+            }
+        });
+        return this;
+    }
+} // end class Moo
+
+function mark__Dialogs() {} // ~~~~~~ Dialogs ~~~~~~
 
 class NewGameDialog extends GameDialog {
     constructor() {

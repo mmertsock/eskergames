@@ -139,12 +139,63 @@ analysis .rainbow-board canvas {
     height: 450px;
 }
 
-moo {
-    transition-property: left, top;
-    transition-duration: 1s;
-    font-size: 28pt;
-    display: inline-block;
+body > moo {
+    display: block;
     position: absolute;
+    left: -100px;
+    top: 20px;
+    transition-property: top, left, font-size;
+    transition-duration: 1s;
+    font-size: 14pt;
+}
+moo moo {
+    display: inline-block;
+    transform: scale(-1, 1);
+}
+
+moo span {
+    display: none;
+    position: relative;
+    top: -1em;
+    font-size: 50%;
+}
+
+moo.ready .ready { display: inline-block; }
+moo.m .m { display: inline-block; }
+moo.mo .mo { display: inline-block; }
+
+moo.ready, moo.finishing {
+    left: -100px;
+}
+moo.m {
+    left: 20px;
+    font-size: 20pt;
+}
+moo.mo {
+    left: 20px;
+    font-size: 24pt;
+}
+moo.preparing, moo.performing, moo.finishing {
+    font-size: 28pt;
+}
+
+.moo-mine {
+    transition-property: top, left, opacity;
+    transition-duration: 0.5s;
+    display: none;
+    position: fixed;
+    margin-top: -0.5em;
+    margin-left: -0.25em;
+    opacity: 1;
+    color: #990000;
+}
+.moo-mine.preparing {
+    display: block;
+    opacity: 1;
+}
+.moo-mine.performing {
+    display: block;
+    opacity: 0;
 }
 
 </style>
@@ -159,6 +210,10 @@ moo {
 </main>
 
 <footer></footer>
+
+<moo class="ready"><moo>🐄</moo><span class="ready">❌</span><span class="m">💬</span><span class="mo">💡</span></moo>
+
+<div class="moo-mine">✸</div><div class="moo-mine">✸</div><div class="moo-mine">✸</div><div class="moo-mine">✸</div><div class="moo-mine">✸</div><div class="moo-mine">✸</div><div class="moo-mine">✸</div><div class="moo-mine">✸</div>
 
 <div id="dialogs" class="hidden"></div>
 

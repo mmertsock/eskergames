@@ -179,6 +179,12 @@ analysisView:
             textColor: *AXISBORDERSTROKESTYLE
             titlePadding: *AXISLABELTITLEPADDING
   # end analysisView.historyChart
+moo:
+  thoughts: ["💬", "💬", "💭", "💭", "🐄", "🌮", "🎈", "💡"]
+  duration: 1000
+  mines:
+    duration: 500
+    spread: 50
 
 ################## STRINGS ################
 
@@ -223,7 +229,7 @@ strings:
   lostAlertButton: Bummer
   lostAlertDialogTextTemplate: "Your score: <points>"
   lostAlertTitle: You Lost
-  mooActionDescription: "🐮🐄🐮🐄🐮🐄🐮🐄🐮"
+  mooActionDescription: mooooo
   newGameButton: New
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
