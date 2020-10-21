@@ -1870,10 +1870,23 @@ class GameControlsView {
     }
 }
 
+function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
+
 class ActionDescriptionView {
     constructor(config) {
         this.session = config.session;
         this.elem = config.elem;
+    }
+
+    get welcomeMessage() {
+        let hour = new Date().getHours();
+        if (hour >= 4 && hour < 12) {
+            return Strings.str("goodMorning");
+        } else if (hour >= 12 && hour < 6) {
+            return Strings.str("goodAfternoon");
+        } else {
+            return Strings.str("goodEvening");
+        }
     }
 
     render() {
@@ -1882,7 +1895,7 @@ class ActionDescriptionView {
             description = this.session.mostRecentAction ? this.session.mostRecentAction.description : null;
         }
         if (!description) {
-            this.elem.innerHTML = "&nbsp;";
+            this.elem.innerText = this.welcomeMessage;
             return;
         }
         let change = this.session.mostRecentAction.change;
