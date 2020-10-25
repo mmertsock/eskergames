@@ -673,6 +673,8 @@ var randomTest = function() {
 
 var stringsTest = function() {
     let l10n = {
+        _debug: true,
+        _defaultRegion: "en-us",
         hello: "henlo",
         helloTemplate: "henlo, <first> x. <last> of <last>land",
         pluralsTemplate: "henlo <first>: <mineCountCleared#mineCount> and <customPlaceholder#hashtags>",
@@ -753,6 +755,64 @@ var stringsTest = function() {
         data = { first: "bugs", mineCount: { value: 3, formatted: "three" }, hashtags: { value: 1733, formatted: "1,733"}, formattedMineCount: "X", formatMyHashtags: "X"};
         this.assertEqual(String.fromTemplate(template, data), "henlo bugs: three mines cleared and created 1,733 #hashtags");
         this.assertEqual(String.fromTemplate("henlo <something>", { something: { value: 3, formatted: "three" } }), "henlo three");
+    }).build()(null, null);
+
+    new UnitTest("l10n", function() {
+        let l10n = {
+            _debug: true,
+            _defaultRegion: "en-us",
+            a: "en-a",
+            c: "en-c",
+            ta: "en-a-<value>",
+            tc: "en-c-<value>",
+            pa: "en-a/<mineCountClearedA#mineCount#formattedMineCount>",
+            pc: "en-c/<mineCountClearedC#mineCount#formattedMineCount>",
+            _es: {
+                a: "es-a",
+                b: "es-b",
+                ta: "es-a-<value>",
+                tb: "es-b-<value>",
+                pa: "es-a/<mineCountClearedA#mineCount#formattedMineCount>",
+                pb: "es-b/<mineCountClearedB#mineCount#formattedMineCount>"
+            }
+        };
+        let l10ns = {
+            mineCountClearedA: ["en-a-# mines cleared", "en-a-1 mine cleared", "en-a-# mines cleared"],
+            mineCountClearedC: ["en-c-# mines cleared", "en-c-1 mine cleared", "en-c-# mines cleared"],
+            _es: {
+                mineCountClearedA: ["es-a-# mines cleared", "es-a-1 mine cleared", "es-a-# mines cleared"],
+                mineCountClearedB: ["es-b-# mines cleared", "es-b-1 mine cleared", "es-b-# mines cleared"]
+            }
+        };
+        let obj = {
+            value: "test",
+            zero: { mineCount: 0, formattedMineCount: "no" },
+            one: { mineCount: 1, formattedMineCount: "one" },
+            two: { mineCount: 2, formattedMineCount: "2.0" }
+        };
+        Strings.initialize(l10n, l10ns);
+
+        this.assertEqual(Strings.str("a"), "en-a", "uses default language");
+        Strings.setRegion("es-us");
+        this.assertEqual(Strings.str("a"), "es-a", "uses specified language");
+        Strings.setRegion("en-us");
+        this.assertEqual(Strings.str("a"), "en-a", "uses specified language en");
+        Strings.setRegion("es-us");
+        this.assertEqual(Strings.str("b"), "es-b");
+        this.assertEqual(Strings.str("c"), "?en-c?", "fallback to default language with debug marker");
+        this.assertEqual(Strings.str("bogus"), "?bogus?", "unknown key");
+        this.assertEqual(Strings.template("ta", obj), "es-a-test");
+        this.assertEqual(Strings.template("tb", obj), "es-b-test");
+        this.assertEqual(Strings.template("tc", obj), "?en-c-test?", "template: fallback to default language with debug marker");
+        this.assertEqual(Strings.template("pa", obj.zero), "es-a/es-a-no mines cleared");
+        this.assertEqual(Strings.template("pb", obj.one), "es-b/es-b-1 mine cleared");
+        console.log("HEHEHUOHUEN UHORU OEHSNUOHU EN");
+        this.assertEqual(Strings.template("pc", obj.two), "?en-c/?en-c-2.0 mines cleared??", "plural: fallback to default language with debug marker");
+        console.log("HEHEHUOHUEN UHORU OEHSNUOHU EN");
+        Strings.setRegion("cn-us");
+        this.assertEqual(Strings.str("a"), "en-a", "unknown language, uses default language");
+        this.assertEqual(Strings.template("ta", obj), "en-a-test", "unknown language, uses default language");
+        this.assertEqual(Strings.template("pa", obj.one), "en-a/en-a-1 mine cleared");
     }).build()(null, null);
 };
 

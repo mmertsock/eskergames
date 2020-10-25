@@ -22,23 +22,52 @@ Gaming.Strings = (() => {
 
     // Text localization
     class Strings {
-        // Initialize with keys -> localized strings, e.g. from a config file
-        static initialize(dict, pluralDict) {
-            Strings.source = dict || {};
-            Strings.plurals = pluralDict || {};
-            // Gaming.debugLog(`Loaded ${Object.keys(Strings.source).length} Strings`);
+        // Initialize with keys -> localized strings, e.g. from a config file,
+        // and optionally the user's preferred region.
+        // Special keys in the first dictionary:
+        // _regionCode sub-dictionaries for l10n. For example _es: { key: value }
+        // _debug: true to add debug markers to unknown strings
+        // _defaultRegion to document the region the root/default language is implemented in
+        // _debugRegion to override the preferred region for testing specific languages
+        static initialize(dict, pluralDict, region) {
+            Strings.all = {
+                source: dict || {},
+                plurals: pluralDict || {}
+            };
+            Strings.debug = !!Strings.all.source._debug;
+            Strings.defaultRegion = Strings.all.source._defaultRegion || "??";
+            Strings.debugRegion = Strings.all.source._debugRegion || null;
+            Strings.setRegion(Strings.debugRegion || region);
+        }
+
+        // Specify a region code, e.g. "en-us"
+        // null to use default language
+        static setRegion(value) {
+            Strings.region = value || Strings.defaultRegion;
+            let key = "_" + Strings.region.split("-")[0];
+            if (Strings.all.source.hasOwnProperty(key) && Strings.all.plurals.hasOwnProperty(key)) {
+                Strings.source = Strings.all.source[key];
+                Strings.plurals = Strings.all.plurals[key];
+                if (Strings.debug) { Gaming.debugLog(`Strings: set region ${value}: using ${key}`); }
+            } else {
+                Strings.source = Strings.all.source;
+                Strings.plurals = Strings.all.plurals;
+                if (Strings.debug && value != Strings.defaultRegion) { Gaming.debugLog(`Strings: set region ${value}: ${key} not found, using default`); }
+            }
         }
 
         // id: key in Strings config data
         static str(id) {
-            return Strings.source[id] || missingStringID(id);
+            if (Strings.source.hasOwnProperty(id)) {
+                return Strings.source[id];
+            }
+            return missingString(Strings.all.source.hasOwnProperty(id) ? Strings.all.source[id] : id);
         }
 
         // id: key in Strings config data
         // data: object
         static template(id, data) {
             let template = Strings.str(id);
-            // TODO pluralize any <key#value> tokens
             return template ? String.fromTemplate(template, data) : null;
         }
 
@@ -61,14 +90,32 @@ Gaming.Strings = (() => {
         }
     }
 
-    function missingStringID(id) {
-        return `?${id}?`;
+    let sources = {
+        preferred: 0,
+        fallback: 1,
+        missing: 2
+    };
+
+    function missingString(value) {
+        return Strings.debug ? `?${value}?` : value;
     }
-    function missingPluralID(id) {
-        return [`?${id}/0?`, `?${id}/1?`, `?${id}/#?`];
-    }
+
     function pluralTemplates(id) {
-        return Gaming.Strings.plurals[id] || missingPluralID(id);
+        if (Strings.plurals.hasOwnProperty(id)) {
+            return Strings.plurals[id];
+        } else if (Strings.all.plurals.hasOwnProperty(id)) {
+            return missingPluralID(Strings.all.plurals[id]);
+        } else {
+            return missingPluralID(id);
+        }
+    }
+
+    function missingPluralID(value) {
+        if (Array.isArray(value)) {
+            return Strings.debug ? value.map(item => missingString(item)) : value;
+        } else {
+            return Strings.debug ? [`?${value}/0?`, `?${value}/1?`, `?${value}/#?`] : [`${value}/0`, `${value}/1`, `${value}/#`]
+        }
     }
 
     const _stringTemplateTokenFindRegex = /<([^>]+)>/g;

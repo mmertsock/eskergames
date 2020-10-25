@@ -2854,7 +2854,7 @@ var initialize = async function() {
         return;
     }
 
-    Gaming.Strings.initialize(content.strings, content.pluralStrings);
+    Strings.initialize(content.strings, content.pluralStrings, navigator.language);
     Game.initialize(content);
     new NewGameDialog().show();
 };

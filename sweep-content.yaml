@@ -189,13 +189,15 @@ moo:
 ################## STRINGS ################
 
 strings:
+  _defaultRegion: en-us
+  #_debugRegion: es-us
+  _debug: true
   analysisChartMoveNumberLabel: Moves
   analysisChartSeriesNameAssertMineFlagCount: Mines Flagged
   analysisChartSeriesNameScore: Score
   analysisViewChartTitle: HENLO
   analysisViewDismiss: Cool
   analysisViewTitle: Stats
-  beginNewGameButton: Begin New Game
   continuePlayingButton: Cancel
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✖️"
@@ -204,13 +206,13 @@ strings:
   errorAlertTitle: "Oh No!"
   failedToLoadGameMessage: There was a problem loading the game data.
   flagAllNeighborsActionTemplate: "<flaggedKnownMines#length#formattedLength>"
-  gameBoardDebugSummaryTemplate: "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
+  gameBoardDebugSummaryTemplate: &gameBoardDebugSummaryTemplate "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
   gameDifficultyAdvanced: Advanced
   gameDifficultyBeginner: Beginner
   gameDifficultyCustom: Custom
   gameDifficultyExpert: Expert
   gameDifficultyIntermediate: Intermediate
-  gameSettingsDifficultyLabel: "Difficulty"
+  gameSettingsDifficultyLabel: Difficulty
   gameStatusLostTemplate: "Lost! <stars> <points> pts, <progressPercent> tiles completed"
   gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
   gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCountCleared#mineCount#formattedMineCount>"
@@ -285,6 +287,63 @@ strings:
   warningAbortRevealNeighborsNoCandidates: No tiles to clear in this area
   warningAllNeighborsAlreadyFlagged: All tiles in this area are already flagged
   warningIncorrectUncoveredTileCount: "Can’t flag this area: incorrect number of covered tiles"
+  _es:
+    analysisChartMoveNumberLabel: Movimientos
+    analysisChartSeriesNameAssertMineFlagCount: Minas Marcadas
+    analysisChartSeriesNameScore: Cuenta
+    analysisViewChartTitle: HENLO
+    analysisViewDismiss: Fresco
+    analysisViewTitle: Estadisticas
+    continuePlayingButton: Cancelar
+    defaultPlayerName: "✷✷✷"
+    dialogDismissButton: "✖️"
+    difficultyChoiceLabelTemplate: "<name>"
+    errorAlertDismissButton: "Qué pena"
+    errorAlertTitle: "¡Oh No!"
+    failedToLoadGameMessage: Hubo un problema al cargar los datos del juego.
+    flagAllNeighborsActionTemplate: "<flaggedKnownMines#length#formattedLength>"
+    gameBoardDebugSummaryTemplate: *gameBoardDebugSummaryTemplate
+    gameDifficultyAdvanced: Avanzada
+    gameDifficultyBeginner: Fácil
+    gameDifficultyCustom: Personalizada
+    gameDifficultyExpert: Experta
+    gameDifficultyIntermediate: Intermedia
+    gameSettingsDifficultyLabel: Dificultad
+    gameStatusLostTemplate: "¡Perdiste! <stars> <points> pts, <progressPercent> completado"
+    gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> completado | <assertMineFlagCount>/<mineCount> minas marcadas"
+    gameStatusWonTemplate: "¡Ganaste! <stars> <points> pts, <mineCountCleared#mineCount#formattedMineCount>"
+    goodAfternoon: Buenos tardes
+    goodEvening: Buenos noches
+    goodMorning: Buenos días
+    helpDialogTitle: Ayuda
+    helpDismiss: "¡Gracias!"
+    helpKeyboardEscapePressed: "esc|: Cerrar ventanas emergentes, etc."
+    helpKeyboardNewGame: "N|: Nuevo juego"
+    helpKeyboardShowAnalysis: "#|: Mostrar estadísticas del juego"
+    helpKeyboardShowHelp: "?|: Mostrar ayuda"
+    helpKeyboardShowHighScores: "*|: Mostrar cuentas altas"
+    helpKeyboardShowHint: "!|: Obtén un consejo"
+    helpKeyboardShowNewGameDialog: "⇧ + N|: Mostrar opciones para un juego nuevo"
+    helpKeyboardSolverStep: "$|: Resolver automáticamente"
+    highScoresDialogTitle: "✷ Cuentas Altas ✷"
+    highScoresDismiss: Hecho
+    lostAlertButton: Qué pena
+    lostAlertDialogTextTemplate: "Tu Cuenta: <points>"
+    lostAlertTitle: Perdiste
+    newGameButton: Nuevo
+    newGameDialogStartButton: Comienzo
+    newGameDialogTitle: "Nuevo Juego"
+    newGameHeightInputLabelTemplate: "Altura (<min>–<max>)"
+    newGameMineCountInputLabelTemplate: "Minas (<min>–<max>)"
+    newGameMineCountPlaceholder: "# Minas"
+    newGameTileCountPlaceholder: "# Cuadrados"
+    newGameWhilePlayingPrompt: "¿Estás listo para comenzar un nuevo juego?"
+    newGameWidthInputLabelTemplate: "Anchura (<min>–<max>)"
+    oxfordCommaManyItemsSeparator: ", "
+    oxfordCommaManyItemsTemplate: "<first> y <last>"
+    oxfordCommaTwoItemsTemplate: "<first> y <last>"
+    playerNameInputTitle: Tu nombre
+    quitGameConfirmPrompt: "¿Estás seguro de que quieres salir?"
 
 # arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
 pluralStrings:
@@ -292,3 +351,9 @@ pluralStrings:
   gotPoints: ["got 0 points", "got 1 point", "got # points"]
   mineCountCleared: ["0 mines cleared", "1 mine cleared", "# mines cleared"]
   flaggedKnownMines: ["flagged 0 known mines", "flagged a known mine", "flagged # known mines"]
+  _es:
+    clearedTileCountPhrase: ["descubierto 0 cuadrados", "descubierto un cuadrado", "descubierto # cuadrados"]
+    gotPoints: ["obtuve 0 puntos", "obtuve 1 punto", "obtuve # puntos"]
+    mineCountCleared: ["0 minas despejadas", "1 mina despejada", "# minas despejadas"]
+    flaggedKnownMines: ["marcado 0 minas conocidas", "marcado una mina conocida", "marcado # minas conocidas"]
+
