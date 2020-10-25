@@ -287,6 +287,7 @@ class GameBoard {
         rect = rect ? rect.intersection(bounds) : bounds;
         for (let y = rect.y + rect.height - 1; y >= rect.y; y -= 1) {
             for (let x = rect.x; x < rect.x + rect.width; x += 1) {
+                if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.visitTiles++; }
                 let keepGoing = block(this._tiles[y][x]);
                 if (typeof(boolean) === 'boolean' && !keepGoing) {
                     return;
@@ -785,7 +786,9 @@ class GameSession {
     }
 
     renderViews() {
+        // SweepPerfTimer.startShared("renderViews");
         this.views.forEach(view => view.render());
+        SweepPerfTimer.endShared();
     }
 
     toggleDebugMode() {
@@ -808,12 +811,17 @@ class GameSession {
     // That way performAction can represent a single block of user interaction, can manage
     // state, etc.
     performAction(action) {
+        // SweepPerfTimer.startShared("performAction");
         this.moveState = MoveState.pending;
         let start = this.game.statistics;
         action.perform(this);
         this.checkForWin();
         this.pendingMove = MoveState.ready;
         this.mostRecentAction.setStatistics(start, this.game.statistics);
+        if (SweepPerfTimer.shared) {
+            SweepPerfTimer.shared.counters.action = this.mostRecentAction.description;
+        }
+        SweepPerfTimer.endShared();
         this.renderViews();
     }
 
@@ -821,7 +829,7 @@ class GameSession {
         let result = SweepAction.Result.noop;
         actions.forEach(action => {
             if (this.state == GameState.playing) {
-                debugLog(`Perform: ${action.debugDescription}`);
+                // debugLog(`Perform: ${action.debugDescription}`);
                 result = action.perform(this);
                 this.checkForWin();
             }
@@ -1421,6 +1429,7 @@ class TileCollection {
 
     applying(transform) {
         let applied = this.tiles.flatMap(tile => {
+            if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.TileCollection++; }
             let mapped = transform.map(tile, this);
             if (mapped instanceof GameTile) {
                 return mapped;
@@ -1445,6 +1454,7 @@ class TileCollection {
 
         let min = -1;
         let items = this.tiles.map(tile => {
+            if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.TileCollection++; }
             let distance = tile.coord.manhattanDistanceFrom(origin.coord).magnitude;
             min = min < 0 ? distance : Math.min(min, distance);
             return { tile: tile, distance: distance };
@@ -1466,6 +1476,7 @@ class TileCollection {
     appendDebugTiles(items) {
         if (!this.debugTiles) { this.debugTiles = []; }
         items.forEach(tile => {
+            if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.TileCollection++; }
             if (!this.debugTiles.contains(tile)) { this.debugTiles.push(tile); }
         });
     }
@@ -1475,6 +1486,7 @@ class TileTransform {
     static unique(tiles) {
         let applied = [];
         tiles.forEach(tile => {
+            if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.TileCollection++; }
             if (!applied.includes(tile)) { applied.push(tile); }
         });
         return applied;
@@ -1803,6 +1815,15 @@ class GameControlsView {
 
     newGame(prompt) {
         if (!this.session) { return debugWarn("no session"); }
+        if (Gaming.GameDialogManager.shared.currentDialog) {
+            let dialog = Gaming.GameDialogManager.shared.currentDialog;
+            if (!dialog.isModal) {
+                dialog.dismiss();
+            } else if (prompt) {
+                debugWarn("Can't show prompt");
+                return;
+            }
+        }
         if (prompt && (this.session.state == GameState.playing && this.session.hasMoved)) {
             new AlertDialog({
                 title: Strings.str("newGameDialogTitle"),
@@ -1882,7 +1903,7 @@ class ActionDescriptionView {
         let hour = new Date().getHours();
         if (hour >= 4 && hour < 12) {
             return Strings.str("goodMorning");
-        } else if (hour >= 12 && hour < 6) {
+        } else if (hour >= 12 && hour < 18) {
             return Strings.str("goodAfternoon");
         } else {
             return Strings.str("goodEvening");
@@ -2588,7 +2609,7 @@ class SaveHighScoreDialog extends GameDialog {
         this.contentElem.append(formElem);
     }
 
-    get isModal() { return true; }
+    get isModal() { return this.isEnabled; }
     get title() { return Strings.str("saveHighScoreDialogTitle"); }
 
     get dialogButtons() {
@@ -2846,6 +2867,30 @@ class HighScoresDialog extends GameDialog {
     get title() { return Strings.str("highScoresDialogTitle"); }
     get dialogButtons() { return [this.x.elem]; }
 } // end class HighScoresDialog
+
+class SweepPerfTimer extends Gaming.PerfTimer {
+    static startShared(name) {
+        SweepPerfTimer.shared = new SweepPerfTimer(name).start();
+    }
+    static endShared() {
+        if (!SweepPerfTimer.shared) { return; }
+        SweepPerfTimer.shared.end();
+        // SweepPerfTimer.shared.counters = Object.assign(SweepPerfTimer.shared.counters, SweepPerfTimer.shared.summaryInfo);
+        Gaming.debugInfo(SweepPerfTimer.shared.summary);
+        Gaming.debugInfo(SweepPerfTimer.shared.counters);
+        SweepPerfTimer.shared = null;
+    }
+
+    constructor(name) {
+        super(name);
+        this.counters = {
+            visitTiles: 0,
+            visitNeighbors: 0,
+            TileCollection: 0
+        };
+    }
+}
+SweepPerfTimer.shared = null;
 
 var initialize = async function() {
     let content = await GameContent.loadYamlFromLocalFile("sweep-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);

@@ -190,7 +190,7 @@ moo:
 
 strings:
   _defaultRegion: en-us
-  #_debugRegion: es-us
+  # _debugRegion: es-us
   _debug: true
   analysisChartMoveNumberLabel: Moves
   analysisChartSeriesNameAssertMineFlagCount: Mines Flagged
@@ -205,7 +205,7 @@ strings:
   errorAlertDismissButton: Bummer
   errorAlertTitle: "Oh No!"
   failedToLoadGameMessage: There was a problem loading the game data.
-  flagAllNeighborsActionTemplate: "<flaggedKnownMines#length#formattedLength>"
+  flagAllNeighborsActionTemplate: &flagAllNeighborsActionTemplate "<flaggedKnownMines#length#formattedLength>"
   gameBoardDebugSummaryTemplate: &gameBoardDebugSummaryTemplate "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
   gameDifficultyAdvanced: Advanced
   gameDifficultyBeginner: Beginner
@@ -249,8 +249,8 @@ strings:
   oxfordCommaTwoItemsTemplate: "<first> and <last>"
   playerNameInputTitle: "Your Name"
   quitGameConfirmPrompt: "Are you sure you want to quit?"
-  recentActionClearedTileCountToken: "<clearedTileCountPhrase#clearedTileCount#formattedClearedTileCount>"
-  recentActionPointsWonToken: "<gotPoints#points#formattedPoints>"
+  recentActionClearedTileCountToken: &recentActionClearedTileCountToken "<clearedTileCountPhrase#clearedTileCount#formattedClearedTileCount>"
+  recentActionPointsWonToken: &recentActionPointsWonToken "<gotPoints#points#formattedPoints>"
   recentActionWithChangesTemplate: "<description>: <list>"
   revealSingleTileActionDescription: Revealed a tile
   revealTrustingFlagsActionDescription: Revealed unflagged tiles
@@ -290,7 +290,7 @@ strings:
   _es:
     analysisChartMoveNumberLabel: Movimientos
     analysisChartSeriesNameAssertMineFlagCount: Minas Marcadas
-    analysisChartSeriesNameScore: Cuenta
+    analysisChartSeriesNameScore: Puntaje
     analysisViewChartTitle: HENLO
     analysisViewDismiss: Fresco
     analysisViewTitle: Estadisticas
@@ -301,7 +301,7 @@ strings:
     errorAlertDismissButton: "Qué pena"
     errorAlertTitle: "¡Oh No!"
     failedToLoadGameMessage: Hubo un problema al cargar los datos del juego.
-    flagAllNeighborsActionTemplate: "<flaggedKnownMines#length#formattedLength>"
+    flagAllNeighborsActionTemplate: *flagAllNeighborsActionTemplate
     gameBoardDebugSummaryTemplate: *gameBoardDebugSummaryTemplate
     gameDifficultyAdvanced: Avanzada
     gameDifficultyBeginner: Fácil
@@ -321,14 +321,14 @@ strings:
     helpKeyboardNewGame: "N|: Nuevo juego"
     helpKeyboardShowAnalysis: "#|: Mostrar estadísticas del juego"
     helpKeyboardShowHelp: "?|: Mostrar ayuda"
-    helpKeyboardShowHighScores: "*|: Mostrar cuentas altas"
+    helpKeyboardShowHighScores: "*|: Mostrar puntajes altos"
     helpKeyboardShowHint: "!|: Obtén un consejo"
     helpKeyboardShowNewGameDialog: "⇧ + N|: Mostrar opciones para un juego nuevo"
     helpKeyboardSolverStep: "$|: Resolver automáticamente"
-    highScoresDialogTitle: "✷ Cuentas Altas ✷"
+    highScoresDialogTitle: "✷ Puntajes Altos ✷"
     highScoresDismiss: Hecho
     lostAlertButton: Qué pena
-    lostAlertDialogTextTemplate: "Tu Cuenta: <points>"
+    lostAlertDialogTextTemplate: "Tu Puntaje: <points>"
     lostAlertTitle: Perdiste
     newGameButton: Nuevo
     newGameDialogStartButton: Comienzo
@@ -344,6 +344,16 @@ strings:
     oxfordCommaTwoItemsTemplate: "<first> y <last>"
     playerNameInputTitle: Tu nombre
     quitGameConfirmPrompt: "¿Estás seguro de que quieres salir?"
+    recentActionClearedTileCountToken: *recentActionClearedTileCountToken
+    recentActionPointsWonToken: *recentActionPointsWonToken
+    recentActionWithChangesTemplate: "<description>: <list>"
+    revealSingleTileActionDescription: Descubriste un cuadrado
+    revealTrustingFlagsActionDescription: Descubriste cuadrados sin marcar
+    saveHighScoreButton: Guardar
+    saveHighScoreDialogTextTemplate: "Tu puntaje: <points>"
+    saveHighScoreDialogTitle: "¡Tu Ganaste!"
+    saveHighScoreDisabledButton: OK
+    saveHighScoreDisabledDialogTextTemplate: "Tu puntaje: <points>. Pero no puede guardar su puntaje alto porque recibió ayuda."
 
 # arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
 pluralStrings:

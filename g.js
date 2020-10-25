@@ -15,6 +15,13 @@ function debugLog(msg) {
         console.log(msg);
     }
 }
+function debugInfo(msg) {
+    if (typeof(self.workerScope) == 'string' && typeof(msg) == 'string') {
+        console.info(msg, self.workerScope);
+    } else {
+        console.info(msg);
+    }
+}
 function debugWarn(msg, trace) {
     console.warn(msg);
     if (trace) { console.trace(); }
@@ -2964,6 +2971,7 @@ Prompt.prototype.dismiss = function(action, button) {
 return {
     alias: alias,
     debugLog: debugLog,
+    debugInfo: debugInfo,
     debugWarn: debugWarn,
     once: once,
     deserializeAssert: deserializeAssert,
