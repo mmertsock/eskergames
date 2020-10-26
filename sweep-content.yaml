@@ -200,7 +200,7 @@ strings:
   analysisViewTitle: Stats
   continuePlayingButton: Cancel
   defaultPlayerName: "✷✷✷"
-  dialogDismissButton: "✖️"
+  dialogDismissButton: "✕"
   difficultyChoiceLabelTemplate: "<name>"
   errorAlertDismissButton: Bummer
   errorAlertTitle: "Oh No!"
@@ -296,7 +296,7 @@ strings:
     analysisViewTitle: Estadisticas
     continuePlayingButton: Cancelar
     defaultPlayerName: "✷✷✷"
-    dialogDismissButton: "✖️"
+    dialogDismissButton: "✕"
     difficultyChoiceLabelTemplate: "<name>"
     errorAlertDismissButton: "Qué pena"
     errorAlertTitle: "¡Oh No!"

@@ -17,6 +17,72 @@
     <link rel="stylesheet" href="city.css">
 <style type="text/css">
 
+:root {
+    color-scheme: light dark;
+    --main-text-color: hsl(0, 0%, 0%);
+    --background-color-main: hsl(0, 0%, 100%);
+    --background-color-2: hsl(0, 0%, 100%);
+    --background-color-3: hsl(0, 0%, 95%);
+    --background-color-bar: hsl(0, 0%, 75%);
+    --background-color-selected: hsl(120, 50%, 75%);
+    --background-color-input-custom: hsl(0, 0%, 100%);
+    --border-color-main: hsl(0, 0%, 0%);
+    --border-color-2: hsl(0, 0%, 0%);
+    --border-color-3: hsl(0, 0%, 60%);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --main-text-color: hsl(0, 0%, 98%);
+        --background-color-main: hsl(0, 0%, 7%);
+        --background-color-2: hsl(0, 0%, 20%);
+        --background-color-3: hsl(0, 0%, 35%);
+        --background-color-bar: hsl(0, 0%, 35%);
+        --background-color-selected: hsl(120, 75%, 25%);
+        --background-color-input-custom: hsl(0, 0%, 12%);
+        --border-color-main: hsl(0, 0%, 93%);
+        --border-color-2: hsl(0, 0%, 35%);
+        --border-color-3: hsl(0, 0%, 60%);
+    }
+}
+
+/* system, and default overrides */
+
+body {
+    color: var(--main-text-color);
+    background-color: var(--background-color-main);
+}
+
+a.tool:link, a.tool:visited, a.tool:active, a.tool:hover {
+    color: var(--main-text-color);
+}
+
+a.tool.selected {
+    background-color: var(--background-color-selected);
+}
+
+input {
+    color: var(--main-text-color);
+    background-color: var(--background-color-input-custom);
+    background-color: -webkit-control-background;
+}
+
+dialog {
+    background-color: var(--background-color-2);
+    border-color: var(--border-color-2);
+}
+
+dialog header, dialog > nav {
+    background-color: var(--background-color-bar);
+}
+
+dialog header a.tool span {
+    line-height: 7pt;
+    font-size: 10pt;
+}
+
+/* sweep layout */
+
 header controls {
     margin-top: 0.75em;
     background-color: transparent;
@@ -29,6 +95,11 @@ header row {
 
 header a.tool {
     margin: 0 0.75em;
+}
+
+body > header a.tool {
+    border-radius: 2px;
+    padding: 0 2px;
 }
 
 main {
@@ -65,8 +136,8 @@ dialog content help ul {
 help li kbd {
     padding: 0 2pt;
     border-radius: 2pt;
-    border: 1px solid #999999;
-    background-color: #f3f3f3;
+    border: 1px solid var(--border-color-3);
+    background-color: var(--background-color-3);
 }
 
 highScores controls {
