@@ -360,10 +360,10 @@ pluralStrings:
   clearedTileCountPhrase: ["cleared 0 tiles", "cleared a tile", "cleared # tiles"]
   gotPoints: ["got 0 points", "got 1 point", "got # points"]
   mineCountCleared: ["0 mines cleared", "1 mine cleared", "# mines cleared"]
-  flaggedKnownMines: ["flagged 0 known mines", "flagged a known mine", "flagged # known mines"]
+  flaggedKnownMines: ["Flagged 0 known mines", "Flagged a known mine", "Flagged # known mines"]
   _es:
     clearedTileCountPhrase: ["descubierto 0 cuadrados", "descubierto un cuadrado", "descubierto # cuadrados"]
     gotPoints: ["obtuve 0 puntos", "obtuve 1 punto", "obtuve # puntos"]
     mineCountCleared: ["0 minas despejadas", "1 mina despejada", "# minas despejadas"]
-    flaggedKnownMines: ["marcado 0 minas conocidas", "marcado una mina conocida", "marcado # minas conocidas"]
+    flaggedKnownMines: ["Marcado 0 minas conocidas", "Marcado una mina conocida", "Marcado # minas conocidas"]
 

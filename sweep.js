@@ -232,7 +232,10 @@ class GameTile {
     }
 
     visitNeighbors(block) {
-        this._neighbors.forEach(neighbor => block(neighbor, this));
+        this._neighbors.forEach(neighbor => {
+            if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.visitNeighbors++; }
+            block(neighbor, this)
+        });
     }
 } // end class GameTile
 
@@ -307,6 +310,9 @@ class GameBoard {
         let mineTiles = candidates.slice(0, this.mineCount);
         mineTiles.forEach(tile => { tile.isMined = true; })
         this.visitTiles(null, tile => { tile._boardConstructed(); });
+        if (SweepPerfTimer.shared) {
+            SweepPerfTimer.shared.counters.visitTiles += (3 * this._allTiles.length) + mineTiles.length;
+        }
         debugLog(Game.debugSummary(this));
     }
 } // end class GameBoard
