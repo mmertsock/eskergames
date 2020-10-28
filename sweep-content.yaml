@@ -2,7 +2,6 @@
 ################ GAME RULES ###############
 
 rules:
-  allowDebugMode: false
   solverDebugMode: false
   difficulties:
     - name: gameDifficultyBeginner

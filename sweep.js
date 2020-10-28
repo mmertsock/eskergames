@@ -324,6 +324,7 @@ class Game {
             content.rules.difficulties.forEach( difficulty => { difficulty.name = Strings.str(difficulty.name); });
         }
         Game.content = content;
+        Game.content.rules.allowDebugMode = Game.content.rules.allowDebugMode || (self.location ? (self.location.hostname == "localhost") : false);
         GameBoardView.initialize(content.gameBoardView);
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
@@ -966,6 +967,22 @@ class GameSession {
             message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.game.statistics)),
             buttons: [{ title: Strings.str("lostAlertButton") }]
         }).show();
+    }
+
+    undoLoss() {
+        if (this.state != GameState.lost) { return; }
+        let collection = TileCollection.allTiles(this)
+            .applying(new RevealedTilesFilter())
+            .applying(new MineFilter(true));
+        collection.tiles.forEach(tile => {
+            tile.setFlag(TileFlag.assertMine, this.history.moveNumber);
+            tile._covered = true;
+            tile.rainbow.cleared = -1;
+        });
+        this.state = GameState.playing;
+        this.endTime = null;
+        this.isClean = false;
+        this.renderViews();
     }
 
     checkForWin() {
