@@ -140,6 +140,24 @@ help li kbd {
     background-color: var(--background-color-3);
 }
 
+dialog content shareGame p {
+    max-width: 288pt;
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+}
+
+shareGame div {
+    text-align: center;
+}
+
+shareGame pre {
+    display: inline-block;
+    margin: 1em;
+    text-align: left;
+    font-size: 8pt;
+}
+
 highScores controls {
     background-color: transparent;
 }
@@ -315,6 +333,11 @@ moo.preparing, moo.performing, moo.finishing {
     <ul class="shortcuts"></ul>
     <p title="%> moo ⏎">🐄</p>
 </help>
+
+<shareGame class="hidden">
+    <p>instructions</p>
+    <div><pre></pre></div>
+</shareGame>
 
 <highScores class="hidden">
     <div class="difficulties"><controls><row></row></controls></div>

@@ -261,6 +261,11 @@ strings:
   setFlagAssertMineActionDescription: Marked a mine
   setFlagMaybeMineActionDescription: Marked a possible mine
   setFlagNoneActionDescription: Cleared a mine marker
+  shareButton: Share
+  shareDialogDismiss: Done
+  shareDialogInstructions: "Copy and share/save the code below. To use it, go to Options, select Import, and paste the code."
+  shareDialogTitle: Share
+  shareGameBoardCodeTemplate: "-- Try this Sweep game: <width>x<height>, <mineCount#mineCount#formattedMineCount>, <starCount>/<maxStarCount> difficulty --\n<data>"
   showAnalysisButton: Stats
   showHelpButton: "Help"
   showHighScoresButton: "High Scores"
@@ -358,11 +363,13 @@ strings:
 pluralStrings:
   clearedTileCountPhrase: ["cleared 0 tiles", "cleared a tile", "cleared # tiles"]
   gotPoints: ["got 0 points", "got 1 point", "got # points"]
+  mineCount: ["0 mines", "1 mine", "# mines"]
   mineCountCleared: ["0 mines cleared", "1 mine cleared", "# mines cleared"]
   flaggedKnownMines: ["Flagged 0 known mines", "Flagged a known mine", "Flagged # known mines"]
   _es:
     clearedTileCountPhrase: ["descubierto 0 cuadrados", "descubierto un cuadrado", "descubierto # cuadrados"]
     gotPoints: ["obtuve 0 puntos", "obtuve 1 punto", "obtuve # puntos"]
+    mineCount: ["0 minas", "1 mina", "# minas"]
     mineCountCleared: ["0 minas despejadas", "1 mina despejada", "# minas despejadas"]
     flaggedKnownMines: ["Marcado 0 minas conocidas", "Marcado una mina conocida", "Marcado # minas conocidas"]
 

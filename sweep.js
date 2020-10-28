@@ -280,6 +280,22 @@ class GameBoard {
         };
     }
 
+    // returns [[width, height, mineCount, preserveGameState, checksum], [tile, tile, ...]]
+    objectForSharing(preserveGameState) {
+        let bits = new Gaming.BoolArray(this._allTiles.length);
+        this._allTiles.forEach((tile, index) => {
+            if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.visitTiles++; }
+            bits.setValue(index, tile.isMined);
+        });
+        let data = [];
+        for (let i = 0; i < bits.array.length; i += 1) {
+            data.push(bits.getByte(i));
+        }
+        let checksum = Gaming.hashArrayOfInts(data);
+        let header = [this.size.width, this.size.height, this.mineCount, preserveGameState ? 1 : 0, checksum];
+        return [header, data];
+    }
+
     tileAtCoord(coord) {
         let row = this._tiles[coord.y];
         return row ? row[coord.x] : null;
@@ -325,6 +341,7 @@ class Game {
         }
         Game.content = content;
         Game.content.rules.allowDebugMode = Game.content.rules.allowDebugMode || (self.location ? (self.location.hostname == "localhost") : false);
+        Game.content.rules.maxStarCount = Game.content.rules.highScoreThresholds.length + 1;
         GameBoardView.initialize(content.gameBoardView);
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
@@ -386,6 +403,14 @@ class Game {
         };
     }
 
+    objectForSharing(preserveGameState) {
+        return {
+            difficulty: this.difficulty.index,
+            preserveGameState: preserveGameState,
+            board: this.board.objectForSharing(preserveGameState)
+        };
+    }
+
     get mineCount() { return this.board.mineCount; }
 
     get statistics() {
@@ -409,7 +434,7 @@ class Game {
         stats.progress = Game.progress(stats.clearedTileCount, stats.assertMineFlagCount, stats.totalTileCount);
         stats.progressPercent = Number.uiFormatWithPercent(Math.floor(100 * stats.progress));
         stats.starCount = Game.starCount(stats);
-        stats.stars = Strings.str(`stars${stats.starCount}`);
+        stats.stars = Game.formatStars(stats.starCount);
         return stats;
     }
 
@@ -419,12 +444,20 @@ class Game {
 
     static formatStatistics(statistics) {
         let data = Object.assign({}, statistics);
+        if (data.difficulty) {
+            data.width = Game.integerFormatObject(data.difficulty.width);
+            data.height = Game.integerFormatObject(data.difficulty.height);
+        }
         data.mineCount = Game.integerFormatObject(data.mineCount);
         data.totalTileCount = Game.integerFormatObject(data.totalTileCount);
         data.assertMineFlagCount = Game.integerFormatObject(data.assertMineFlagCount);
         data.clearedTileCount = Game.integerFormatObject(data.clearedTileCount);
         data.starCount = Game.integerFormatObject(data.starCount);
         return data;
+    }
+
+    static formatStars(starCount) {
+        return Strings.str(`stars${starCount}`);
     }
 } // end class Game
 Game.schemaVersion = 1;
@@ -1013,6 +1046,20 @@ GameSession.revealBehaviors = {
     assertFlag: 2
 };
 // end class GameSession
+
+class Sharing {
+    static gameBoardObject(session, preserveGameState) {
+        if (!session || !session.game) { return null; }
+        return {
+            v: Game.schemaVersion,
+            type: Sharing.type.board,
+            data: session.game.objectForSharing(preserveGameState)
+        };
+    }
+}
+Sharing.type = {
+    board: "board"
+};
 
 function mark__Actions() {} // ~~~~~~ Actions ~~~~~~
 
@@ -1804,6 +1851,11 @@ class GameControlsView {
             title: Strings.str("toggleRainbowButton"),
             click: () => this.toggleRainbowMode()
         });
+        this.shareButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("shareButton"),
+            click: () => this.shareGame()
+        });
 
         if (Game.rules().allowDebugMode) {
             this.debugModeButton = new ToolButton({
@@ -1907,6 +1959,12 @@ class GameControlsView {
 
     toggleRainbowMode() {
         if (this.session) { this.session.toggleRainbowMode(); }
+    }
+
+    shareGame() {
+        if (this.session) {
+            new ShareDialog(this.session).show();
+        }
     }
 
     toggleDebugMode() {
@@ -2598,6 +2656,36 @@ class AlertDialog extends GameDialog {
     }
 }
 
+class ShareDialog extends GameDialog {
+    constructor(session) {
+        super();
+        this.contentElem = GameDialog.createContentElem();
+        let elem = document.querySelector("body > shareGame")
+            .cloneNode(true).addRemClass("hidden", false);
+        elem.querySelector("p").innerText = Strings.str("shareDialogInstructions");
+        
+        let data = Sharing.gameBoardObject(session);
+        let stats = Object.assign({}, Game.formatStatistics(session.game.statistics), {
+            data: JSON.prettyStringify(data, 64, session.debugMode),
+            maxStarCount: Game.rules().maxStarCount
+        });
+        elem.querySelector("pre").innerText = Strings.template("shareGameBoardCodeTemplate", stats);
+
+        this.contentElem.append(elem);
+        this.x = new ToolButton({
+            title: Strings.str("shareDialogDismiss"),
+            click: () => this.dismiss()
+        });
+    }
+
+    get isModal() { return false; }
+    get title() { return Strings.str("shareDialogTitle"); }
+
+    get dialogButtons() {
+        return [this.x.elem];
+    }
+}
+
 class SaveHighScoreDialog extends GameDialog {
     constructor(session) {
         super();
@@ -2879,7 +2967,7 @@ class HighScoresDialog extends GameDialog {
                 item.querySelector("name").innerText = highScore.playerName;
                 item.querySelector("date").innerText = new Date(highScore.timestamp).toLocaleDateString("default", { dateStyle: "short" });
                 item.querySelector("points").innerText = highScore.points;
-                item.querySelector("stars").innerText = Strings.str(`stars${Game.starCount(highScore)}`);
+                item.querySelector("stars").innerText = Game.formatStars(Game.starCount(highScore));
                 highScores.append(item);
             });
             return highScores;

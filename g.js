@@ -194,6 +194,15 @@ Array.prototype.randomItem = function() {
     return this[Math.floor(Math.random() * this.length)];
 };
 
+JSON.prettyStringify = function(object, width, disableBase64) {
+    let base64 = disableBase64 ? JSON.stringify(object) : btoa(JSON.stringify(object)).replaceAll("=", "");
+    let text = "";
+    for (let i = 0; i <= base64.length; i += width) {
+        text = (i > 0 ? text + "\n" : text) + base64.slice(i, i + width);
+    }
+    return text;
+};
+
 self.isWorkerScope = (typeof(DedicatedWorkerGlobalScope) == 'function');
 
 if (!self.isWorkerScope) { // DOM objects, etc., unavailable to Worker scope
@@ -2976,6 +2985,7 @@ return {
     once: once,
     deserializeAssert: deserializeAssert,
     directions: directions,
+    hashArrayOfInts: hashArrayOfInts,
     Binding: Binding,
     BoolArray: BoolArray,
     CanvasStack: CanvasStack,
