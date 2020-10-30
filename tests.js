@@ -566,6 +566,27 @@ var boolArrayTest = function() {
         this.assertFalse(sut.getValue(5), "5 after randomize");
         this.assertTrue(sut.getValue(6), "6 after randomize");
     }).buildAndRun();
+
+    new UnitTest("BoolArray.objectForSerialization", function() {
+        let sut = new BoolArray(27);
+        sut.setValue(0, true);
+        sut.setValue(1, true);
+        sut.setValue(11, true);
+        sut.setValue(26, true);
+        let bytes = sut.objectForSerialization;
+        this.assertTrue(Array.isArray(bytes));
+        this.assertEqual(bytes.length, 5);
+        this.assertEqual(bytes[0], 27);
+        this.assertEqual(bytes[1], 3);
+        this.assertEqual(bytes[2], 8);
+        this.assertEqual(bytes[3], 0);
+        this.assertEqual(bytes[4], 4);
+        let other = new BoolArray(bytes);
+        this.assertEqual(sut.length, 27);
+        for (let i = 0; i < 27; i += 1) {
+            this.assertEqual(other.getValue(i), sut.getValue(i), i);
+        }
+    }).buildAndRun();
 }
 
 var circularArrayTest = function() {
@@ -687,8 +708,9 @@ var stringsTest = function() {
     Strings.initialize(l10n, l10ns);
 
     new UnitTest("Strings.str", function() {
-        this.assertEqual(Strings.str("bogus"), "?bogus?");
         this.assertEqual(Strings.str("hello"), "henlo");
+        this.assertEqual(Strings.str("bogus"), "?bogus?");
+        this.assertEqual(Strings.str("bogus", "fallback"), "fallback");
     }).build()(null, null);
 
     new UnitTest("Strings.template", function() {
@@ -2200,10 +2222,10 @@ let standardSuite = new TestSession([
 ]);
 
 let taskSuite = new TestSession([
-    stringsTest
+    boolArrayTest
     ]);
 
-TestSession.current = taskSuite;
+TestSession.current = standardSuite;
 // TestSession.current = new TestSession([randomBlobTest]);
 
 return TestSession.current;

@@ -9,7 +9,7 @@ body {
     background-color: hsl(0, 0%, 100%);
 }
 
-.hidden {
+.hidden, gameForm label.textAreaInput.hidden {
     display: none;
 }
 
@@ -331,11 +331,19 @@ gameForm label {
 gameForm label.textInput span { display: flex; }
 gameForm label.textInput input { display: flex; flex-grow: 1; }
 
+gameForm label.textAreaInput { display: block; }
+gameForm label.textAreaInput span { display: block; }
+gameForm label.textAreaInput textarea {
+    display: block;
+    width: calc(100% - 2em);
+    margin: 2pt auto 4pt auto;
+}
+
 gameForm label, gameForm div.singleChoiceInput {
     margin: 2pt 0;
 }
 
-gameForm label.textInput span:after { content: ":"; }
+gameForm label.textInput, label.textAreaInput span:after { content: ":"; }
 gameForm label.textInput span { padding-right: 3pt; }
 gameForm label.singleChoiceInput span { padding-left: 3pt; }
 

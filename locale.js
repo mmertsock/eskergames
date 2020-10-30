@@ -57,17 +57,20 @@ Gaming.Strings = (() => {
         }
 
         // id: key in Strings config data
-        static str(id) {
+        static str(id, fallback) {
             if (Strings.source.hasOwnProperty(id)) {
                 return Strings.source[id];
+            }
+            if (typeof(fallback) != 'undefined') {
+                return fallback;
             }
             return missingString(Strings.all.source.hasOwnProperty(id) ? Strings.all.source[id] : id);
         }
 
         // id: key in Strings config data
         // data: object
-        static template(id, data) {
-            let template = Strings.str(id);
+        static template(id, data, fallback) {
+            let template = Strings.str(id, fallback);
             return template ? String.fromTemplate(template, data) : null;
         }
 

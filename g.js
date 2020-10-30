@@ -887,10 +887,22 @@ class RandomLineGeneratorOLD {
 }
 
 class BoolArray {
-    constructor(length) {
-        this.length = length;
-        this.array = new Int8Array(Math.ceil(length / 8));
+    constructor(obj) {
+        if (Array.isArray(obj)) {
+            this.length = obj.shift() || 0;
+        } else {
+            this.length = obj;
+        }
+        this.array = new Int8Array(Math.ceil(this.length / 8));
         this.view = new DataView(this.array.buffer, 0, this.array.length);
+        if (Array.isArray(obj)) {
+            if (obj.length != this.array.length) {
+                throw new Error("BoolArray.dzObjInvalidLength");
+            }
+            obj.forEach((byte, index) => {
+                this.view.setUint8(index, byte);
+            });
+        }
     }
     getValue(index) {
         var byte = this.view.getUint8(this._arrayIndex(index));
@@ -906,6 +918,14 @@ class BoolArray {
 
     getByte(index) {
         return this.view.getUint8(index);
+    }
+
+    get objectForSerialization() {
+        let data = [this.length];
+        for (let i = 0; i < this.array.length; i += 1) {
+            data.push(this.getByte(i));
+        }
+        return data;
     }
 
     get debugDescription() {
@@ -2558,7 +2578,7 @@ class InputView extends FormValueView {
 
     constructor(config, elem) {
         super(config, elem);
-        this.valueElem = this.elem.querySelector("input");
+        this.valueElem = this.elem.querySelector("input") || this.elem.querySelector("textarea");
         this.transform = config.transform;
         if (config.binding) {
             this.binding = new Binding({ source: config.binding.source, target: this, sourceFormatter: config.binding.sourceFormatter });
@@ -2615,6 +2635,19 @@ class TextInputView extends InputView {
         input.type = "text";
         input.placeholder = config.placeholder || "";
         elem.append(input);
+        return elem;
+    }
+
+    static createTextAreaElement(config) {
+        let elem = document.createElement("label").addRemClass("textAreaInput", true);
+        if (config.title) {
+            let title = document.createElement("span");
+            title.innerText = config.title;
+            elem.append(title);
+        }
+        let textarea = document.createElement("textarea");
+        textarea.placeholder = config.placeholder || "";
+        elem.append(textarea);
         return elem;
     }
 
