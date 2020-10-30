@@ -20,6 +20,7 @@
 :root {
     color-scheme: light dark;
     --main-text-color: hsl(0, 0%, 0%);
+    --warning-text-color: hsl(0, 50%, 40%);
     --background-color-main: hsl(0, 0%, 100%);
     --background-color-2: hsl(0, 0%, 100%);
     --background-color-3: hsl(0, 0%, 95%);
@@ -34,6 +35,7 @@
 @media (prefers-color-scheme: dark) {
     :root {
         --main-text-color: hsl(0, 0%, 98%);
+        --warning-text-color: hsl(0, 50%, 55%);
         --background-color-main: hsl(0, 0%, 7%);
         --background-color-2: hsl(0, 0%, 20%);
         --background-color-3: hsl(0, 0%, 35%);
@@ -124,6 +126,10 @@ footer, message {
     margin: 0.5em;
 }
 
+.result.invalid {
+    color: var(--warning-text-color);
+}
+
 textarea {
     height: 2.5em;
 }
@@ -198,11 +204,21 @@ p.message {
     text-align: center;
 }
 
-dialog.prompt > nav {
+dialog.prompt > nav, dialog.newGame > nav {
     justify-content: space-between;
 }
 dialog.prompt.buttons-1 > nav {
     justify-content: flex-end;
+}
+
+dialog.newGame {
+    min-width: 15em;
+}
+
+dialog.newGame > nav label {
+    padding: 2px 4px;
+    font-size: 10pt;
+    line-height: 10pt;
 }
 
 dialog.analysis {
@@ -211,7 +227,7 @@ dialog.analysis {
 
 analysis {
     display: block;
-    padding: 0.;
+    padding: 0;
 }
 
 analysis .history-chart, analysis .rainbow-board {

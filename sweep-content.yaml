@@ -204,14 +204,15 @@ strings:
   errorAlertDismissButton: Bummer
   errorAlertTitle: "Oh No!"
   failedToLoadGameMessage: There was a problem loading the game data.
+  failedToParseGame: "Invalid game code :("
   flagAllNeighborsActionTemplate: &flagAllNeighborsActionTemplate "<flaggedKnownMines#length#formattedLength>"
   gameBoardDebugSummaryTemplate: &gameBoardDebugSummaryTemplate "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
   gameDifficultyAdvanced: Advanced
   gameDifficultyBeginner: Beginner
   gameDifficultyCustom: Custom
   gameDifficultyExpert: Expert
+  gameDifficultyImport: Import Code
   gameDifficultyIntermediate: Intermediate
-  gameSettingsDifficultyLabel: Difficulty
   gameStatusLostTemplate: "Lost! <stars> <points> pts, <progressPercent> tiles completed"
   gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> tiles complete | <assertMineFlagCount>/<mineCount> mines flagged"
   gameStatusWonTemplate: "Won! <stars> <points> pts, <mineCountCleared#mineCount#formattedMineCount>"
@@ -230,6 +231,9 @@ strings:
   helpKeyboardSolverStep: "$|: Auto-solve"
   highScoresDialogTitle: "✷ High Scores ✷"
   highScoresDismiss: "Done"
+  importCodeTitle: Code
+  importCodePlaceholder: Paste game code here
+  importCodeValidMessage: "Game code recognized!"
   lostAlertButton: Bummer
   lostAlertDialogTextTemplate: "Your score: <points>"
   lostAlertTitle: You Lost
@@ -258,6 +262,7 @@ strings:
   saveHighScoreDialogTitle: "You Won!"
   saveHighScoreDisabledButton: OK
   saveHighScoreDisabledDialogTextTemplate: "Your score: <points>. But you can’t save your high score because you got help."
+  schemaVersionUnsupported: Unsupported game version
   setFlagAssertMineActionDescription: Marked a mine
   setFlagMaybeMineActionDescription: Marked a possible mine
   setFlagNoneActionDescription: Cleared a mine marker
@@ -312,7 +317,6 @@ strings:
     gameDifficultyCustom: Personalizada
     gameDifficultyExpert: Experta
     gameDifficultyIntermediate: Intermedia
-    gameSettingsDifficultyLabel: Dificultad
     gameStatusLostTemplate: "¡Perdiste! <stars> <points> pts, <progressPercent> completado"
     gameStatusPlayingTemplate: "<stars> <points> pts | <progressPercent> completado | <assertMineFlagCount>/<mineCount> minas marcadas"
     gameStatusWonTemplate: "¡Ganaste! <stars> <points> pts, <mineCountCleared#mineCount#formattedMineCount>"

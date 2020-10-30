@@ -280,22 +280,6 @@ class GameBoard {
         };
     }
 
-    // returns [[width, height, mineCount, preserveGameState, checksum], [tile, tile, ...]]
-    objectForSharing(preserveGameState) {
-        let bits = new Gaming.BoolArray(this._allTiles.length);
-        this._allTiles.forEach((tile, index) => {
-            if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.visitTiles++; }
-            bits.setValue(index, tile.isMined);
-        });
-        let data = [];
-        for (let i = 0; i < bits.array.length; i += 1) {
-            data.push(bits.getByte(i));
-        }
-        let checksum = Gaming.hashArrayOfInts(data);
-        let header = [this.size.width, this.size.height, this.mineCount, preserveGameState ? 1 : 0, checksum];
-        return [header, data];
-    }
-
     tileAtCoord(coord) {
         let row = this._tiles[coord.y];
         return row ? row[coord.x] : null;
@@ -392,7 +376,7 @@ class Game {
 
     constructor(config) {
         this.difficulty = config.difficulty;
-        this.board = new GameBoard({ size: config.difficulty, mineCount: config.difficulty.mineCount });
+        this.board = config.board || new GameBoard({ size: config.difficulty, mineCount: config.difficulty.mineCount });
     }
 
     get objectForSerialization() {
@@ -400,14 +384,6 @@ class Game {
             difficulty: this.difficulty,
             board: this.board.compactSerialized,
             statistics: this.statistics
-        };
-    }
-
-    objectForSharing(preserveGameState) {
-        return {
-            difficulty: this.difficulty.index,
-            preserveGameState: preserveGameState,
-            board: this.board.objectForSharing(preserveGameState)
         };
     }
 
@@ -1047,7 +1023,13 @@ GameSession.revealBehaviors = {
 };
 // end class GameSession
 
+function mark__Serialization() {} // ~~~ Serialization
+
 class Sharing {
+    static cleanBase64(text) {
+        return text ? text.replace(/--.*--\W*/g, "") : "";
+    }
+
     static gameBoardObject(session, preserveGameState) {
         if (!session || !session.game) { return null; }
         return {
@@ -1056,9 +1038,104 @@ class Sharing {
             data: session.game.objectForSharing(preserveGameState)
         };
     }
+
+    static gameFromBoardObject(object) {
+        if (!object) {
+            throw new Error("failedToParseGame");
+        }
+        if (object.v != Game.schemaVersion) {
+            throw new Error("schemaVersionUnsupported");
+        }
+        if (object.type != Sharing.type.board || !object.data) {
+            throw new Error("failedToParseGame");
+        }
+        return Game.fromObjectForSharing(object.data);
+    }
 }
 Sharing.type = {
     board: "board"
+};
+
+Game.prototype.objectForSharing = function(preserveGameState) {
+    return {
+        difficulty: this.difficulty.index,
+        preserveGameState: preserveGameState,
+        board: this.board.objectForSharing(preserveGameState)
+    };
+};
+
+Game.fromObjectForSharing = function(data) {
+    if (!data || !data.hasOwnProperty("difficulty") || !data.hasOwnProperty("board")) {
+        throw new Error("failedToParseGame");
+    }
+    let difficulty = Game.rules().difficulties[data.difficulty];
+    if (!difficulty) {
+        throw new Error("failedToParseGame");
+    }
+    let board = GameBoard.fromObjectForSharing(data.board);
+    if (difficulty.isCustom) {
+        difficulty = Object.assign({}, difficulty, {
+            width: board.size.width,
+            height: board.size.height,
+            mineCount: board.mineCount
+        });
+    }
+    return new Game({ difficulty: difficulty, board: board });
+};
+
+// returns [[width, height, mineCount, preserveGameState, checksum], [tile, tile, ...]]
+GameBoard.prototype.objectForSharing = function(preserveGameState) {
+    let bits = new Gaming.BoolArray(this._allTiles.length);
+    this._allTiles.forEach((tile, index) => {
+        if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.visitTiles++; }
+        bits.setValue(index, tile.isMined);
+    });
+    let data = bits.objectForSerialization;
+    let checksum = Gaming.hashArrayOfInts(data);
+    let header = [this.size.width, this.size.height, this.mineCount, preserveGameState ? 1 : 0, checksum];
+    return [header, data];
+};
+
+GameBoard.fromObjectForSharing = function(object) {
+    if (!Array.isArray(object) || object.length != 2) {
+        throw new Error("failedToParseGame");
+    }
+    let header = object[0];
+    let data = object[1];
+    if (!Array.isArray(header) || header.length != 5 || !Array.isArray(data)) {
+        throw new Error("failedToParseGame");
+    }
+
+    let size = {};
+    size.width = header.shift();
+    size.height = header.shift();
+    let mineCount = header.shift();
+    let preserveGameState = !!(header.shift());
+    let checksum = header.shift();
+    let customDifficulty = Game.rules().customDifficulty;
+
+    let isValid = size.width >= customDifficulty.width.min
+            && size.width <= customDifficulty.width.max
+            && size.height >= customDifficulty.height.min
+            && size.height <= customDifficulty.height.max
+            && Gaming.hashArrayOfInts(data) == checksum;
+    if (!isValid) {
+        debugWarn("invalid GameBoard objectForSharing");
+        debugLog({ size: size, mineCount: mineCount, preserveGameState: preserveGameState, checksum: { expected: checksum, actual: Gaming.hashArrayOfInts(data) } });
+        throw new Error("failedToParseGame");
+    }
+
+    let board = new GameBoard({ size: size, mineCount: mineCount });
+    let bits = new Gaming.BoolArray(data);
+    if (bits.length != board._allTiles.length) {
+        debugWarn("GameBoard bit array length != expected tileCount"); debugLog(object);
+        throw new Error("failedToParseGame");
+    }
+    board._allTiles.forEach((tile, index) => {
+        tile.isMined = !!(bits.getValue(index));
+    });
+    board.reset();
+    return board;
 };
 
 function mark__Actions() {} // ~~~~~~ Actions ~~~~~~
@@ -2462,7 +2539,7 @@ function mark__Dialogs() {} // ~~~~~~ Dialogs ~~~~~~
 
 class NewGameDialog extends GameDialog {
     constructor() {
-        super();
+        super({ rootElemClass: "newGame" });
         this.startButton = new ToolButton({
             title: Strings.str("newGameDialogStartButton"),
             click: () => this.validateAndStart()
@@ -2470,17 +2547,28 @@ class NewGameDialog extends GameDialog {
         this.contentElem = GameDialog.createContentElem();
         var formElem = GameDialog.createFormElem();
 
-        const difficultyRules = Game.rules().difficulties;
+        this.difficultyRules = Game.rules().difficulties.map(item => {
+            return Object.assign({}, item, {
+                import: false
+            });
+        });
         let defaultDifficultyIndex = GameStorage.shared.lastDifficultyIndex;
+        let customDifficultyIndex = this.difficultyRules.findIndex(item => !!item.isCustom);
         if (!(defaultDifficultyIndex >= 0)) {
-            defaultDifficultyIndex = difficultyRules.findIndex(difficulty => !!difficulty.isDefault);
+            defaultDifficultyIndex = this.difficultyRules.findIndex(difficulty => !!difficulty.isDefault);
         }
+        this.difficultyRules.push({
+            import: true,
+            index: this.difficultyRules.length,
+            name: Strings.str("gameDifficultyImport"),
+            width: 1, height: 1, mineCount: 1, isCustom: false
+        });
         this.difficulties = new Gaming.FormValueView.SingleChoiceInputCollection({
             id: "difficulty",
             parent: formElem,
-            title: Strings.str("gameSettingsDifficultyLabel"),
+            title: "",
             validationRules: [Gaming.FormValueView.SingleChoiceInputCollection.selectionRequiredRule],
-            choices: difficultyRules.map(difficulty => { return {
+            choices: this.difficultyRules.map(difficulty => { return {
                 title: Strings.template("difficultyChoiceLabelTemplate", difficulty),
                 value: difficulty.index,
                 selected: difficulty.index == defaultDifficultyIndex
@@ -2490,7 +2578,7 @@ class NewGameDialog extends GameDialog {
             this.difficultyChanged();
         });
 
-        let lastCustomDifficultyConfig = GameStorage.shared.lastCustomDifficultyConfig || difficultyRules.find(difficulty => difficulty.isCustom);
+        let lastCustomDifficultyConfig = GameStorage.shared.lastCustomDifficultyConfig || this.difficultyRules.find(difficulty => difficulty.isCustom);
         let customDifficulty = Game.rules().customDifficulty;
 
         let validationRules = {
@@ -2498,7 +2586,6 @@ class NewGameDialog extends GameDialog {
             height: InputView.makeNumericRangeRule(customDifficulty.height)
         };
         this.customWidthInput = new TextInputView({
-            parent: formElem,
             title: Strings.template("newGameWidthInputLabelTemplate", customDifficulty.width),
             placeholder: Strings.str("newGameTileCountPlaceholder"),
             transform: InputView.integerTransform,
@@ -2509,7 +2596,6 @@ class NewGameDialog extends GameDialog {
             }]
         }).configure(input => input.value = lastCustomDifficultyConfig.width);
         this.customHeightInput = new TextInputView({
-            parent: formElem,
             title: Strings.template("newGameHeightInputLabelTemplate", customDifficulty.height),
             placeholder: Strings.str("newGameTileCountPlaceholder"),
             transform: InputView.integerTransform,
@@ -2520,15 +2606,34 @@ class NewGameDialog extends GameDialog {
             }]
         }).configure(input => input.value = lastCustomDifficultyConfig.height);
         this.customMineCountInput = new TextInputView({
-            parent: formElem,
             title: Strings.template("newGameMineCountInputLabelTemplate", this.validMineCountRange),
             placeholder: Strings.str("newGameMineCountPlaceholder"),
             transform: InputView.integerTransform,
             validationRules: [(input) => this.validateMineCount(input)]
         }).configure(input => input.value = lastCustomDifficultyConfig.mineCount);
+        this.customInputs = [this.customWidthInput, this.customHeightInput, this.customMineCountInput];
+
+        let next = this.difficulties.choices[customDifficultyIndex + 1].elem;
+        this.customInputs.forEach(input => {
+            next.insertAdjacentElement("beforebegin", input.elem);
+        });
+
+        let config = {
+            parent: formElem,
+            title: Strings.str("importCodeTitle"),
+            placeholder: Strings.str("importCodePlaceholder"),
+            validationRules: [input => this.validateImportCode(input)]
+        };
+        this.importCodeInput = new TextInputView(config, TextInputView.createTextAreaElement(config));
+        this.importCodeResultLabel = document.createElement("label")
+            .addRemClass("result", true).addRemClass("hidden", true);
+        formElem.append(this.importCodeResultLabel);
+
+        this.difficultyLabel = document.createElement("label");
 
         this.contentElem.append(formElem);
-        this.allInputs = [this.difficulties, this.customWidthInput, this.customHeightInput, this.customMineCountInput];
+        this.nonCustomInputs = [this.difficulties, this.importCodeInput];
+        this.allInputs = [this.difficulties, this.customWidthInput, this.customHeightInput, this.customMineCountInput, this.importCodeInput];
         this.difficultyChanged();
     }
 
@@ -2546,32 +2651,42 @@ class NewGameDialog extends GameDialog {
     get title() { return Strings.str("newGameDialogTitle"); }
 
     get dialogButtons() {
-        return [this.startButton.elem];
+        return [this.difficultyLabel, this.startButton.elem];
     }
 
     get isValid() {
         if (this.showCustomControls) {
             return this.allInputs.every(input => input.isValid);
         } else {
-            return this.difficulties.isValid;
+            return this.nonCustomInputs.every(input => input.isValid);
         }
     }
 
     get difficulty() {
-        let difficulty = Game.rules().difficulties[this.difficulties.value];
-        if (difficulty && difficulty.isCustom) {
-            return Object.assign(difficulty, {
+        let difficulty = this.difficultyRules[this.difficulties.value];
+        if (difficulty.isCustom) {
+            return Object.assign({}, difficulty, {
                 width: this.customWidthInput.value,
                 height: this.customHeightInput.value,
                 mineCount: this.customMineCountInput.value
+            });
+        }
+        if (difficulty.import && !!this.game) {
+            return Object.assign({}, difficulty, {
+                width: this.game.board.size.width,
+                height: this.game.board.size.height,
+                mineCount: this.game.board.mineCount
             });
         }
         return difficulty;
     }
 
     get showCustomControls() {
-        let difficulty = Game.rules().difficulties[this.difficulties.value];
-        return difficulty ? !!(difficulty.isCustom) : false;
+        return !!this.difficulty.isCustom;
+    }
+
+    get showImportControls() {
+        return !!this.difficulty.import;
     }
 
     get validMineCountRange() {
@@ -2586,23 +2701,77 @@ class NewGameDialog extends GameDialog {
         let range = this.validMineCountRange;
         this.customMineCountInput.title = Strings.template("newGameMineCountInputLabelTemplate", range);
         let validation = InputView.makeNumericRangeRule(range);
+        this.updateStarCount();
         return validation(input);
     }
 
+    validateImportCode(input) {
+        let isValid = true;
+        let value = Sharing.cleanBase64(input.value);
+        if (!this.showImportControls || value.length == 0) {
+            this.game = null;
+            this.setImportCodeResult(null, false);
+        } else {
+            try {
+                let object = JSON.parse(atob(value));
+                this.game = Sharing.gameFromBoardObject(object);
+                this.setImportCodeResult(Strings.str("importCodeValidMessage"), false);
+            } catch(e) {
+                debugWarn(`import error: ${e.message}`, true);
+                isValid = false;
+                this.game = null;
+                this.setImportCodeResult(Strings.str(e.message, Strings.str("failedToParseGame")), true);
+            }
+        }
+        this.updateStarCount();
+        return isValid;
+    }
+
+    setImportCodeResult(value, invalid) {
+        this.importCodeResultLabel.innerText = value || "";
+        this.importCodeResultLabel.addRemClass("invalid", !!invalid);
+    }
+
     difficultyChanged() {
+        let showCustomControls = this.showCustomControls;
+        let showImportControls = this.showImportControls;
         [this.customWidthInput, this.customHeightInput, this.customMineCountInput].forEach(input => {
-            input.elem.addRemClass("hidden", !this.showCustomControls);
+            input.elem.addRemClass("hidden", !showCustomControls);
         });
+        [this.importCodeInput.elem, this.importCodeResultLabel].forEach(elem => {
+            elem.addRemClass("hidden", !showImportControls);
+        });
+        if (showImportControls) {
+            this.importCodeInput.valueElem.select();
+        } else if (showCustomControls) {
+            this.customWidthInput.valueElem.select();
+        }
+        this.importCodeInput.value = "";
+        this.setImportCodeResult(null, false);
+        this.updateStarCount();
         return true;
+    }
+
+    updateStarCount() {
+        if (this.showImportControls && !this.game) {
+            this.difficultyLabel.innerText = "";
+        } else {
+            let difficulty = this.difficulty;
+            let starCount = Game.starCount({ mineCount: difficulty.mineCount, totalTileCount: difficulty.width * difficulty.height });
+            this.difficultyLabel.innerText = Game.formatStars(starCount);
+        }
     }
 
     validateAndStart() {
         if (!this.isValid) {
-            debugLog("NOT VALID");
             return;
         }
         this.dismiss();
-        GameSession.begin(new Game({ difficulty: this.difficulty }));
+        if (this.showImportControls) {
+            GameSession.begin(this.game);
+        } else {
+            GameSession.begin(new Game({ difficulty: this.difficulty }));
+        }
     }
 
     dismissButtonClicked() {
@@ -2745,7 +2914,6 @@ class SaveHighScoreDialog extends GameDialog {
         }
 
         if (!this.isValid) {
-            debugLog("NOT VALID");
             return;
         }
         let difficulty = this.session.game.difficulty;
