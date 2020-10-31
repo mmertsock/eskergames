@@ -204,7 +204,7 @@ p.message {
     text-align: center;
 }
 
-dialog.prompt > nav, dialog.newGame > nav {
+dialog.prompt > nav, dialog.newGame > nav, dialog#help > nav {
     justify-content: space-between;
 }
 dialog.prompt.buttons-1 > nav {
@@ -215,7 +215,7 @@ dialog.newGame {
     min-width: 15em;
 }
 
-dialog.newGame > nav label {
+dialog > nav label {
     padding: 2px 4px;
     font-size: 10pt;
     line-height: 10pt;
@@ -351,7 +351,6 @@ moo.preparing, moo.performing, moo.finishing {
     </ul>
     <h3>Keyboard shortcuts</h3>
     <ul class="shortcuts"></ul>
-    <p title="%> moo ⏎">🐄</p>
 </help>
 
 <shareGame class="hidden">

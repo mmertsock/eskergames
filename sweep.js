@@ -437,6 +437,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
+Game.appVersion = "1.3";
 
 GameState = {
     playing: 0,
@@ -2397,16 +2398,20 @@ class Moo {
         Moo.state = {
             ready: "ready",
             m: "m",
+            c: "c",
             mo: "mo",
+            co: "co",
             moo: "moo",
             preparing: "preparing",
             performing: "performing",
             finishing: "finising"
         };
         Moo.transitions = {
-            ready: { "m": Moo.state.m },
-            m: { "o": Moo.state.mo, "m": Moo.state.m },
-            mo: { "o": Moo.state.moo, "m": Moo.state.m }
+            ready: { "m": Moo.state.m, "c": Moo.state.c },
+            m: { "o": Moo.state.mo, "m": Moo.state.m, "c": Moo.state.c },
+            mo: { "o": Moo.state.moo, "m": Moo.state.m, "c": Moo.state.c },
+            c: { "o": Moo.state.co, "m": Moo.state.m, "c": Moo.state.c },
+            co: { "w": Moo.state.moo, "m": Moo.state.m, "c": Moo.state.c }
         };
     }
 
@@ -2501,14 +2506,22 @@ class Moo {
         return this.animate(Moo.config.duration, () => this.readyState(Moo.state.ready));
     }
 
+    classNameForState(state) {
+        switch (state) {
+            case Moo.state.c: return "m";
+            case Moo.state.co: return "mo";
+            default: return state;
+        }
+    }
+
     setState(value) {
         this.state = value;
-        this.elem.className = value;
+        this.elem.className = this.classNameForState(value);
         return this;
     }
 
     setClassName(value) {
-        this.elem.className = value;
+        this.elem.className = this.classNameForState(value);
         return this;
     }
 
@@ -2937,20 +2950,29 @@ class HelpDialog extends GameDialog {
             if (config.length == 1) {
                 config.push("???");
             }
-            let content = document.createElement("li");
-            let child = document.createElement("kbd");
-            child.innerText = config[0];
-            content.append(child);
-            child = document.createElement("span");
-            child.innerText = config[1];
-            content.append(child);
-            elem.querySelector(".shortcuts").append(content);
+            this.appendShortcut(elem, config[0], config[1]);
         });
+        elem.querySelector(".shortcuts li:last-child").title = "%> moo ⏎";
         this.contentElem.append(elem);
+
+        this.gameVersionLabel = document.createElement("label");
+        this.gameVersionLabel.innerText = Strings.template("gameVersionLabelTemplate", { appVersion: Game.appVersion });
+
         this.x = new ToolButton({
             title: Strings.str("helpDismiss"),
             click: () => this.dismiss()
         });
+    }
+
+    appendShortcut(elem, code, description) {
+        let content = document.createElement("li");
+        let child = document.createElement("kbd");
+        child.innerText = code;
+        content.append(child);
+        child = document.createElement("span");
+        child.innerText = description;
+        content.append(child);
+        elem.querySelector(".shortcuts").append(content);
     }
 
     show() {
@@ -2962,7 +2984,7 @@ class HelpDialog extends GameDialog {
     // get cssID() { return "help"; }
     get isModal() { return false; }
     get title() { return Strings.str("helpDialogTitle"); }
-    get dialogButtons() { return [this.x.elem]; }
+    get dialogButtons() { return [this.gameVersionLabel, this.x.elem]; }
 }
 
 class GameAnalysisDialog extends GameDialog {
