@@ -1170,7 +1170,7 @@ class XYValue {
         } else {
             var dx = this.x - x; var dy = this.y - y;
         }
-        return { dx: dx, dy: dy, magnitude: Math.max(Math.abs(dx), Math.abs(dy)) };
+        return { dx: dx, dy: dy, magnitude: Math.max(Math.abs(dx), Math.abs(dy)), pathLength: Math.abs(dx) + Math.abs(dy) };
     }
 
     integral() {

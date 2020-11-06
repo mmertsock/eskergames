@@ -11,6 +11,7 @@
     <script defer src="locale.js"></script>
     <script defer src="game-content.js"></script>
     <script defer src="charts.js"></script>
+    <!-- sweep.js is the entry point -->
     <script defer src="sweep.js"></script>
     <script defer src="sweep-solver.js"></script>
 
@@ -20,12 +21,14 @@
 :root {
     color-scheme: light dark;
     --main-text-color: hsl(0, 0%, 0%);
+    --text-color-2: hsl(0, 0%, 25%);
     --warning-text-color: hsl(0, 50%, 40%);
     --background-color-main: hsl(0, 0%, 100%);
     --background-color-2: hsl(0, 0%, 100%);
     --background-color-3: hsl(0, 0%, 95%);
     --background-color-bar: hsl(0, 0%, 75%);
     --background-color-selected: hsl(120, 50%, 75%);
+    --background-color-highlight: hsl(120, 75%, 90%);
     --background-color-input-custom: hsl(0, 0%, 100%);
     --border-color-main: hsl(0, 0%, 0%);
     --border-color-2: hsl(0, 0%, 0%);
@@ -35,12 +38,14 @@
 @media (prefers-color-scheme: dark) {
     :root {
         --main-text-color: hsl(0, 0%, 98%);
+        --text-color-2: hsl(0, 0%, 85%);
         --warning-text-color: hsl(0, 50%, 55%);
         --background-color-main: hsl(0, 0%, 7%);
         --background-color-2: hsl(0, 0%, 20%);
         --background-color-3: hsl(0, 0%, 35%);
         --background-color-bar: hsl(0, 0%, 35%);
         --background-color-selected: hsl(120, 75%, 25%);
+        --background-color-highlight: hsl(120, 75%, 15%);
         --background-color-input-custom: hsl(0, 0%, 12%);
         --border-color-main: hsl(0, 0%, 93%);
         --border-color-2: hsl(0, 0%, 35%);
@@ -72,6 +77,7 @@ input, textarea {
 dialog {
     background-color: var(--background-color-2);
     border-color: var(--border-color-2);
+    max-height: calc(100% - 20px);
 }
 
 dialog header, dialog > nav {
@@ -81,6 +87,10 @@ dialog header, dialog > nav {
 dialog header a.tool span {
     line-height: 7pt;
     font-size: 10pt;
+}
+
+dialog content {
+    overflow-y: scroll;
 }
 
 /* sweep layout */
@@ -102,6 +112,13 @@ header a.tool {
 body > header a.tool {
     border-radius: 2px;
     padding: 0 2px;
+}
+
+body > header a.tool.new:before {
+    content: "•";
+    margin-right: 0.1em;
+    font-size: 150%;
+    color: var(--background-color-selected);
 }
 
 main {
@@ -168,6 +185,15 @@ shareGame pre {
     font-size: 8pt;
 }
 
+.trophies h3 {
+    margin: 0.75em 0 0.5em 0;
+    text-align: center;
+}
+
+.trophies section:first-child h3 {
+    margin-top: 0.25em;
+}
+
 highScores controls {
     background-color: transparent;
 }
@@ -176,8 +202,17 @@ highScores a.tool {
     margin: 0 0.75em;
 }
 
+highScores .scores {
+    margin: 0.3em 0 0 0;
+    padding: 2pt;
+    border: 1px solid var(--border-color-3);
+    border-radius: 2pt;
+    background-color: var(--background-color-3);
+}
+
 dialog content highScores ol {
-    padding-left: 1.5em;
+    padding-left: 1.75em;
+    margin: 0;
 }
 
 highScores li row {
@@ -190,6 +225,7 @@ highScores li row {
 highScores li row > * {
     flex: 1 1 0;
     text-align: center;
+    line-height: 1.25;
 }
 
 highScores p {
@@ -198,6 +234,79 @@ highScores p {
 
 highScores name {
     text-transform: uppercase;
+}
+
+highScores stars {
+    font-size: 90%;
+}
+
+achievements {
+    display: block;
+}
+
+achievements ul {
+    list-style-type: none;
+}
+
+achievements li {
+    list-style-type: none;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    flex-grow: 1;
+    margin: 0.3em 0;
+    padding: 2pt 0;
+    border: 1px solid var(--border-color-2);
+    border-radius: 2pt;
+    background-color: var(--background-color-highlight);
+}
+
+achievements li.seen {
+    background-color: var(--background-color-3);
+    border-color: var(--border-color-3);
+}
+
+achievements li.status-none, achievements li.status-locked {
+    color: var(--text-color-2);
+    font-weight: unset;
+}
+
+achievements li > :first-child {
+    flex-basis: 17%;
+    padding: 2pt 0;
+    text-align: center;
+}
+
+achievements li > :last-child {
+    flex-basis: 83%;
+    margin-left: 0.5em;
+    text-align: left;
+}
+
+achievements value {
+    display: block;
+    font-size: 125%;
+    line-height: 0.9;
+    font-weight: 700;
+}
+
+achievements date {
+    display: block;
+    line-height: 1;
+    font-size: 70%;
+}
+
+achievements name, achievements locked {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1;
+    font-weight: bolder;
+}
+
+achievements locked {
+    letter-spacing: 2pt;
+    font-family: monospace;
 }
 
 p.message {
@@ -362,14 +471,20 @@ moo.preparing, moo.performing, moo.finishing {
     <div class="difficulties"><controls><row></row></controls></div>
     <div class="scores"></div>
     <scoreTemplate class="hidden">
-        <ol><li><row><name></name><date></date><points></points><stars></stars></row></li></ol>
-        <p>No High Scores</p>
+        <ol><li><row><name>–––</name><date></date><points></points><stars></stars></row></li></ol>
     </scoreTemplate>
 </highScores>
 
+<achievementTemplate class="hidden">
+    <ul>
+        <li class="status-achieved"><div><value></value><date></date></div><name></name></li>
+        <li class="status-none"><div><none>–––</none></div><name></name></li>
+        <li class="status-locked"><div><none>–––</none></div><locked>?????</locked></li>
+    </ul>
+</achievementTemplate>
+
 <analysis class="hidden">
     <div class="history-chart"><canvas></canvas></div>
-    <!-- div class="rainbow-board"><canvas></canvas></div -->
 </analysis>
 
 </body>

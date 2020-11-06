@@ -8,11 +8,11 @@ rules:
       width: 10
       height: 10
       mineCount: 8 # ratio: 12.5
+      isDefault: true 
     - name: gameDifficultyIntermediate
       width: 24
       height: 16
-      mineCount: 36
-      isDefault: true # ratio: 10.67
+      mineCount: 36 # ratio: 10.67
     - name: gameDifficultyAdvanced
       width: 32
       height: 32
@@ -51,7 +51,7 @@ keyboard:
     - [Slash, showHelp, null, helpKeyboardShowHelp]
     - [KeyN, newGame, true, helpKeyboardNewGame]
     - [Shift+KeyN, showNewGameDialog, null, helpKeyboardShowNewGameDialog]
-    - [Digit8, showHighScores, null, helpKeyboardShowHighScores] # asterisk
+    - [Digit8, showTrophies, null, helpKeyboardShowTrophies] # asterisk
     - [Digit3, showAnalysis, null, helpKeyboardShowAnalysis] # pound
     - [Shift+Digit1, showHint, null, helpKeyboardShowHint] # bang
     - [Shift+Digit4, solverStep, null, helpKeyboardSolverStep] # dollar
@@ -121,6 +121,26 @@ gameTileViewState:
     borderStrokeWidth: 3
   debug:
     fillColor: "hsla(83, 100%, 50%, 0.2)"
+achievements:
+  Achievement.MostPointsInSingleMove:
+    name: achievementsMostPointsInSingleMoveName
+  Achievement.HighestScoreInAnyGame:
+    name: achievementsHighestScoreInAnyGameName
+  Achievement.MostClearedInSingleMove:
+    name: achievementsMostClearedInSingleMoveName
+  Achievement.Moo:
+    name: achievementsMooName
+    formattedValue: "🐄"
+  Achievement.HighestScoreInFiveStarGame:
+    name: achivementsHighestScoreInFiveStarGameName
+  Achievement.Won1StarGame: &WONSTARS
+    name: achievementsWonStarsName
+    value: achievementsWonStarsValue
+  Achievement.Won2StarGame: *WONSTARS
+  Achievement.Won3StarGame: *WONSTARS
+  Achievement.Won4StarGame: *WONSTARS
+  Achievement.Won5StarGame: *WONSTARS
+
 analysisView:
   historyChart:
     backgroundColor: "#ffffff"
@@ -193,6 +213,14 @@ strings:
   _defaultRegion: en-us
   # _debugRegion: es-us
   _debug: true
+  achievementsDialogTitle: Achievements
+  achivementsHighestScoreInFiveStarGameName: "Highest score at 5-star difficulty (win or lose)"
+  achievementsHighestScoreInAnyGameName: "Highest score in any game (win or lose)"
+  achievementsMooName: "Deployed the cow to eat a mine!"
+  achievementsMostClearedInSingleMoveName: Largest area cleared in a single move
+  achievementsMostPointsInSingleMoveName: Most points earned in a single move
+  achievementsWonStarsName: "Won a <value>-star difficulty game"
+  achievementsWonStarsValue: "<value>★"
   analysisChartMoveNumberLabel: Moves
   analysisChartSeriesNameAssertMineFlagCount: Mines Flagged
   analysisChartSeriesNameScore: Score
@@ -229,12 +257,11 @@ strings:
   helpKeyboardNewGame: "N|: New game"
   helpKeyboardShowAnalysis: "#|: Show game stats"
   helpKeyboardShowHelp: "?|: Show help"
-  helpKeyboardShowHighScores: "*|: Show high scores"
+  helpKeyboardShowTrophies: "*|: Show trophy room"
   helpKeyboardShowHint: "!|: Get a hint"
   helpKeyboardShowNewGameDialog: "⇧ + N|: Show options for new game"
   helpKeyboardSolverStep: "$|: Auto-solve"
-  highScoresDialogTitle: "✷ High Scores ✷"
-  highScoresDismiss: "Done"
+  highScoresDialogTitle: High Scores
   importCodeTitle: Code
   importCodePlaceholder: Paste game code here
   importCodeValidMessage: "Game code recognized!"
@@ -277,11 +304,11 @@ strings:
   shareGameBoardCodeTemplate: "-- Try this Sweep game: <width>x<height>, <mineCount#mineCount#formattedMineCount>, <starCount>/<maxStarCount> difficulty --\n<data>"
   showAnalysisButton: Stats
   showHelpButton: "Help"
-  showHighScoresButton: "High Scores"
   showHintActionDescription: Got a hint
   showHintButton: Hint
   showHintErrorText: Can’t find any hints to show.
   showNewGameDialogButton: Options
+  showTrophiesButton: Trophies
   solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
   solverClearHintedTileActionDescription: "Solver: cleared tile indicated by last hint"
   solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: <flaggedKnownMines#length#formattedLength>"
@@ -295,6 +322,8 @@ strings:
   stars5: "★★★★★"
   toggleDebugModeButton: "Debug"
   toggleRainbowButton: "🌈"
+  trophiesDialogDismiss: Done
+  trophiesDialogTitle: "✷ Trophy Room ✷"
   warningAbortRevealNeighborsIncorrectFlagCount: "Won’t clear this area: incorrect flag count"
   warningAbortRevealNeighborsMaybeFlags: "Won’t clear this area: unsafe around “?” flags"
   warningAbortRevealNeighborsNoCandidates: No tiles to clear in this area
@@ -333,12 +362,10 @@ strings:
     helpKeyboardNewGame: "N|: Nuevo juego"
     helpKeyboardShowAnalysis: "#|: Mostrar estadísticas del juego"
     helpKeyboardShowHelp: "?|: Mostrar ayuda"
-    helpKeyboardShowHighScores: "*|: Mostrar puntajes altos"
     helpKeyboardShowHint: "!|: Obtén un consejo"
     helpKeyboardShowNewGameDialog: "⇧ + N|: Mostrar opciones para un juego nuevo"
     helpKeyboardSolverStep: "$|: Resolver automáticamente"
-    highScoresDialogTitle: "✷ Puntajes Altos ✷"
-    highScoresDismiss: Hecho
+    highScoresDialogTitle: "Puntajes Altos"
     lostAlertButton: Qué pena
     lostAlertDialogTextTemplate: "Tu Puntaje: <points>"
     lostAlertTitle: Perdiste
@@ -366,6 +393,7 @@ strings:
     saveHighScoreDialogTitle: "¡Tu Ganaste!"
     saveHighScoreDisabledButton: OK
     saveHighScoreDisabledDialogTextTemplate: "Tu puntaje: <points>. Pero no puede guardar su puntaje alto porque recibió ayuda."
+    trophiesDialogDismiss: Hecho
 
 # arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
 pluralStrings:

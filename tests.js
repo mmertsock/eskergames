@@ -496,22 +496,32 @@ var manhattanDistanceFromTest = function() {
         this.assertEqual(result.dx, 0);
         this.assertEqual(result.dy, 0);
         this.assertEqual(result.magnitude, 0);
+        this.assertEqual(result.pathLength, 0);
         result = x1y1.manhattanDistanceFrom(x0y0);
         this.assertEqual(result.dx, 1);
         this.assertEqual(result.dy, 1);
         this.assertEqual(result.magnitude, 1);
+        this.assertEqual(result.pathLength, 2);
         result = x0y0.manhattanDistanceFrom(x1y1);
         this.assertEqual(result.dx, -1);
         this.assertEqual(result.dy, -1);
         this.assertEqual(result.magnitude, 1);
+        this.assertEqual(result.pathLength, 2);
+        result = x0y0.manhattanDistanceFrom(1, 0);
+        this.assertEqual(result.dx, -1);
+        this.assertEqual(result.dy, 0);
+        this.assertEqual(result.magnitude, 1);
+        this.assertEqual(result.pathLength, 1);
         result = xn1y7.manhattanDistanceFrom(x7y5);
         this.assertEqual(result.dx, -8);
         this.assertEqual(result.dy, 2);
         this.assertEqual(result.magnitude, 8);
+        this.assertEqual(result.pathLength, 10);
         result = xn1y7.manhattanDistanceFrom(7, 5);
         this.assertEqual(result.dx, -8);
         this.assertEqual(result.dy, 2);
         this.assertEqual(result.magnitude, 8);
+        this.assertEqual(result.pathLength, 10);
     }).buildAndRun();
 }
 

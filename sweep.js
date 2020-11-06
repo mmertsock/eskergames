@@ -25,7 +25,7 @@ const ChartDataSeriesPresentation = Charts.ChartDataSeriesPresentation;
 const ChartAxisPresentation = Charts.ChartAxisPresentation;
 const ChartView = Charts.ChartView;
 
-function mark__Game_Model() {} // ~~~ Game Model
+function mark__Game_Model() {} // ~~~~~~ Game Model ~~~~~~
 
 class TileFlag {
     constructor(present) {
@@ -202,8 +202,9 @@ class GameTile {
     setFlag(value, moveNumber) {
         if (this._flag == value) { return this; }
         this._flag = value;
-        if (this._flag != TileFlag.none) {
+        if (this._flag.isPresent) {
             this.rainbow.flagged = moveNumber;
+            this.board.gameState.hasAnyFlag = true;
         } else {
             this.rainbow.flagged = -1;
         }
@@ -247,6 +248,7 @@ class GameBoard {
     constructor(config) {
         this.size = { width: config.size.width, height: config.size.height };
         this.mineCount = config.mineCount;
+        this.gameState = {}; // arbitrary metadata
         this._tiles = new Rect(new Point(0, 0), { width: 1, height: this.size.height }).allTileCoordinates.map(rowCoord => {
             return new Rect(new Point(0, rowCoord.y), { width: this.size.width, height: 1 }).allTileCoordinates.map(colCoord => {
                 return new GameTile(new Point(colCoord.x, rowCoord.y), this);
@@ -442,7 +444,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
-Game.appVersion = "1.3";
+Game.appVersion = "1.4";
 
 GameState = {
     playing: 0,
@@ -1051,7 +1053,7 @@ GameSession.revealBehaviors = {
 };
 // end class GameSession
 
-function mark__Serialization() {} // ~~~ Serialization
+function mark__Serialization() {} // ~~~~~~ Serialization ~~~~~~
 
 class Sharing {
     static cleanBase64(text) {
@@ -1334,7 +1336,7 @@ class AttemptHintAction extends SweepAction {
             closest = closest.map(tile => {
                 let item = { tile: tile, score: 0 };
                 revealed.tiles.forEach(nearby => {
-                    item.score += (1 / tile.coord.manhattanDistanceFrom(nearby.coord).magnitude);
+                    item.score += (1 / tile.coord.manhattanDistanceFrom(nearby.coord).pathLength);
                 });
                 return item;
             });
@@ -1770,49 +1772,66 @@ MinedNeighborCountRangeFilter.hasAny = new MinedNeighborCountRangeFilter({ min: 
 MinedNeighborCountRangeFilter.zero = new MinedNeighborCountRangeFilter({ min: 0, max: 0 });
 TileTransform.MinedNeighborCountRangeFilter = MinedNeighborCountRangeFilter;
 
-function mark__Achievement() {} // ~~~ Achievement
+function mark__Achievement() {} // ~~~~~~ Achievement ~~~~~~
 
 class Achievement {
     static initialize() {
         Achievement.allTypes = {
+            "Achievement.HighestScoreInAnyGame": Achievement.HighestScoreInAnyGame,
+            "Achievement.Moo": Achievement.Moo,
+            "Achievement.MostClearedInSingleMove": Achievement.MostClearedInSingleMove,
             "Achievement.MostPointsInSingleMove": Achievement.MostPointsInSingleMove,
-            "Achievement.HighestScoreInAnyGame": Achievement.HighestScoreInAnyGame
+            "Achievement.HighestScoreInFiveStarGame": Achievement.HighestScoreInFiveStarGame,
+            "Achievement.Won1StarGame": Achievement.Won1StarGame,
+            "Achievement.Won2StarGame": Achievement.Won2StarGame,
+            "Achievement.Won3StarGame": Achievement.Won3StarGame,
+            "Achievement.Won4StarGame": Achievement.Won4StarGame,
+            "Achievement.Won5StarGame": Achievement.Won5StarGame,
         };
         AchievementStorage.shared = new AchievementStorage.Local();
         let data = AchievementStorage.shared.loadAll();
         this.all = Object.getOwnPropertyNames(Achievement.allTypes).map(id => {
             let constructor = Achievement.allTypes[id];
-            let achievement = null;
             try {
+                if (!constructor) {
+                    debugWarn(`unknown achievement id ${id}`);
+                    return null;
+                }
                 if (data.hasOwnProperty(id)) {
-                    achievement = constructor.fromDeserializedWrapper(data[id]);
+                    return constructor.fromDeserializedWrapper(data[id]);
                 }
             } catch(e) {
-                debugWarn([`Failed to parse ${constructor.name}: ${e.message}`, data[id]], true);
+                debugWarn([`Failed to parse ${constructor.name}#${id}: ${e.message}`, data[id]], true);
             }
-            return achievement ? achievement : new constructor({ id: id });
-        });
+            return new constructor({ id: id });
+        }).filter(achievement => !!achievement);
+    }
+
+    static hasAnyNew() {
+        return this.all.find(achievement => !achievement.seen);
+    }
+
+    static reset() {
+        this.all.forEach(achievement => achievement.reset());
     }
 
     constructor(config) {
-        config = Object.assign({
-            status: Achievement.Status.none,
-            value: null,
-            date: Date.now(),
-            seen: false
-        }, config);
-
         if (!config.id) {
+            debugWarn(config, true);
             throw new Error("Achievement.dzFailure");
         }
 
-        this.id = config.id; // unique id per Achievement instance
-        this.status = config.status; // Achievement.Status
-        this.value = config.value; // any serializable value the subclass needs
-        this.date = config.date; // timestamp, e.g. Date.now()
-        this.seen = config.seen; // bool
+        this.id = config.id;
+        if (typeof(config.status) == 'undefined') {
+            this.setDefaultConfig();
+        } else {
+            this.status = config.status; // Achievement.Status
+            this.value = config.value; // any serializable value the subclass needs
+            this.date = config.date; // timestamp, e.g. Date.now()
+            this.seen = config.seen; // bool
+        }
 
-        debugLog("init: " + this.debugDescription);
+        // debugLog("init: " + this.debugDescription);
         this.target = new DispatchTarget();
         this.target.register(GameSession.moveCompletedEvent, (e, session) => {
             if (this.isValid(session)) { this.moveCompleted(session, Date.now()); }
@@ -1820,6 +1839,21 @@ class Achievement {
         this.target.register(GameSession.gameCompletedEvent, (e, session) => {
             if (this.isValid(session)) { this.gameCompleted(session, session.endTime); }
         });
+    }
+
+    // also used by constructor to set default state
+    setDefaultConfig() {
+        this.status = Achievement.Status.none;
+        this.value = null;
+        this.date = Date.now();
+        this.seen = false;
+    }
+
+    reset(status) {
+        this.status = status;
+        this.setDefaultConfig();
+        this.seen = true;
+        this.save();
     }
 
     get debugDescription() {
@@ -1837,12 +1871,21 @@ class Achievement {
         this.status = Achievement.Status.achieved;
         this.value = value;
         this.date = date;
-        debugLog(`achieved: ${this.debugDescription}`);
+        this.seen = false;
+        // debugLog(`achieved: ${this.debugDescription}`);
+        this.save();
+    }
+
+    markAsSeen() {
+        if (this.seen) { return; }
+        this.seen = true;
+        // debugLog(`markAsSeen: ${this.debugDescription}`)
         this.save();
     }
 
     save() {
         AchievementStorage.shared.saveAchievement(this);
+        Dispatch.shared.postEventSync(Achievement.achievementUpdatedEvent, this);
     }
 
     get objectForSerialization() {
@@ -1857,7 +1900,7 @@ class Achievement {
     }
 
     static fromDeserializedWrapper(data) {
-        if (!data || data.schemaVersion != Game.schemaVersion) {
+        if (!data || (data.schemaVersion != Game.schemaVersion)) {
             // could have a static tryUpgradeSchema fallback to handle schemaVersion updates
             throw new Error("schemaVersionUnsupported");
         }
@@ -1866,9 +1909,11 @@ class Achievement {
 }
 Achievement.Status = {
     none: "none",
-    achieved: "achieved"
-    // locked, etc.
+    achieved: "achieved",
+    locked: "locked",
+    hidden: "hidden"
 };
+Achievement.achievementUpdatedEvent = "Achievement.achievementUpdatedEvent";
 
 class AchievementStorage {
     // return id -> data
@@ -1899,8 +1944,14 @@ AchievementStorage.InMemory = class extends AchievementStorage {
 };
 
 Achievement.MostPointsInSingleMove = class MostPointsInSingleMove extends Achievement {
-    constructor(config) {
-        super(Object.assign({ value: 0 }, config));
+    static formatValue(achievement) {
+        if (achievement.status != Achievement.Status.achieved) { return ""; }
+        return Number.uiInteger(achievement.value);
+    }
+
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = 0;
     }
 
     isValid(session) {
@@ -1919,8 +1970,14 @@ Achievement.MostPointsInSingleMove = class MostPointsInSingleMove extends Achiev
 };
 
 Achievement.HighestScoreInAnyGame = class HighestScoreInAnyGame extends Achievement {
-    constructor(config) {
-        super(Object.assign({ value: 0 }, config));
+    static formatValue(achievement) {
+        if (achievement.status != Achievement.Status.achieved) { return ""; }
+        return Number.uiInteger(achievement.value);
+    }
+
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = 0;
     }
 
     isValid(session) {
@@ -1934,6 +1991,147 @@ Achievement.HighestScoreInAnyGame = class HighestScoreInAnyGame extends Achievem
             this.achieved(points, date);
         }
     }
+};
+
+Achievement.HighestScoreInFiveStarGame = class HighestScoreInFiveStarGame extends Achievement {
+    static formatValue(achievement) {
+        return Number.uiInteger(achievement.value);
+    }
+
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.status = Achievement.Status.locked;
+        this.value = 0;
+    }
+
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.won || session.state == GameState.lost);
+    }
+
+    gameCompleted(session, date) {
+        let statistics = session.game.statistics;
+        if (statistics.starCount == 5 && statistics.points > this.value) {
+            this.achieved(statistics.points, date);
+        }
+    }
+}
+
+Achievement.MostClearedInSingleMove = class MostClearedInSingleMove extends Achievement {
+    static formatValue(achievement) {
+        if (achievement.status != Achievement.Status.achieved) { return ""; }
+        return Number.uiPercent(achievement.value);
+    }
+
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = 0;
+    }
+
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.playing)
+            && (!!session.mostRecentAction)
+            && (!!session.mostRecentAction.change);
+    }
+
+    moveCompleted(session, date) {
+        let progress = session.mostRecentAction.change.progress;
+        if (progress > this.value) {
+            this.achieved(progress, date);
+        }
+    }
+};
+
+Achievement.Moo = class Moo extends Achievement {
+    // why is this static? why not just `get formattedValue()` ???
+    static formatValue(achievement) {
+        return Game.content.achievements["Achievement.Moo"].formattedValue;
+    }
+
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = false;
+        this.status = Achievement.Status.locked;
+    }
+
+    isValid(session) {
+        return this.status != Achievement.Status.achieved
+            && session.state == GameState.playing
+            && !!session.mostRecentAction;
+    }
+
+    moveCompleted(session, date) {
+        if (!this.value && session.mostRecentAction.action instanceof MooAction) {
+            this.achieved(true, date);
+        }
+    }
+};
+
+class WonStars extends Achievement {
+    static formatValue(achievement) {
+        return { value: achievement.value };
+    }
+
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = this.constructor.starCount(); // static starCount() in subclasses
+        if (this.value == 1) {
+            this.status = Achievement.Status.none;
+            this.save();
+        } else {
+            this.status = Achievement.Status.hidden;
+        }
+    }
+
+    constructor(config) {
+        super(config);
+        this.target = new DispatchTarget();
+        this.target.register(Achievement.achievementUpdatedEvent, (e, achievement) => {
+            this.unlockIfReady(achievement);
+        });
+    }
+
+    // achieve N stars: un-hide N+1 stars
+    unlockIfReady(trigger) {
+        if ((this.status == Achievement.Status.hidden)
+            && (trigger != this)
+            && (trigger instanceof WonStars)
+            && (trigger.status == Achievement.Status.achieved)
+            && (trigger.value >= this.value - 1)) {
+            debugLog(`unlockIfReady: trigger=${trigger.debugDescription} this=${this.debugDescription}`);
+            this.status = Achievement.Status.none;
+            this.save();
+        }
+    }
+
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.won)
+            && this.status != Achievement.Status.achieved;
+    }
+
+    gameCompleted(session, date) {
+        if (this.value == session.game.statistics.starCount) {
+            this.achieved(this.value, date);
+        }
+    }
+}
+
+Achievement.Won1StarGame = class Won1StarGame extends WonStars {
+    static starCount() { return 1; }
+};
+Achievement.Won2StarGame = class Won2StarGame extends WonStars {
+    static starCount() { return 2; }
+};
+Achievement.Won3StarGame = class Won3StarGame extends WonStars {
+    static starCount() { return 3; }
+};
+Achievement.Won4StarGame = class Won4StarGame extends WonStars {
+    static starCount() { return 4; }
+};
+Achievement.Won5StarGame = class Won5StarGame extends WonStars {
+    static starCount() { return 5; }
 };
 
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
@@ -2097,10 +2295,10 @@ class GameControlsView {
             title: Strings.str("showHelpButton"),
             click: () => this.showHelp()
         });
-        this.showHighScoresButton = new ToolButton({
+        this.showTrophiesButton = new ToolButton({
             parent: this.elem,
-            title: Strings.str("showHighScoresButton"),
-            click: () => this.showHighScores()
+            title: Strings.str("showTrophiesButton"),
+            click: () => this.showTrophies()
         });
         this.showAnalysisButton = new ToolButton({
             parent: this.elem,
@@ -2138,11 +2336,16 @@ class GameControlsView {
             this.debugModeButton = null;
         }
 
+        this.target = new DispatchTarget();
+        this.target.register(Achievement.achievementUpdatedEvent, (e, achievement) => {
+            this.render();
+        });
+
         let gse = GameScriptEngine.shared;
         gse.registerCommand("newGame", prompt => this.newGame(prompt));
         gse.registerCommand("showNewGameDialog", () => this.showNewGameDialog());
         gse.registerCommand("showHelp", () => this.showHelp());
-        gse.registerCommand("showHighScores", () => this.showHighScores());
+        gse.registerCommand("showTrophies", () => this.showTrophies());
         gse.registerCommand("showAnalysis", () => this.showAnalysis());
         gse.registerCommand("showHint", () => this.showHint());
         gse.registerCommand("solverStep", () => this.solverStep());
@@ -2150,6 +2353,7 @@ class GameControlsView {
     }
 
     render() {
+        this.showTrophiesButton.elem.addRemClass("new", Achievement.hasAnyNew());
         this.showAnalysisButton.isEnabled = GameAnalysisDialog.isValid(this.session);
         this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
         this.solverStepButton.isEnabled = AttemptSolverStepAction.isValid(this.session);
@@ -2200,13 +2404,13 @@ class GameControlsView {
         new HelpDialog().show();
     }
 
-    showHighScores() {
+    showTrophies() {
         if (GameSession.isShowingDialog()) { return; }
         let difficulty = null;
         if (this.session && this.session.game) {
             difficulty = this.session.game.difficulty;
         }
-        HighScoresDialog.showHighScores(GameStorage.shared, difficulty);
+        TrophiesDialog.show(GameStorage.shared, difficulty);
     }
 
     showAnalysis() {
@@ -2241,7 +2445,7 @@ class GameControlsView {
     toggleDebugMode() {
         if (this.session) { this.session.toggleDebugMode(); }
     }
-}
+} // end class GameControlsView
 
 function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 
@@ -3125,7 +3329,7 @@ class SaveHighScoreDialog extends GameDialog {
         let difficulty = this.session.game.difficulty;
         GameStorage.shared.addHighScore(this.session, this.playerName);
         this.dismiss();
-        HighScoresDialog.showHighScores(GameStorage.shared, difficulty);
+        TrophiesDialog.show(GameStorage.shared, difficulty);
     }
 }
 
@@ -3285,25 +3489,57 @@ class GameAnalysisDialog extends GameDialog {
     }
 } // end class GameAnalysisDialog
 
-class HighScoresDialog extends GameDialog {
-    static showHighScores(storage, difficulty) {
+class TrophiesDialog extends GameDialog {
+    static show(storage, difficulty) {
         const highScores = storage.highScoresByDifficulty;
-        new HighScoresDialog(highScores, difficulty).show();
+        new TrophiesDialog(highScores, difficulty).show();
     }
 
-    constructor(data, selected) {
-        super();
+    get title() { return Strings.str("trophiesDialogTitle"); }
+    get isModal() { return false; }
+    get dialogButtons() { return [this.x.elem]; }
+
+    constructor(highScores, difficulty) {
+        super({ rootElemClass: "trophies" });
+        this.sections = [
+            new HighScoresSection(highScores, difficulty),
+            new AchievementsSection()
+        ];
+
         this.contentElem = GameDialog.createContentElem();
-        let elem = document.querySelector("body > highScores")
-            .cloneNode(true).addRemClass("hidden", false);
-        this.contentElem.append(elem);
-        this.scores = elem.querySelector(".scores");
-        this.x = new ToolButton({
-            title: Strings.str("highScoresDismiss"),
-            click: () => this.dismiss()
+        this.sections.forEach(item => {
+            let section = document.createElement("section");
+            section.append(document.createElement("h3").configure(h3 => h3.innerText = item.title));
+            section.append(item.contentElem);
+            this.contentElem.append(section);
         });
 
+        this.x = new ToolButton({
+            title: Strings.str("trophiesDialogDismiss"),
+            click: () => this.dismiss()
+        });
+    }
+
+    dismiss() {
+        super.dismiss();
+        this.sections.forEach(section => {
+            if (typeof(section.dismissed) == 'function') {
+                section.dismissed();
+            }
+        });
+    }
+}
+
+class HighScoresSection {
+    get title() { return Strings.str("highScoresDialogTitle"); }
+
+    constructor(data, selected) {
+        let elem = document.querySelector("body > highScores")
+            .cloneNode(true).addRemClass("hidden", false);
+        this.scores = elem.querySelector(".scores");
+
         this.buttons = [];
+        let maxItems = Math.max(3, Math.min(10, data.difficulties.map(difficulty => difficulty.highScores.length).maxElement()));
         data.difficulties.forEach(difficulty => {
             let index = difficulty.difficulty.index;
             let rules = Game.rules().difficulties[index];
@@ -3315,12 +3551,13 @@ class HighScoresDialog extends GameDialog {
                     click: () => this.selectDifficulty(index)
                 }));
 
-                let highScore = this.highScoreElement(difficulty, elem.querySelector("scoreTemplate"))
+                let highScore = this.highScoreElement(difficulty, elem.querySelector("scoreTemplate"), maxItems)
                     .addRemClass("highScores", true)
                     .addRemClass(this.classForDifficulty(index), true);
                 this.scores.append(highScore);
             }
         });
+        this.contentElem = elem;
 
         if (selected) {
             this.selectDifficulty(selected.index);
@@ -3340,27 +3577,103 @@ class HighScoresDialog extends GameDialog {
         this.scores.querySelector(`.${this.classForDifficulty(index)}`).addRemClass("hidden", false);
     }
 
-    highScoreElement(difficulty, template) {
-        if (difficulty.highScores.length == 0) {
-            return template.querySelector("p").cloneNode(true);
-        } else {
-            let highScores = document.createElement("ol");
-            difficulty.highScores.slice(0, 10).forEach(highScore => {
-                let item = template.querySelector("li").cloneNode(true);
-                item.querySelector("name").innerText = highScore.playerName;
-                item.querySelector("date").innerText = new Date(highScore.timestamp).toLocaleDateString("default", { dateStyle: "short" });
-                item.querySelector("points").innerText = highScore.points;
-                item.querySelector("stars").innerText = Game.formatStars(Game.starCount(highScore));
-                highScores.append(item);
-            });
-            return highScores;
+    highScoreElement(difficulty, template, maxItems) {
+        let highScores = document.createElement("ol");
+        difficulty.highScores.slice(0, maxItems).forEach(highScore => {
+            let item = template.querySelector("li").cloneNode(true);
+            item.querySelector("name").innerText = highScore.playerName;
+            item.querySelector("date").innerText = new Date(highScore.timestamp).toLocaleDateString("default", { dateStyle: "short" });
+            item.querySelector("points").innerText = highScore.points;
+            item.querySelector("stars").innerText = Game.formatStars(Game.starCount(highScore));
+            highScores.append(item);
+        });
+        for (let index = difficulty.highScores.length; index < maxItems; index += 1) {
+            let item = template.querySelector("li").cloneNode(true);
+            highScores.append(item);
         }
+        return highScores;
+    }
+} // end class HighScoresSection
+
+class AchievementsSection {
+    get title() { return Strings.str("achievementsDialogTitle"); }
+
+    constructor() {
+        this.contentElem = document.createElement("achievements");
+
+        let achievements = Achievement.all;
+        // let achievements = [
+        //     new Achievement({
+        //         id: "Achievement.MostPointsInSingleMove",
+        //         status: Achievement.Status.none,
+        //         value: 33,
+        //         date: Date.now(),
+        //         seen: true
+        //     }),
+        //     new Achievement({
+        //         id: "Achievement.MostClearedInSingleMove",
+        //         status: Achievement.Status.achieved,
+        //         value: 0.97,
+        //         date: Date.now(),
+        //         seen: false
+        //     }),
+        //     new Achievement({
+        //         id: "Achievement.HighestScoreInAnyGame",
+        //         status: Achievement.Status.achieved,
+        //         value: 2482,
+        //         date: Date.now(),
+        //         seen: true
+        //     })
+        // ];
+
+        this.seen = achievements.filter(achievement => !achievement.seen);
+
+        achievements = achievements.map(achievement => {
+            let config = Game.content.achievements[achievement.id];
+            let constructor = Achievement.allTypes[achievement.id];
+            let viewModel = {
+                id: achievement.id,
+                status: achievement.status,
+                seen: achievement.seen,
+                date: new Date(achievement.date).toLocaleDateString("default", { dateStyle: "short" }),
+                value: constructor ? constructor.formatValue(achievement) : achievement.value
+            };
+            if (!config) {
+                debugWarn(`UI config not found for ${achievement.id}`);
+                return viewModel;
+            }
+            viewModel.name = Strings.template(config.name, viewModel.value);
+            viewModel.value = config.value ? Strings.template(config.value, viewModel.value) : viewModel.value;
+            return viewModel;
+        }).sort((a, b) => a.name.localeCompare(b.name));
+
+        let list = document.createElement("ul");
+        let template = document.querySelector("achievementTemplate");
+        achievements.forEach(achievement => {
+            let li = this.achievementElement(achievement, template);
+            if (li) list.append(li);
+        });
+        this.contentElem.append(list);
     }
 
-    get isModal() { return false; }
-    get title() { return Strings.str("highScoresDialogTitle"); }
-    get dialogButtons() { return [this.x.elem]; }
-} // end class HighScoresDialog
+    achievementElement(viewModel, template) {
+        template = template.querySelector(`li.status-${viewModel.status}`);
+        if (!template) { return null; }
+        let elem = template.cloneNode(true).addRemClass("seen", viewModel.seen);
+        this.innerText(elem.querySelector("name"), viewModel.name);
+        this.innerText(elem.querySelector("date"), viewModel.date);
+        this.innerText(elem.querySelector("value"), viewModel.value);
+        return elem;
+    }
+
+    innerText(elem, text) {
+        if (elem) { elem.innerText = text; }
+    }
+
+    dismissed() {
+        this.seen.forEach(achievement => achievement.markAsSeen());
+    }
+} // end class AchievementsSection
 
 class SweepPerfTimer extends Gaming.PerfTimer {
     static startShared(name) {
@@ -3405,6 +3718,7 @@ return {
     Game: Game,
     GameSession: GameSession,
     GameTile: GameTile,
+    Achievement: Achievement,
     SweepAction: SweepAction,
     TileCollection: TileCollection,
     TileFlag: TileFlag,
