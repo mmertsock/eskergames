@@ -1,33 +1,29 @@
 "use-strict";
 
-self.Sweep = (function() {
+import { Strings } from './locale.js';
+import * as Gaming from './g.js';
+import { GameContent, GameScriptEngine } from './game-content.js';
+import * as SweepSolver from './sweep-solver.js';
+import { ChartDataSeries, ChartDataSeriesPresentation, ChartAxisPresentation, ChartView } from './charts.js';
 
-const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
+const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions;
 
 const Dispatch = Gaming.Dispatch;
 const DispatchTarget = Gaming.DispatchTarget;
 const FlexCanvasGrid = Gaming.FlexCanvasGrid;
-const GameContent = Gaming.GameContent;
 const GameDialog = Gaming.GameDialog;
-const GameScriptEngine = Gaming.GameScriptEngine;
 const InputView = Gaming.FormValueView.InputView;
 const Point = Gaming.Point;
 const Rect = Gaming.Rect;
 const SaveStateItem = Gaming.SaveStateItem;
 const SaveStateCollection = Gaming.SaveStateCollection;
-const Strings = Gaming.Strings;
 const TextInputView = Gaming.FormValueView.TextInputView;
 const TilePlane = Gaming.TilePlane;
 const ToolButton = Gaming.ToolButton;
 
-const ChartDataSeries = Charts.ChartDataSeries;
-const ChartDataSeriesPresentation = Charts.ChartDataSeriesPresentation;
-const ChartAxisPresentation = Charts.ChartAxisPresentation;
-const ChartView = Charts.ChartView;
-
 function mark__Game_Model() {} // ~~~~~~ Game Model ~~~~~~
 
-class TileFlag {
+export class TileFlag {
     constructor(present) {
         this.isPresent = present;
     }
@@ -50,7 +46,7 @@ TileFlag.assertMine.next = TileFlag.maybeMine;
 TileFlag.maybeMine.next = TileFlag.none;
 TileFlag.sz = [TileFlag.none, TileFlag.assertMine, TileFlag.maybeMine];
 
-class GameTile {
+export class GameTile {
     constructor(coord, board) {
         this.coord = coord;
         this.board = board;
@@ -446,13 +442,13 @@ class Game {
 Game.schemaVersion = 1;
 Game.appVersion = "1.4";
 
-GameState = {
+let GameState = {
     playing: 0,
     lost: 1,
     won: 2
 };
 
-MoveState = {
+let MoveState = {
     ready: 0,
     pending: 1,
     active: 2
@@ -734,7 +730,7 @@ class MoveHistoryMoment {
     }
 }
 
-class GameSession {
+export class GameSession {
     static quit(prompt) {
         if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
             window.location = "index.html";
@@ -742,11 +738,12 @@ class GameSession {
     }
 
     static begin(game) {
-        if (Sweep.session) {
-            Sweep.session.start(game);
+        // TODO how about: if (!s) { GameSession.shared = new GameSession(); } GameSession.shared.start(game);
+        if (GameSession.shared) {
+            GameSession.shared.start(game);
         } else {
-            Sweep.session = new GameSession({ game: game });
-            Sweep.session.start();
+            GameSession.shared = new GameSession({ game: game });
+            GameSession.shared.start();
         }
     }
 
@@ -800,12 +797,8 @@ class GameSession {
         this.warningMessage = null;
         this.elems.boardContainer.addRemClass("hidden", false);
 
-        if (SweepSolver) {
-            let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
-            this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
-        } else {
-            this.solver = null;
-        }
+        let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
+        this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
 
         if (newGame) {
             this.boardView.game = this.game;
@@ -1043,6 +1036,7 @@ class GameSession {
         }
     }
 }
+GameSession.shared = null;
 GameSession.moveCompletedEvent = "GameSession.moveCompletedEvent";
 GameSession.gameCompletedEvent = "GameSession.gameCompletedEvent";
 GameSession.gameControlsView = null;
@@ -1170,7 +1164,7 @@ GameBoard.fromObjectForSharing = function(object) {
 
 function mark__Actions() {} // ~~~~~~ Actions ~~~~~~
 
-class ActionResult {
+export class ActionResult {
     constructor(config) {
         this.action = config ? config.action : null;
         this.tile = config ? config.tile : null;
@@ -1196,7 +1190,7 @@ class ActionResult {
     }
 }
 
-class SweepAction {
+export class SweepAction {
     get debugDescription() { return `<${this.constructor.name}>`; }
     get actionDescription() { return null; }
     get requiresGameStatePlaying() { return true; }
@@ -1586,7 +1580,7 @@ SweepAction.MooAction = MooAction;
 
 function mark__Tile_Collections_and_Transforms() {} // ~~~~~~ Tile Collections and Transforms ~~~~~~
 
-class TileCollection {
+export class TileCollection {
     static allTiles(session) {
         let tiles = [];
         session.game.board.visitTiles(null, tile => tiles.push(tile));
@@ -1659,7 +1653,7 @@ class TileCollection {
     }
 } // end class TileCollection
 
-class TileTransform {
+export class TileTransform {
     static unique(tiles) {
         let applied = [];
         tiles.forEach(tile => {
@@ -1774,7 +1768,7 @@ TileTransform.MinedNeighborCountRangeFilter = MinedNeighborCountRangeFilter;
 
 function mark__Achievement() {} // ~~~~~~ Achievement ~~~~~~
 
-class Achievement {
+export class Achievement {
     static initialize() {
         Achievement.allTypes = {
             "Achievement.HighestScoreInAnyGame": Achievement.HighestScoreInAnyGame,
@@ -3053,7 +3047,7 @@ class NewGameDialog extends GameDialog {
     }
 
     get isDismissable() {
-        return !!Sweep.session;
+        return !!GameSession.shared;
     }
 
     get isModal() { return !this.isDismissable; }
@@ -3699,7 +3693,7 @@ class SweepPerfTimer extends Gaming.PerfTimer {
 }
 SweepPerfTimer.shared = null;
 
-var initialize = async function() {
+export let initialize = async function() {
     let content = await GameContent.loadYamlFromLocalFile("sweep-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
     if (!content) {
         alert(Strings.str("failedToLoadGameMessage"));
@@ -3707,24 +3701,7 @@ var initialize = async function() {
     }
 
     Strings.initialize(content.strings, content.pluralStrings, navigator.language);
+    SweepSolver.initialize();
     Game.initialize(content);
     new NewGameDialog().show();
 };
-
-return {
-    initialize: initialize,
-    session: null,
-    ActionResult: ActionResult,
-    Game: Game,
-    GameSession: GameSession,
-    GameTile: GameTile,
-    Achievement: Achievement,
-    SweepAction: SweepAction,
-    TileCollection: TileCollection,
-    TileFlag: TileFlag,
-    TileTransform: TileTransform
-};
-
-})(); // end Sweep namespace
-
-Sweep.initialize();

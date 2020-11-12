@@ -1,5 +1,7 @@
 "use-strict";
 
+if (!Number.uiInteger) {
+
 Number.uiInteger = function(value) {
     return Number(value).toLocaleString();
 };
@@ -17,11 +19,11 @@ Number.uiPercent = function(ratio) {
 Number.uiFormatWithPercent = function(percent) {
     return percent.toLocaleString() + "%";
 };
-
-Gaming.Strings = (() => {
+    
+}
 
     // Text localization
-    class Strings {
+    export class Strings {
         // Initialize with keys -> localized strings, e.g. from a config file,
         // and optionally the user's preferred region.
         // Special keys in the first dictionary:
@@ -144,10 +146,10 @@ Gaming.Strings = (() => {
                 if (data.hasOwnProperty(rule.magnitudeKey)) {
                     let magnitude = data[rule.magnitudeKey];
                     if (typeof(magnitude) == 'object' && magnitude.hasOwnProperty("value")) {
-                        let value = Gaming.Strings.pluralize(rule.templateKey, magnitude.value, magnitude.formatted);
+                        let value = Strings.pluralize(rule.templateKey, magnitude.value, magnitude.formatted);
                         template = template.replaceAll(rule.token, value);
                     } else {
-                        let value = Gaming.Strings.pluralize(rule.templateKey, data[rule.magnitudeKey], data[rule.formattedMagnitudeKey]);
+                        let value = Strings.pluralize(rule.templateKey, data[rule.magnitudeKey], data[rule.formattedMagnitudeKey]);
                         template = template.replaceAll(rule.token, value);
                     }
                 }
@@ -169,21 +171,23 @@ Gaming.Strings = (() => {
         return template.replaceAll(placeholder, formattedMagnitude);
     };
 
-    return Strings;
-})(); // end Gaming.Strings
-Gaming.Strings.source = {}; // call Strings.initialize(dict) to configure
+Strings.source = {}; // call Strings.initialize(dict) to configure
+
+if (!Array.oxfordCommaList) {
 
 Array.oxfordCommaList = function(items) {
     if (!items) return items;
     switch (items.length) {
         case 0: return "";
         case 1: return items[0];
-        case 2: return Gaming.Strings.template("oxfordCommaTwoItemsTemplate", { first: items[0], last: items[1] });
+        case 2: return Strings.template("oxfordCommaTwoItemsTemplate", { first: items[0], last: items[1] });
         default:
             let last = items.pop();
-            return Gaming.Strings.template("oxfordCommaManyItemsTemplate", {
-                first: items.join(Gaming.Strings.str("oxfordCommaManyItemsSeparator")),
+            return Strings.template("oxfordCommaManyItemsTemplate", {
+                first: items.join(Strings.str("oxfordCommaManyItemsSeparator")),
                 last: last
             });
     }
 };
+
+}

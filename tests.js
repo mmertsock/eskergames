@@ -1,39 +1,29 @@
 "use-strict";
 
-window.UnitTests = (function(outputElement) {
+import { Strings } from './locale.js';
+import {
+    Binding, BoolArray,
+    CanvasStack, ChangeTokenBinding, CircularArray,
+    Dispatch, DispatchTarget,
+    FlexCanvasGrid,
+    GameTask,
+    Kvo,
+    PeriodicRandomComponent, Point,
+    RandomComponent, RandomBlobGenerator, RandomLineGenerator, Rect, Rng,
+    SaveStateItem, SelectableList, SaveStateCollection,
+    TaskQueue, TilePlane,
+    UndoStack,
+    Vector
+} from './g.js';
 
-const Binding = Gaming.Binding;
-const BoolArray = Gaming.BoolArray;
-const CanvasStack = Gaming.CanvasStack;
-const ChangeTokenBinding = Gaming.ChangeTokenBinding;
-const CircularArray = Gaming.CircularArray;
-const Dispatch = Gaming.Dispatch;
-const DispatchTarget = Gaming.DispatchTarget;
-const FlexCanvasGrid = Gaming.FlexCanvasGrid;
-const GameTask = Gaming.GameTask;
-const Kvo = Gaming.Kvo;
-const PeriodicRandomComponent = Gaming.PeriodicRandomComponent;
-const Point = Gaming.Point;
-const RandomComponent = Gaming.RandomComponent;
-const RandomBlobGenerator = Gaming.RandomBlobGenerator;
-const RandomLineGenerator = Gaming.RandomLineGenerator;
-const Rect = Gaming.Rect;
-const Rng = Gaming.Rng;
-const SaveStateItem = Gaming.SaveStateItem;
-const Strings = Gaming.Strings;
-const TaskQueue = Gaming.TaskQueue;
-const TilePlane = Gaming.TilePlane;
-const UndoStack = Gaming.UndoStack;
-const Vector = Gaming.Vector;
-
-const SimDate = CitySim.SimDate;
+// import { SimDate } from './city.js';
 
 function appendOutputItem(msg, className) {
-    if (!outputElement) { return; }
+    if (!TestSession.outputElement) { return; }
     var elem = document.createElement("li");
     elem.innerText = msg;
     elem.addRemClass(className, true);
-    outputElement.append(elem);
+    TestSession.outputElement.append(elem);
 }
 
 function logTestMsg(msg) {
@@ -56,13 +46,14 @@ function logTestFail(msg) {
     appendOutputItem(msg, "warn");
 }
 
-class TestSession {
+export class TestSession {
     constructor(testFuncs) {
         this.testFuncs = testFuncs;
         this.testsPassed = 0;
         this.testsFailed = 0;
     }
-    run() {
+    run(outputElement) {
+        TestSession.outputElement = outputElement;
         this.testFuncs.forEach(function (t) {
             t();
         });
@@ -78,6 +69,7 @@ class TestSession {
         }
     }
 }
+TestSession.current = null;
 
 class UnitTest {
     constructor(name, body) {
@@ -862,7 +854,7 @@ class SelectableStub {
 function selectableListTest() {
     new UnitTest("SelectableList", function() {
         var items = [new SelectableStub("a", false), new SelectableStub("b", true), new SelectableStub("c", false)];
-        var sut = new Gaming.SelectableList(items);
+        var sut = new SelectableList(items);
         this.assertEqual(sut.selectedIndex, 1);
         this.assertEqual(sut.selectedItem, items[1]);
         sut.setSelectedIndex(2);
@@ -923,7 +915,7 @@ function saveStateTest() {
         this.assertEqual(item1.data, data1);
 
         window.sessionStorage.clear();
-        var sut = new Gaming.SaveStateCollection(window.sessionStorage, "_unitTests_");
+        var sut = new SaveStateCollection(window.sessionStorage, "_unitTests_");
         this.assertEqual(sut.itemsSortedByLastSaveTime.length, 0);
         this.assertEqual(sut.getItem(item1.id), null);
         this.assertTrue(sut.deleteItem(item1.id));
@@ -1142,7 +1134,7 @@ function changeTokenBindingTest() {
         sut = new ChangeTokenBinding(person1.kvo.title, false);
         this.assertFalse(sut.hasChange, "has: initial set to false with non-zero target token");
 
-        items = [new ChangeTokenBinding(person1.kvo.name, false), new ChangeTokenBinding(person1.kvo.title, true)];
+        let items = [new ChangeTokenBinding(person1.kvo.name, false), new ChangeTokenBinding(person1.kvo.title, true)];
         this.assertTrue(ChangeTokenBinding.consumeAll(items), "consumeAll: one initial true value");
         this.assertFalse(items[0].hasChange);
         this.assertFalse(items[1].hasChange);
@@ -2228,7 +2220,7 @@ let standardSuite = new TestSession([
     flexCanvasGridTest2,
     flexCanvasGridTest3,
     cityRectExtensionsTest,
-    simDateTest
+    // simDateTest
 ]);
 
 let taskSuite = new TestSession([
@@ -2236,10 +2228,3 @@ let taskSuite = new TestSession([
     ]);
 
 TestSession.current = standardSuite;
-// TestSession.current = new TestSession([randomBlobTest]);
-
-return TestSession.current;
-
-})(document.querySelector("#testOutput"));
-
-UnitTests.run();

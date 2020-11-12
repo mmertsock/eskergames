@@ -1,15 +1,10 @@
 "use-strict";
 
-self.Charts = (function() {
-
-const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
-
-const Point = Gaming.Point;
-const Rect = Gaming.Rect;
+import { debugLog, debugWarn, directions, Point, Rect } from './g.js';
 
 const _zeroToOne = { min: 0, max: 1 };
 
-class ChartDataSeries {
+export class ChartDataSeries {
     constructor(config) {
         this.name = config.name;
         this.values = [];
@@ -42,7 +37,7 @@ class ChartDataSeries {
     }
 }
 
-class ChartDataSeriesPresentation {
+export class ChartDataSeriesPresentation {
     constructor(config) {
         this.series = config.series;
         this.style = Object.assign({
@@ -56,7 +51,7 @@ ChartDataSeriesPresentation.Type = {
     line: "line"
 };
 
-class ChartAxisPresentation {
+export class ChartAxisPresentation {
     static defaultValueLabelFormatter(value) {
         return `${value}`;
     }
@@ -97,7 +92,7 @@ class ChartAxisPresentation {
     }
 }
 
-class ChartView {
+export class ChartView {
     constructor(config) {
         this.canvas = config.canvas;
         this.title = config.title || null;
@@ -412,12 +407,3 @@ class ChartView {
         ctx.restore();
     }
 } // end class ChartView
-
-return {
-    ChartDataSeries: ChartDataSeries,
-    ChartDataSeriesPresentation: ChartDataSeriesPresentation,
-    ChartAxisPresentation: ChartAxisPresentation,
-    ChartView: ChartView
-};
-
-})(); // end Charts namespace

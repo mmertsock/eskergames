@@ -1,11 +1,8 @@
 "use-strict";
 
-(function() {
+import { debugLog, once, KeyInputController } from './g.js';
 
-var debugLog = Gaming.debugLog;
-var once = Gaming.once;
-
-class GameScriptEngine {
+export class GameScriptEngine {
     constructor() {
         this._commandRegistry = {};
         this.debug = false;
@@ -50,15 +47,17 @@ class GameScriptEngine {
     }
 }
 
-EventTarget.prototype.addGameCommandEventListener = function(eventType, preventDefault, command, subject) {
-    this.addEventListener(eventType, (evt) => {
-        if (preventDefault) { evt.preventDefault(); }
-        if (!Gaming.GameScriptEngine || !Gaming.GameScriptEngine.shared) { return; }
-        Gaming.GameScriptEngine.shared.execute(command, subject);
-    });
-};
+if (!EventTarget.prototype.addGameCommandEventListener) {
+    EventTarget.prototype.addGameCommandEventListener = function(eventType, preventDefault, command, subject) {
+        this.addEventListener(eventType, (evt) => {
+            if (preventDefault) { evt.preventDefault(); }
+            if (!Gaming.GameScriptEngine || !Gaming.GameScriptEngine.shared) { return; }
+            Gaming.GameScriptEngine.shared.execute(command, subject);
+        });
+    };
+}
 
-class GameContent {
+export class GameContent {
     static loadYamlFromLocalFile(path, cachePolicy) {
         if (typeof cachePolicy === "undefined") {
             cachePolicy = GameContent.cachePolicies.auto;
@@ -138,7 +137,8 @@ GameContent.cachePolicies = {
 };
 GameContent.oneTimeLoadKeys = new Set();
 
-Gaming.GameContent = GameContent;
-Gaming.GameScriptEngine = GameScriptEngine;
-
-})(); // end namespace
+KeyInputController.prototype.addGameScriptShortcut = function(code, shift, script, subject) {
+    this.addShortcutListener({ id: script, code: code, shift: shift }, (controller, shortcut, evt) => {
+        GameScriptEngine.shared.execute(script, subject, evt);
+    });
+};

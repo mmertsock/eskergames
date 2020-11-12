@@ -1,46 +1,73 @@
 "use-strict";
 
-function alias(symbol, x) {
-    return symbol;
-}
+import { Strings } from './locale.js';
 
 function setWorkerScope(name) {
     self.workerScope = name;
 }
 
-function debugLog(msg) {
+export function debugLog(msg) {
     if (typeof(self.workerScope) == 'string' && typeof(msg) == 'string') {
         console.log(msg, self.workerScope);
     } else {
         console.log(msg);
     }
 }
-function debugInfo(msg) {
+export function debugInfo(msg) {
     if (typeof(self.workerScope) == 'string' && typeof(msg) == 'string') {
         console.info(msg, self.workerScope);
     } else {
         console.info(msg);
     }
 }
-function debugWarn(msg, trace) {
+export function debugWarn(msg, trace) {
     console.warn(msg);
     if (trace) { console.trace(); }
 }
 
+export function debugExpose(name, obj) {
+    if (!self._debugObj) {
+        self._debugObj = {};
+    }
+    if (!self._debugObj.hasOwnProperty(name)) {
+        self._debugObj[name] = {};
+    }
+    if (typeof(obj) != 'undefined') {
+        self._debugObj[name] = obj;
+    }
+    return self._debugObj[name];
+}
+
 var onceTokens = new Set();
-function once(id, block) {
+export function once(id, block) {
     if (onceTokens.has(id)) { return; }
     debugLog("(once) " + id);
     block();
     onceTokens.add(id);
 }
 
-function deserializeAssert(condition, message) {
+export function deserializeAssert(condition, message) {
     if (!!condition) { return; }
     var error = message ? `Deserialization error: ${message}` : "Deserialization error";
     debugWarn(error, true);
     throw new Error(error);
 }
+
+const _primes = [3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71];
+export function hashArrayOfInts(values) {
+    var result = 0;
+    if (values.length < 1) { return result; }
+    values = values.map(v => Math.abs(parseInt(v)));
+    var m = _primes[values[0] % _primes.length] % _primes.length;
+    for (var i = 0; i < values.length; i++) {
+        var m2 = (m + 3) % _primes.length;
+        result = (result + (Math.abs(parseInt(values[i])) * _primes[m])) % _primes[m2];
+        m = _primes[m] % _primes.length;
+    }
+    return result;
+}
+
+if (!Object.isPrimitive) {
 
 Object.isPrimitive = function(o) {
     var type = typeof(o);
@@ -163,20 +190,6 @@ Set.prototype.addIfNotContains = function(value) {
     return true;
 };
 
-var _primes = [3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71];
-function hashArrayOfInts(values) {
-    var result = 0;
-    if (values.length < 1) { return result; }
-    values = values.map(v => Math.abs(parseInt(v)));
-    var m = _primes[values[0] % _primes.length] % _primes.length;
-    for (var i = 0; i < values.length; i++) {
-        var m2 = (m + 3) % _primes.length;
-        result = (result + (Math.abs(parseInt(values[i])) * _primes[m])) % _primes[m2];
-        m = _primes[m] % _primes.length;
-    }
-    return result;
-}
-
 // https://stackoverflow.com/a/2450976/795339
 Array.prototype.shuffle = function() {
     var currentIndex = this.length, temporaryValue, randomIndex;
@@ -203,9 +216,12 @@ JSON.prettyStringify = function(object, width, disableBase64) {
     return text;
 };
 
+} // end if (!Object.isPrimitive)
+
 self.isWorkerScope = (typeof(DedicatedWorkerGlobalScope) == 'function');
 
-if (!self.isWorkerScope) { // DOM objects, etc., unavailable to Worker scope
+// DOM objects, etc., unavailable to Worker scope
+if (!self.isWorkerScope && !Element.prototype.addRemClass) {
 
 Element.prototype.addRemClass = function(className, shouldAdd) {
     if (shouldAdd)
@@ -237,7 +253,7 @@ HTMLCanvasElement.getDevicePixelScale = function() {
 };
 
 HTMLCanvasElement.prototype.rectForFullCanvas = function() {
-    return new Gaming.Rect(0, 0, this.width, this.height);
+    return new Rect(0, 0, this.width, this.height);
 }
 
 HTMLCanvasElement.prototype.updateBounds = function() {
@@ -316,15 +332,13 @@ CanvasRenderingContext2D.prototype.roundRect = function(rect, xRadius, yRadius, 
 };
 } // end if !isWorkerScope
 
-Mixins = {
+export let Mixins = {
     mix: function(prototype, name, func) {
         prototype[name] = prototype[name] || func;
     }
 };
 
 // ----------------------------------------------------------------------
-
-Gaming = (function() {
 
 const _zeroToOne = { min: 0, max: 1 };
 
@@ -355,7 +369,7 @@ Mixins.Gaming.DelegateSet = function(cls) {
     });
 };
 
-class WorkerMessage {
+export class WorkerMessage {
     static registerType(type) {
         WorkerMessage.types[type.name] = type.name;
         type.messageName = type.name;
@@ -414,7 +428,7 @@ class WorkerController {
     }
 }
 
-class UIWorkerController extends WorkerController {
+export class UIWorkerController extends WorkerController {
     constructor(config) {
         super(config);
         this.worker = config.worker;
@@ -427,7 +441,7 @@ class UIWorkerController extends WorkerController {
     }
 }
 
-class BackgroundWorkerController extends WorkerController {
+export class BackgroundWorkerController extends WorkerController {
     constructor(config) {
         super(config);
         self.onmessage = (e) => this.receivedMessage(e);
@@ -439,11 +453,11 @@ class BackgroundWorkerController extends WorkerController {
     }
 }
 
-class GameTask {
+export class GameTask {
     perform(target, queue) { }
 }
 
-class TaskQueue {
+export class TaskQueue {
     constructor() {
         this.tasks = [];
     }
@@ -470,7 +484,7 @@ class TaskQueue {
     }
 }
 
-class Rng {
+export class Rng {
     nextUnitFloat() {
         return Math.random();
     }
@@ -499,7 +513,7 @@ class NonSmoothedSequence {
     push(value) { this.lastValue = value; return this.lastValue; }
 }
 
-class SmoothedSequence {
+export class SmoothedSequence {
     static withWindowSize(size) {
         return (typeof(size) == 'undefined' || size < 2) ? new NonSmoothedSequence() : new SmoothedSequence(size);
     }
@@ -522,7 +536,7 @@ class SmoothedSequence {
     }
 }
 
-class PeriodicRandomComponent {
+export class PeriodicRandomComponent {
     constructor(config) {
         this.amplitude = Math.abs(config.amplitude);
         this.period = {
@@ -555,7 +569,7 @@ class PeriodicRandomComponent {
     }
 }
 
-class RandomComponent {
+export class RandomComponent {
     constructor(config) {
         this.amplitude = Math.abs(config.amplitude);
         this.smoothing = SmoothedSequence.withWindowSize(config.smoothing);
@@ -571,7 +585,7 @@ class RandomComponent {
     }
 }
 
-class RandomLineGenerator {
+export class RandomLineGenerator {
     static componentsFromConfig(items) {
         return items.map(config => { let type = Gaming[config.type]; return new type(config); });
     }
@@ -615,7 +629,7 @@ class RandomLineGenerator {
 // in makeBlob, you use the RandomLineGenerator, mapped to a polar coordinate space, to 
 // produce an ideal -1...1 square blob, then stretch that blob to the specified size
 // and quantize into an array of BoolArrays.
-class RandomBlobGenerator {
+export class RandomBlobGenerator {
     constructor(config) {
         this.perimeterGenerator = new RandomLineGenerator({
             min: 1 - Math.clamp(config.variance, _zeroToOne),
@@ -886,7 +900,7 @@ class RandomLineGeneratorOLD {
     }
 }
 
-class BoolArray {
+export class BoolArray {
     constructor(obj) {
         if (Array.isArray(obj)) {
             this.length = obj.shift() || 0;
@@ -944,7 +958,7 @@ class BoolArray {
     _mask(index) { return 0x1 << (index % 8); }
 }
 
-class CircularArray {
+export class CircularArray {
     constructor(maxLength) {
         this.maxLength = maxLength;
         this.items = new Array(maxLength);
@@ -1006,7 +1020,7 @@ class CircularArray {
     }
 }
 
-class Easing {
+export class Easing {
     static linearCurve(elapsed) { return elapsed; }
     static smoothCurve(elapsed) {
         if (elapsed < 0.5)
@@ -1045,7 +1059,7 @@ class Easing {
 }
 Easing.zeroToOneRange = { min: 0, max: 1 };
 
-class SelectableList {
+export class SelectableList {
     constructor(items) {
         this.items = items;
     }
@@ -1081,7 +1095,7 @@ class SelectableList {
     }
 }
 
-class UndoStack {
+export class UndoStack {
     constructor() {
         this.stack = [];
         this.index = 0;
@@ -1126,8 +1140,9 @@ class UndoStack {
 }
 
 // ----------------------------------------------------------------------
+function mark__Geometry() { }
 
-var directions = {
+export const directions = {
     N: 0,
     NE: 1,
     E: 2,
@@ -1145,7 +1160,7 @@ directions.debugDescriptionOf = function(direction) {
     return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][direction];
 }
 
-class XYValue {
+export class XYValue {
     isEqual(p2, tol) {
         tol = (tol === undefined) ? 0 : 0.01;
         return Math.fequal(this.x, p2.x, tol) && Math.fequal(this.y, p2.y, tol);
@@ -1178,7 +1193,7 @@ class XYValue {
     }
 }
 
-class Point extends XYValue {
+export class Point extends XYValue {
     static min(p1, p2) {
         return new Point(Math.min(p1.x, p2.x), Math.min(p1.y, p2.y));
     }
@@ -1206,7 +1221,7 @@ class Point extends XYValue {
 }
 Point.zeroConst = new Point();
 
-class Rect {
+export class Rect {
     constructor(x, y, width, height) {
         if (typeof x === 'undefined') { // zero args: the unit rect
             this.x = 0;
@@ -1350,7 +1365,7 @@ class Rect {
     }
 }
 
-class Vector extends XYValue {
+export class Vector extends XYValue {
     static betweenPoints(a, b) {
         return new Vector(b.x - a.x, b.y - a.y);
     }
@@ -1420,7 +1435,7 @@ Vector.cardinalUnits = [Vector.manhattanUnits[directions.N], Vector.manhattanUni
 
 // ----------------------------------------------------------------------
 
-class PerfTimer {
+export class PerfTimer {
     constructor(name) {
         this.isEnabled = !!performance;
         this.name = name;
@@ -1471,7 +1486,7 @@ var RunStates = {
 //   runLoopWillResume(RunLoop)
 //   runLoopDidPause(RunLoop)
 //   runLoopDidChange(RunLoop)
-var RunLoop = function(config) {
+export var RunLoop = function(config) {
     this.id = config.id;
     this.targetFrameRate = config.targetFrameRate;
     this.targetFrameInterval = 1000 / config.targetFrameRate;
@@ -1622,7 +1637,9 @@ RunLoop.prototype.processFrame = function() {
     this.scheduleNextFrame();
 };
 
-class SaveStateCollection {
+function mark__Storage() { }
+
+export class SaveStateCollection {
     // these will throw
     static serialize(object) { return object ? JSON.stringify(object) : object; }
     static deserialize(savedString) { return JSON.parse(savedString); }
@@ -1737,7 +1754,7 @@ class SaveStateSummaryItem {
     }
 }
 
-class SaveStateItem {
+export class SaveStateItem {
     static newID() { return Rng.shared.nextHexString(16); }
 
     static fromDeserializedWrapper(wrapper) {
@@ -1759,7 +1776,9 @@ class SaveStateItem {
     }
 }
 
-class Dispatch {
+function mark__Dispatch() { }
+
+export class Dispatch {
     constructor() {
         this._blocks = {};
         this.totalDispatches = 0;
@@ -1799,7 +1818,7 @@ class Dispatch {
 }
 Dispatch.shared = new Dispatch();
 
-class Kvo {
+export class Kvo {
     static stopAllObservations(target) {
         if (!target._kvoDT) { return; }
         Dispatch.shared.remove(target._kvoDT);
@@ -1870,7 +1889,7 @@ class KvoProperty {
     }
 }
 
-class Binding {
+export class Binding {
     // config.source: a Kvo or KvoProperty
     // config.target: a KvoProperty or anything with a setValue func
     // config.sourceFormatter: (optional) a func to transform the source kvo value (see default below)
@@ -1891,7 +1910,7 @@ class Binding {
     }
 }
 
-class ChangeTokenBinding {
+export class ChangeTokenBinding {
     static consumeAll(bindings) {
         return bindings.map(item => item.consume()).filter(item => item).length > 0;
     }
@@ -1908,7 +1927,7 @@ class ChangeTokenBinding {
     }
 }
 
-class DispatchTarget {
+export class DispatchTarget {
     constructor(id) {
         DispatchTarget.counter += 1;
         this.id = id || `DispatchTarget-${DispatchTarget.counter}`;
@@ -1927,7 +1946,7 @@ DispatchTarget.counter = 0;
 //   keyboardStateDidChange(KeyboardState, eventType)
 //      eventType = keydown|keyup
 //   keyboardStateContinuing(KeyboardState).
-var KeyboardState = function(config) {
+export var KeyboardState = function(config) {
     this.keyCodesCurrentlyDown = new Set();
     config.runLoop.addDelegate(this);
     document.addEventListener("keydown", e => this.keydown(e));
@@ -1991,6 +2010,7 @@ KeyboardState.prototype.reset = function() {
 };
 
 // ----------------------------------------------------------------------
+function mark__Canvas() {}
 
 // Finite plane of square tiles. A defined origin and size.
 // Model coordinates have origin at bottom left, screen coordinates 
@@ -2004,7 +2024,7 @@ KeyboardState.prototype.reset = function() {
 // 1      2
 // 0      3
 // -1     4
-class TilePlane {
+export class TilePlane {
     constructor(size, tileWidth) {
         // width/height of the primary model coordinate space. 1 unit = 1 tile
         this.size = { width: size.width, height: size.height };
@@ -2152,7 +2172,7 @@ class TilePlane {
     }
 }
 
-class CanvasStack {
+export class CanvasStack {
     static Kvo() { return { "canvasDeviceSize": "_canvasDeviceSize" }; }
 
     constructor(containerElem, layerCount) {
@@ -2237,7 +2257,7 @@ So rects may be 2x size of tileWidth depending on screen scale.
     this.ctx.transform(this.canvasSizeInfo.pointsPerUnit * scale, 0, 0, -this.canvasSizeInfo.pointsPerUnit * scale, 0, this.canvas.height);
     this.ctx.save();
 */
-class FlexCanvasGrid {
+export class FlexCanvasGrid {
     static getDevicePixelScale() { return HTMLCanvasElement.getDevicePixelScale(); }
 
     constructor(config) {
@@ -2351,7 +2371,7 @@ class FlexCanvasGrid {
 
 function mark__Keyboard_Management() {} // ~~~~~~ Keyboard Management ~~~~~~
 
-class KeyInputShortcut {
+export class KeyInputShortcut {
     constructor(config) {
         this.id = config.id || null;
         this.code = config.code;
@@ -2401,7 +2421,7 @@ class KeyInputShortcut {
     }
 }
 
-class KeyInputController {
+export class KeyInputController {
     constructor() {
         document.addEventListener("keydown", e => this.keydown(e));
         document.addEventListener("keyup", e => this.keyup(e));
@@ -2416,7 +2436,7 @@ class KeyInputController {
 
     get activeCodes() { return Object.getOwnPropertyNames(this.codeState); }
     get isActive() {
-        return this.hasPointer && !Gaming.GameDialogManager.shared.hasFocus;
+        return this.hasPointer && !GameDialogManager.shared.hasFocus;
     }
 
     isCodeActive(code) { return this.codeState.hasOwnProperty(code); }
@@ -2445,13 +2465,6 @@ class KeyInputController {
             } else {
                 this.addGameScriptShortcut(tokens[0], false, script, subject);
             }
-        });
-    }
-
-    addGameScriptShortcut(code, shift, script, subject) {
-        // TODO build a help menu automatically
-        this.addShortcutListener({ id: script, code: code, shift: shift }, (controller, shortcut, evt) => {
-            Gaming.GameScriptEngine.shared.execute(script, subject, evt);
         });
     }
 
@@ -2542,10 +2555,10 @@ Mixins.Gaming.DelegateSet(KeyInputController);
 //     KeyInputController.shared = new KeyInputController();
 // }
 
-function mark__UI_Controls() {} // ~~~~~~ UI Controls ~~~~~~
+function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 
 // Subclasses implement: get/set value().
-class FormValueView {
+export class FormValueView {
     constructor(config, elem) {
         this.elem = elem;
         if (config.parent) { config.parent.append(this.elem); }
@@ -2557,7 +2570,7 @@ class FormValueView {
     }
 }
 
-class InputView extends FormValueView {
+export class InputView extends FormValueView {
     static trimTransform(value) {
         return (typeof(value) === 'string') ? value.trim() : value;
     }
@@ -2756,7 +2769,7 @@ class SingleChoiceInputCollection extends FormValueView {
 }
 FormValueView.SingleChoiceInputCollection = SingleChoiceInputCollection;
 
-class ToolButton {
+export class ToolButton {
     static createElement(config) {
         var elem = document.createElement("a")
             .addRemClass("tool", true)
@@ -2813,7 +2826,7 @@ class ToolButton {
 
 function mark__Dialog_Management() {} // ~~~~~~ Dialog Management ~~~~~~
 
-class GameDialogManager {
+export class GameDialogManager {
     constructor() {
         this.containerElem = document.querySelector("#dialogs");
         this.items = [];
@@ -2860,7 +2873,7 @@ if (!self.isWorkerScope) {
 // Required: get dialogButtons() -> array of DOM elements
 // Optional: get isModal() -> bool
 // Optional: get rootElemClass() -> text
-class GameDialog {
+export class GameDialog {
     static createContentElem() { return document.createElement("content"); }
     static createFormElem() { return document.createElement("gameForm"); }
 
@@ -2878,7 +2891,7 @@ class GameDialog {
         })
         var header = document.createElement("header");
         this.dismissButton = new ToolButton({
-            title: Gaming.Strings.str("dialogDismissButton"),
+            title: Strings.str("dialogDismissButton"),
             click: () => this.dismissButtonClicked()
         });
         header.append(this.dismissButton.elem);
@@ -2910,12 +2923,12 @@ class GameDialog {
         if (config && config.message) {
             message = config.message;
         } else if (config && config.fieldNames) {
-            message = Gaming.Strings.template("validationFailureFieldListTemplate", { items: Array.oxfordCommaList(config.fieldNames) });
+            message = Strings.template("validationFailureFieldListTemplate", { items: Array.oxfordCommaList(config.fieldNames) });
         }
-        new Gaming.Prompt({
-            title: Gaming.Strings.str("validationFailureTitle"),
+        new Prompt({
+            title: Strings.str("validationFailureTitle"),
             message: message,
-            buttons: [{ label: Gaming.Strings.str("okButton") }],
+            buttons: [{ label: Strings.str("okButton") }],
             requireSelection: true
         }).show();
     }
@@ -2927,7 +2940,7 @@ class GameDialog {
 //   buttons: [{label: "html", classNames: ["",...]?, action: function()?}, ...],
 //   unprioritizeButtons: bool=false, requireSelection: bool=false}
 // dismissed called if prompt escaped (button arg is null then), or button without a callback is clicked.
-var Prompt = function(config) {
+export var Prompt = function(config) {
     this.config = config;
     this.elem = document.querySelector("prompt"); // only a single <prompt> element allowed
 
@@ -3007,57 +3020,3 @@ Prompt.prototype.dismiss = function(action, button) {
         this.config.dismissed(button);
     }
 };
-
-// ----------------------------------------------------------------------
-
-return {
-    alias: alias,
-    debugLog: debugLog,
-    debugInfo: debugInfo,
-    debugWarn: debugWarn,
-    once: once,
-    deserializeAssert: deserializeAssert,
-    directions: directions,
-    hashArrayOfInts: hashArrayOfInts,
-    Binding: Binding,
-    BoolArray: BoolArray,
-    CanvasStack: CanvasStack,
-    ChangeTokenBinding: ChangeTokenBinding,
-    CircularArray: CircularArray,
-    Dispatch: Dispatch,
-    DispatchTarget: DispatchTarget,
-    Easing: Easing,
-    FlexCanvasGrid: FlexCanvasGrid,
-    FormValueView: FormValueView,
-    GameDialogManager: GameDialogManager,
-    GameDialog: GameDialog,
-    GameTask: GameTask,
-    KeyboardState: KeyboardState,
-    KeyInputShortcut,
-    KeyInputController,
-    Kvo: Kvo,
-    PerfTimer: PerfTimer,
-    PeriodicRandomComponent: PeriodicRandomComponent,
-    Point: Point,
-    Prompt: Prompt,
-    RandomComponent: RandomComponent,
-    RandomBlobGenerator: RandomBlobGenerator,
-    RandomLineGenerator: RandomLineGenerator,
-    Rect: Rect,
-    Rng: Rng,
-    RunLoop: RunLoop,
-    SaveStateCollection: SaveStateCollection,
-    SaveStateItem: SaveStateItem,
-    SelectableList: SelectableList,
-    SmoothedSequence: SmoothedSequence,
-    TaskQueue: TaskQueue,
-    TilePlane: TilePlane,
-    ToolButton: ToolButton,
-    UndoStack: UndoStack,
-    Vector: Vector,
-    WorkerMessage: WorkerMessage,
-    UIWorkerController: UIWorkerController,
-    BackgroundWorkerController: BackgroundWorkerController
-};
-
-})(); // end Gaming namespace decl

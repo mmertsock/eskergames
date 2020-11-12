@@ -1,27 +1,8 @@
 "use-strict";
 
-self.SweepSolver = (function() {
-
-const alias = Gaming.alias, debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAssert = Gaming.deserializeAssert, directions = Gaming.directions, once = Gaming.once;
-const GameSession = alias(Sweep.GameSession, {
-    game: { board: null },
-    mostRecentAction: { action: null, tile: null }
-});
-const GameTile = alias(Sweep.GameTile, {
-    neighbors: [],
-    minedNeighborCount: 0,
-    isCovered: true,
-    flag: null,
-    visitNeighbors: null
-});
-const PerfTimer = Gaming.PerfTimer;
-const Strings = Gaming.Strings;
-const ActionResult = Sweep.ActionResult;
-const SweepAction = Sweep.SweepAction;
-const TileBasedAction = Sweep.SweepAction.TileBasedAction;
-const TileCollection = Sweep.TileCollection;
-const TileFlag = Sweep.TileFlag;
-const TileTransform = Sweep.TileTransform;
+import { Strings } from './locale.js';
+import { debugLog, PerfTimer } from './g.js';
+import { ActionResult, GameSession, GameTile, SweepAction, TileCollection, TileFlag, TileTransform } from './sweep.js';
 
 function mark__Solver_Agent() {} // ~~~~~~ Solver Agent ~~~~~~
 
@@ -42,7 +23,7 @@ class SolverResult {
     }
 }
 
-class SolverAgent {
+export class SolverAgent {
     constructor(config) {
         this.session = config.session;
         this.solvers = config.solvers;
@@ -79,7 +60,7 @@ class SolverAgent {
 function mark__Basic_Solvers() {} // ~~~~~~ Basic Solvers ~~~~~~
 
 // Abstract base class
-class Solver {
+export class Solver {
     static initialize() {
         Solver.allSolvers = [
             new ClearHintedTileSolver(),
@@ -238,16 +219,6 @@ class ClearFullyFlaggedTileSolver extends Solver {
     }
 }
 
-var initialize = async function() {
+export function initialize() {
     Solver.initialize();
 };
-
-return {
-    Solver: Solver,
-    SolverAgent: SolverAgent,
-    initialize: initialize
-};
-
-})(); // end SweepSolver namespace
-
-SweepSolver.initialize();

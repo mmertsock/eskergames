@@ -6,14 +6,7 @@
     <link rel="icon" href="city-icon-192.png">
     <link rel="apple-touch-icon" href="city-icon-180.png">
 
-    <script defer src="js-yaml.min.js"></script>
-    <script defer src="g.js"></script>
-    <script defer src="locale.js"></script>
-    <script defer src="game-content.js"></script>
-    <script defer src="charts.js"></script>
-    <!-- sweep.js is the entry point -->
-    <script defer src="sweep.js"></script>
-    <script defer src="sweep-solver.js"></script>
+    <script src="js-yaml.min.js"></script>
 
     <link rel="stylesheet" href="city.css">
 <style type="text/css">
@@ -486,6 +479,11 @@ moo.preparing, moo.performing, moo.finishing {
 <analysis class="hidden">
     <div class="history-chart"><canvas></canvas></div>
 </analysis>
+
+<script type="module">
+    import { initialize } from './sweep.js';
+    initialize();
+</script>
 
 </body>
 </html>

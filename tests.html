@@ -5,16 +5,11 @@
     <title>Tests</title>
     <link rel="icon" href="city-icon-192.png">
     <link rel="apple-touch-icon" href="city-icon-180.png">
-    <script>
-        window.citySimInitOptions = { initGame: false, initializeAutomatically: false };
-    </script>
     <script defer src="js-yaml.min.js"></script>
-    <script defer src="g.js"></script>
-    <script defer src="locale.js"></script>
-    <script defer src="game-content.js"></script>
-    <script defer src="city.js"></script>
-    <script defer src="engine.js"></script>
-    <script defer src="tests.js"></script>
+    <script type="module">
+        import { TestSession } from './tests.js';
+        TestSession.current.run(document.querySelector("#testOutput"));
+    </script>
     <style>
     body {
         font-family: monospace;
@@ -74,8 +69,8 @@
     }
     .sparkblob td { 
         border: 1px solid white;
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
         background-color: #ddd;
     }
     .sparkblob td.highlighted {
