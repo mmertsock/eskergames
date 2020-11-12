@@ -132,7 +132,9 @@ achievements:
     name: achievementsMooName
     formattedValue: "🐄"
   Achievement.HighestScoreInFiveStarGame:
-    name: achivementsHighestScoreInFiveStarGameName
+    name: achievementsHighestScoreInFiveStarGameName
+  Achievement.HighestScoreWithoutFlags:
+    name: achievementsHighestScoreWithoutFlags
   Achievement.Won1StarGame: &WONSTARS
     name: achievementsWonStarsName
     value: achievementsWonStarsValue
@@ -214,8 +216,9 @@ strings:
   # _debugRegion: es-us
   _debug: true
   achievementsDialogTitle: Achievements
-  achivementsHighestScoreInFiveStarGameName: "Highest score at 5-star difficulty (win or lose)"
+  achievementsHighestScoreInFiveStarGameName: "Highest score at 5-star difficulty (win or lose)"
   achievementsHighestScoreInAnyGameName: "Highest score in any game (win or lose)"
+  achievementsHighestScoreWithoutFlags: Highest score without using mine markers
   achievementsMooName: "Deployed the cow to eat a mine!"
   achievementsMostClearedInSingleMoveName: Largest area cleared in a single move
   achievementsMostPointsInSingleMoveName: Most points earned in a single move

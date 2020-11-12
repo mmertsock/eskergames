@@ -200,7 +200,7 @@ export class GameTile {
         this._flag = value;
         if (this._flag.isPresent) {
             this.rainbow.flagged = moveNumber;
-            this.board.gameState.hasAnyFlag = true;
+            this.board.gameState.usedAnyFlags = true;
         } else {
             this.rainbow.flagged = -1;
         }
@@ -1776,6 +1776,7 @@ export class Achievement {
             "Achievement.MostClearedInSingleMove": Achievement.MostClearedInSingleMove,
             "Achievement.MostPointsInSingleMove": Achievement.MostPointsInSingleMove,
             "Achievement.HighestScoreInFiveStarGame": Achievement.HighestScoreInFiveStarGame,
+            "Achievement.HighestScoreWithoutFlags": Achievement.HighestScoreWithoutFlags,
             "Achievement.Won1StarGame": Achievement.Won1StarGame,
             "Achievement.Won2StarGame": Achievement.Won2StarGame,
             "Achievement.Won3StarGame": Achievement.Won3StarGame,
@@ -2010,6 +2011,31 @@ Achievement.HighestScoreInFiveStarGame = class HighestScoreInFiveStarGame extend
         }
     }
 }
+
+Achievement.HighestScoreWithoutFlags = class HighestScoreWithoutFlags extends Achievement {
+    static formatValue(achievement) {
+        return Number.uiInteger(achievement.value);
+    }
+
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.won)
+            && !session.game.board.gameState.usedAnyFlags;
+    }
+
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.status = Achievement.Status.locked;
+        this.value = 0;
+    }
+
+    gameCompleted(session, date) {
+        let points = session.game.statistics.points;
+        if (points > this.value) {
+            this.achieved(points, date);
+        }
+    }
+};
 
 Achievement.MostClearedInSingleMove = class MostClearedInSingleMove extends Achievement {
     static formatValue(achievement) {
@@ -3704,4 +3730,5 @@ export let initialize = async function() {
     SweepSolver.initialize();
     Game.initialize(content);
     new NewGameDialog().show();
+    Gaming.debugExpose("Sweep", { GameSession: GameSession });
 };
