@@ -1104,6 +1104,11 @@ Game.fromObjectForSharing = function(data) {
             mineCount: board.mineCount
         });
     }
+    if (board.size.width != difficulty.width
+        || board.size.height != difficulty.height
+        || board.mineCount != difficulty.mineCount) {
+        throw new Error("failedToParseGame");
+    }
     return new Game({ difficulty: difficulty, board: board });
 };
 
@@ -1155,9 +1160,17 @@ GameBoard.fromObjectForSharing = function(object) {
         debugWarn("GameBoard bit array length != expected tileCount"); debugLog(object);
         throw new Error("failedToParseGame");
     }
+    let actualMineCount = 0;
     board._allTiles.forEach((tile, index) => {
         tile.isMined = !!(bits.getValue(index));
+        if (tile.isMined) {
+            actualMineCount += 1;
+        }
     });
+    if (actualMineCount != board.mineCount) {
+        debugWarn("actualMineCount != expected mineCount"); debugLog(object);
+        throw new Error("failedToParseGame");
+    }
     board.reset();
     return board;
 };
