@@ -20,7 +20,7 @@ jobs:
       - name: Run deploy script via SSH
         uses: garygrossgarten/github-action-ssh@release
         with:
-          command: /home/$SSH_USERNAME/deploy-staging/deploy-eskergames.sh main
+          command: ~/deploy-staging/deploy-eskergames.sh main
           host: ${{ secrets.HOSTNAME }}
           username: ${{ secrets.SSH_USERNAME }}
           privateKey: ${{ secrets.SSH_PRIVATE_KEY}}
