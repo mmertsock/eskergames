@@ -257,6 +257,7 @@ strings:
   helpDismiss: "Thanks!"
   helpKeyboardEscapePressed: "esc|: Close popups, etc."
   helpKeyboardMoo: "🐄|: moo"
+  helpKeyboardMooTooltip: "%> moo ⏎"
   helpKeyboardNewGame: "N|: New game"
   helpKeyboardShowAnalysis: "#|: Show game stats"
   helpKeyboardShowHelp: "?|: Show help"

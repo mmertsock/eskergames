@@ -440,7 +440,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
-Game.appVersion = "1.4";
+Game.appVersion = "1.4.1";
 
 let GameState = {
     playing: 0,
@@ -3382,11 +3382,11 @@ class HelpDialog extends GameDialog {
             }
             this.appendShortcut(elem, config[0], config[1]);
         });
-        elem.querySelector(".shortcuts li:last-child").title = "%> moo ⏎";
-        this.contentElem.append(elem);
+        elem.querySelector(".shortcuts li:last-child").title = Strings.str("helpKeyboardMooTooltip");
 
-        this.gameVersionLabel = document.createElement("label");
-        this.gameVersionLabel.innerText = Strings.template("gameVersionLabelTemplate", { appVersion: Game.appVersion });
+        elem.querySelector(".version").innerText = Strings.template("gameVersionLabelTemplate", { appVersion: Game.appVersion });
+        
+        this.contentElem.append(elem);
 
         this.x = new ToolButton({
             title: Strings.str("helpDismiss"),
@@ -3414,7 +3414,7 @@ class HelpDialog extends GameDialog {
     // get cssID() { return "help"; }
     get isModal() { return false; }
     get title() { return Strings.str("helpDialogTitle"); }
-    get dialogButtons() { return [this.gameVersionLabel, this.x.elem]; }
+    get dialogButtons() { return [this.x.elem]; }
 }
 
 class GameAnalysisDialog extends GameDialog {
