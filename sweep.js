@@ -965,10 +965,10 @@ export class GameSession {
 
     // assumes tile isCovered and has minedNeighborCount == 0
     revealClearArea(tile, revealed) {
-        if (revealed.contains(tile)) return;
+        if (revealed.includes(tile)) return;
         revealed.push(tile);
         tile.visitNeighbors(neighbor => {
-            if (revealed.contains(neighbor) || !neighbor.isCovered || neighbor.flag.isPresent) return;
+            if (revealed.includes(neighbor) || !neighbor.isCovered || neighbor.flag.isPresent) return;
             if (neighbor.minedNeighborCount > 0) {
                 revealed.push(neighbor);
             } else {
@@ -1661,7 +1661,7 @@ export class TileCollection {
         if (!this.debugTiles) { this.debugTiles = []; }
         items.forEach(tile => {
             if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.TileCollection++; }
-            if (!this.debugTiles.contains(tile)) { this.debugTiles.push(tile); }
+            if (!this.debugTiles.includes(tile)) { this.debugTiles.push(tile); }
         });
     }
 } // end class TileCollection
@@ -1748,7 +1748,7 @@ class FlaggedTilesFilter extends TileTransform {
     }
 
     map(tile, collection) {
-        return this.allowedFlags.contains(tile.flag);
+        return this.allowedFlags.includes(tile.flag);
     }
 }
 TileTransform.FlaggedTilesFilter = FlaggedTilesFilter;
@@ -2703,7 +2703,7 @@ class GameTileView {
             ctx.stroke();
         }
 
-        if (Game.rules().allowDebugMode && context.session.debugTiles && context.session.debugTiles.contains(this.model)) {
+        if (Game.rules().allowDebugMode && context.session.debugTiles && context.session.debugTiles.includes(this.model)) {
             this.renderContent(context, rect, GameTileViewState.debug);
         }
     }

@@ -123,14 +123,7 @@ Math.fequal = function(v1, v2, tolerance) {
 
 Array.isEmpty = function(value) {
     return !value || value.length == 0;
-}
-if (Array.prototype.contains) {
-    console.log("Array.prototype.contains exists");
-} else {
-    Array.prototype.contains = function(value) {
-        return this.indexOf(value) >= 0;
-    };
-}
+};
 Array.prototype.isIndexValid = function(i) {
     return i >= 0 && i < this.length;
 };
@@ -232,7 +225,7 @@ Element.prototype.addRemClass = function(className, shouldAdd) {
 };
 
 Element.prototype.toggleClass = function(className) {
-    return this.addRemClass(className, !this.classList.contains(className));
+    return this.addRemClass(className, !this.classList.includes(className));
 };
 
 Element.prototype.removeAllChildren = function() {
