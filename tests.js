@@ -16,7 +16,7 @@ import {
     Vector
 } from './g.js';
 
-// import { SimDate } from './city.js';
+// import * as City from './city.js';
 
 function appendOutputItem(msg, className) {
     if (!TestSession.outputElement) { return; }
@@ -526,6 +526,23 @@ let rectTest = function() {
     }).buildAndRun();
 }
 
+function hexStringTest() {
+    new UnitTest("Array hexString", function() {
+        this.assertEqual([].toHexString(), "", "empty array");
+        this.assertEqual([0].toHexString(), "00");
+        this.assertEqual([5, 8].toHexString(), "0508");        this.assertEqual([127, 128, 255].toHexString(), "7f80ff");
+        this.assertElementsEqual(Array.fromHexString(null), [], "from null");
+        this.assertElementsEqual(Array.fromHexString(""), [], "from empty");
+        this.assertElementsEqual(Array.fromHexString("0"), []);
+        this.assertElementsEqual(Array.fromHexString("00"), [0]);
+        this.assertElementsEqual(Array.fromHexString("0508"), [5, 8]);
+        this.assertElementsEqual(Array.fromHexString("7f80FF"), [127, 128, 255]);
+        this.assertElementsEqual(Array.fromHexString("00\n01 02\n 03    99"), [0, 1, 2, 3, 153]);
+        let obj = [0, 2, 99, 84, 127, 250, 200, 0, 73, 64, 28];
+        this.assertElementsEqual(Array.fromHexString(obj.toHexString()), obj, "round trip");
+    }).buildAndRun();
+};
+
 var boolArrayTest = function() {
     new UnitTest("BoolArray", function() {
         var sut = new BoolArray(0);
@@ -578,7 +595,7 @@ var boolArrayTest = function() {
         let bytes = sut.objectForSerialization;
         this.assertTrue(Array.isArray(bytes));
         this.assertEqual(bytes.length, 5);
-        this.assertEqual(bytes[0], 27);
+        this.assertEqual(bytes[0], 5); // 5 dead bits in the last byte
         this.assertEqual(bytes[1], 3);
         this.assertEqual(bytes[2], 8);
         this.assertEqual(bytes[3], 0);
@@ -892,9 +909,9 @@ var simDateTest = function() {
     new UnitTest("SimDateTest", function(config) {
         var failedDays = [];
         for (var i = 0; i < config.days; i += 1) {
-            var d = new SimDate(i);
+            var d = new City.SimDate(i);
             // logTestMsg(d.longString());
-            var ymd = new SimDate(d.year, d.month, d.day);
+            var ymd = new City.SimDate(d.year, d.month, d.day);
             if (ymd.daysSinceEpoch != d.daysSinceEpoch) {
                 failedDays.push([ymd.daysSinceEpoch, d.daysSinceEpoch]);
             }
@@ -2202,6 +2219,7 @@ let taskQueueTest = function() {
 let standardSuite = new TestSession([
     // rectHashTest,
     manhattanDistanceFromTest,
+    hexStringTest,
     boolArrayTest,
     changeTokenBindingTest,
     circularArrayTest,

@@ -440,7 +440,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
-Game.appVersion = "1.4.1";
+Game.appVersion = "1.4.2";
 
 let GameState = {
     playing: 0,
@@ -1049,55 +1049,49 @@ GameSession.revealBehaviors = {
 
 function mark__Serialization() {} // ~~~~~~ Serialization ~~~~~~
 
-class Sharing {
-    static cleanBase64(text) {
+export class Sharing {
+    static cleanSharingCode(text) {
         return text ? text.replace(/--.*--\W*/g, "") : "";
     }
-
-    static gameBoardObject(session, preserveGameState) {
+    
+    static gameBoardObject(session) {
         if (!session || !session.game) { return null; }
-        return {
-            v: Game.schemaVersion,
-            type: Sharing.type.board,
-            data: session.game.objectForSharing(preserveGameState)
-        };
+        let header = [Game.schemaVersion, Sharing.Modes.board];
+        return header.concat(session.game.objectForSharing());
     }
 
     static gameFromBoardObject(object) {
-        if (!object) {
+        if (!Array.isArray(object) || object.length < 2) {
             throw new Error("failedToParseGame");
         }
-        if (object.v != Game.schemaVersion) {
+        if (object[0] != Game.schemaVersion) {
             throw new Error("schemaVersionUnsupported");
         }
-        if (object.type != Sharing.type.board || !object.data) {
+        if (object[1] != Sharing.Modes.board) {
             throw new Error("failedToParseGame");
         }
-        return Game.fromObjectForSharing(object.data);
+        return Game.fromObjectForSharing(object.slice(2));
     }
 }
-Sharing.type = {
-    board: "board"
+Sharing.Modes = {
+    board: 0
 };
 
-Game.prototype.objectForSharing = function(preserveGameState) {
-    return {
-        difficulty: this.difficulty.index,
-        preserveGameState: preserveGameState,
-        board: this.board.objectForSharing(preserveGameState)
-    };
+Game.prototype.objectForSharing = function() {
+    return [this.difficulty.index].concat(this.board.objectForSharing());
 };
 
 Game.fromObjectForSharing = function(data) {
-    if (!data || !data.hasOwnProperty("difficulty") || !data.hasOwnProperty("board")) {
+    if (!Array.isArray(data) || data.length < 1) {
         throw new Error("failedToParseGame");
     }
-    let difficulty = Game.rules().difficulties[data.difficulty];
+    let difficulty = Game.rules().difficulties[data[0]];
     if (!difficulty) {
         throw new Error("failedToParseGame");
     }
-    let board = GameBoard.fromObjectForSharing(data.board);
+    let board = GameBoard.fromObjectForSharing(data.slice(1));
     if (difficulty.isCustom) {
+        // TODO this also appears in NewGameDialog
         difficulty = Object.assign({}, difficulty, {
             width: board.size.width,
             height: board.size.height,
@@ -1112,37 +1106,30 @@ Game.fromObjectForSharing = function(data) {
     return new Game({ difficulty: difficulty, board: board });
 };
 
-// returns [[width, height, mineCount, preserveGameState, checksum], [tile, tile, ...]]
-GameBoard.prototype.objectForSharing = function(preserveGameState) {
-    let bits = new Gaming.BoolArray(this._allTiles.length);
+GameBoard.prototype.objectForSharing = function() {
+    let tiles = new Gaming.BoolArray(this._allTiles.length);
     this._allTiles.forEach((tile, index) => {
         if (SweepPerfTimer.shared) { SweepPerfTimer.shared.counters.visitTiles++; }
-        bits.setValue(index, tile.isMined);
+        tiles.setValue(index, tile.isMined);
     });
-    let data = bits.objectForSerialization;
-    let checksum = Gaming.hashArrayOfInts(data);
-    let header = [this.size.width, this.size.height, this.mineCount, preserveGameState ? 1 : 0, checksum];
-    return [header, data];
+    let tileData = tiles.objectForSerialization;
+    let checksum = Gaming.hashArrayOfInts(tileData);
+    let header = [this.size.width, this.size.height, this.mineCount >> 8, this.mineCount % 256, checksum];
+    return header.concat(tileData);
 };
 
-GameBoard.fromObjectForSharing = function(object) {
-    if (!Array.isArray(object) || object.length != 2) {
+GameBoard.fromObjectForSharing = function(data) {
+    if (!Array.isArray(data) || data.length < 5) {
         throw new Error("failedToParseGame");
     }
-    let header = object[0];
-    let data = object[1];
-    if (!Array.isArray(header) || header.length != 5 || !Array.isArray(data)) {
-        throw new Error("failedToParseGame");
-    }
-
     let size = {};
-    size.width = header.shift();
-    size.height = header.shift();
-    let mineCount = header.shift();
-    let preserveGameState = !!(header.shift());
-    let checksum = header.shift();
+    size.width = data.shift();
+    size.height = data.shift();
+    let mineCount = data.shift() * 256;
+    mineCount += data.shift();
+    let checksum = data.shift();
+    
     let customDifficulty = Game.rules().customDifficulty;
-
     let isValid = size.width >= customDifficulty.width.min
             && size.width <= customDifficulty.width.max
             && size.height >= customDifficulty.height.min
@@ -3150,13 +3137,13 @@ class NewGameDialog extends GameDialog {
 
     validateImportCode(input) {
         let isValid = true;
-        let value = Sharing.cleanBase64(input.value);
+        let value = Sharing.cleanSharingCode(input.value);
         if (!this.showImportControls || value.length == 0) {
             this.game = null;
             this.setImportCodeResult(null, false);
         } else {
             try {
-                let object = JSON.parse(atob(value));
+                let object = Array.fromHexString(value);
                 this.game = Sharing.gameFromBoardObject(object);
                 this.setImportCodeResult(Strings.str("importCodeValidMessage"), false);
             } catch(e) {
@@ -3278,7 +3265,7 @@ class ShareDialog extends GameDialog {
         
         let data = Sharing.gameBoardObject(session);
         let stats = Object.assign({}, Game.formatStatistics(session.game.statistics), {
-            data: JSON.prettyStringify(data, 64, session.debugMode),
+            data: data.toHexString().hardWrap(64),
             maxStarCount: Game.rules().maxStarCount
         });
         elem.querySelector("pre").innerText = Strings.template("shareGameBoardCodeTemplate", stats);

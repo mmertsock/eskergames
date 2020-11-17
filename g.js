@@ -176,6 +176,36 @@ Array.mapSequence = function(range, block) {
     return values;
 };
 
+// assumes each byte in array is < 256
+Array.prototype.toHexString = function() {
+    let str = "";
+    this.forEach(byte => {
+        let chunk = (byte % 256).toString(16);
+        str += (chunk.length == 1) ? ("0" + chunk) : chunk;
+    });
+    return str;
+}
+
+Array.fromHexString = function(text) {
+    if (String.isEmpty(text)) { return []; }
+    let isHex = /[a-fA-F0-9][a-fA-F0-9]/;
+    let bytes = [];
+    let i = 0;
+    while (i < text.length - 1) {
+        let value = text.slice(i, i + 2);
+        if (isHex.test(value)) {
+            value = Number.parseInt(value, 16);
+            if (!isNaN(value)) {
+                bytes.push(value);
+            }
+            i += 2;
+        } else {
+            i += 1;
+        }
+    }
+    return bytes;
+};
+
 // Return false if already has value. Adds value and returns true otherwise.
 Set.prototype.addIfNotContains = function(value) {
     if (this.has(value)) return false;
@@ -202,9 +232,12 @@ Array.prototype.randomItem = function() {
 
 JSON.prettyStringify = function(object, width, disableBase64) {
     let base64 = disableBase64 ? JSON.stringify(object) : btoa(JSON.stringify(object)).replaceAll("=", "");
+    return base64.hardWrap(width);
+};
+String.prototype.hardWrap = function(width) {
     let text = "";
-    for (let i = 0; i <= base64.length; i += width) {
-        text = (i > 0 ? text + "\n" : text) + base64.slice(i, i + width);
+    for (let i = 0; i <= this.length; i += width) {
+        text = (i > 0 ? text + "\n" : text) + this.slice(i, i + width);
     }
     return text;
 };
@@ -896,7 +929,8 @@ class RandomLineGeneratorOLD {
 export class BoolArray {
     constructor(obj) {
         if (Array.isArray(obj)) {
-            this.length = obj.shift() || 0;
+            let deadBits = obj.shift() || 0;
+            this.length = (obj.length * 8) - deadBits;
         } else {
             this.length = obj;
         }
@@ -928,7 +962,8 @@ export class BoolArray {
     }
 
     get objectForSerialization() {
-        let data = [this.length];
+        let lastElementDeadBitCount = (8 - (this.length % 8)) % 8;
+        let data = [lastElementDeadBitCount];
         for (let i = 0; i < this.array.length; i += 1) {
             data.push(this.getByte(i));
         }
