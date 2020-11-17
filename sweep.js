@@ -3729,6 +3729,8 @@ export let initialize = async function() {
     Strings.initialize(content.strings, content.pluralStrings, navigator.language);
     SweepSolver.initialize();
     Game.initialize(content);
-    new NewGameDialog().show();
+    if (!self.isWorkerScope && !!document.querySelector("moo")) {
+        new NewGameDialog().show();
+    }
     Gaming.debugExpose("Sweep", { GameSession: GameSession });
 };
