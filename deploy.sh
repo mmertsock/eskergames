@@ -27,5 +27,3 @@ cp terrain.html "$DEST"
 cp terrain.js "$DEST"
 cp tests.html "$DEST"
 cp tests.js "$DEST"
-
-echo "$(date --iso-8601=seconds) deploy.sh to $DEST" >> ~/logs/deploy.txt
