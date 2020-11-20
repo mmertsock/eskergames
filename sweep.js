@@ -440,7 +440,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
-Game.appVersion = "1.4.2";
+Game.appVersion = "1.4.3";
 
 let GameState = {
     playing: 0,
@@ -1753,6 +1753,10 @@ class MineFilter extends TileTransform {
 TileTransform.MineFilter = MineFilter;
 
 class MinedNeighborCountRangeFilter extends TileTransform {
+    static exactly(count) {
+        return new MinedNeighborCountRangeFilter({ min: count, max: count })
+    }
+    
     constructor(range) {
         super();
         this.range = range;
@@ -1763,8 +1767,26 @@ class MinedNeighborCountRangeFilter extends TileTransform {
     }
 }
 MinedNeighborCountRangeFilter.hasAny = new MinedNeighborCountRangeFilter({ min: 1, max: TileTransform.maxNeighbors });
-MinedNeighborCountRangeFilter.zero = new MinedNeighborCountRangeFilter({ min: 0, max: 0 });
+MinedNeighborCountRangeFilter.zero = MinedNeighborCountRangeFilter.exactly(0);
 TileTransform.MinedNeighborCountRangeFilter = MinedNeighborCountRangeFilter;
+
+class ClearedMoveNumberFilter extends TileTransform {
+    static exactly(moveNumber) {
+        return new ClearedMoveNumberFilter({ min: moveNumber, max: moveNumber });
+    }
+    
+    constructor(range) {
+        super();
+        this.range = range;
+    }
+    
+    map(tile, collection) {
+        return !tile.isCovered
+            && tile.rainbow.cleared >= this.range.min
+            && tile.rainbow.cleared <= this.range.max;
+    }
+}
+TileTransform.ClearedMoveNumberFilter = ClearedMoveNumberFilter;
 
 function mark__Achievement() {} // ~~~~~~ Achievement ~~~~~~
 
@@ -1777,6 +1799,8 @@ export class Achievement {
             "Achievement.MostPointsInSingleMove": Achievement.MostPointsInSingleMove,
             "Achievement.HighestScoreInFiveStarGame": Achievement.HighestScoreInFiveStarGame,
             "Achievement.HighestScoreWithoutFlags": Achievement.HighestScoreWithoutFlags,
+            "Achievement.Uncovered7NeighborCountTile": Achievement.Uncovered7NeighborCountTile,
+            "Achievement.Uncovered8NeighborCountTile": Achievement.Uncovered8NeighborCountTile,
             "Achievement.Won1StarGame": Achievement.Won1StarGame,
             "Achievement.Won2StarGame": Achievement.Won2StarGame,
             "Achievement.Won3StarGame": Achievement.Won3StarGame,
@@ -2088,6 +2112,45 @@ Achievement.Moo = class Moo extends Achievement {
     }
 };
 
+class UncoveredNeighborCountTile extends Achievement {
+    static formatValue(achievement) {
+        return { minedNeighborCount: Game.integerFormatObject(achievement.value) };
+    }
+
+    isValid(session) {
+        return this.status != Achievement.Status.achieved
+            && session.isClean
+            && (session.state == GameState.playing)
+            && (!!session.mostRecentAction)
+            && (!!session.mostRecentAction.change)
+            && (session.mostRecentAction.change.clearedTileCount > 0);
+    }
+
+    moveCompleted(session, date) {
+        let collection = TileCollection.allTiles(session)
+            .applying(ClearedMoveNumberFilter.exactly(session.history.moveNumber))
+            .applying(MinedNeighborCountRangeFilter.exactly(this.value))
+            .applying(new MineFilter(false));
+        if (!collection.isEmpty) {
+            this.achieved(this.value, date);
+        }
+    }
+}
+
+Achievement.Uncovered7NeighborCountTile = class Uncovered7NeighborCountTile extends UncoveredNeighborCountTile {
+    setDefaultConfig() {
+        this.value = 7;
+        this.status = Achievement.Status.locked;
+    }
+};
+
+Achievement.Uncovered8NeighborCountTile = class Uncovered8NeighborCountTile extends UncoveredNeighborCountTile {
+    setDefaultConfig() {
+        this.value = 8;
+        this.status = Achievement.Status.hidden;
+    }
+};
+
 class WonStars extends Achievement {
     static formatValue(achievement) {
         return { value: achievement.value };
@@ -2106,7 +2169,6 @@ class WonStars extends Achievement {
 
     constructor(config) {
         super(config);
-        this.target = new DispatchTarget();
         this.target.register(Achievement.achievementUpdatedEvent, (e, achievement) => {
             this.unlockIfReady(achievement);
         });

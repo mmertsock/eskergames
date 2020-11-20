@@ -135,6 +135,10 @@ achievements:
     name: achievementsHighestScoreInFiveStarGameName
   Achievement.HighestScoreWithoutFlags:
     name: achievementsHighestScoreWithoutFlags
+  Achievement.Uncovered7NeighborCountTile: &UNCOVEREDNEIGHBORCOUNT
+    name: achievementsUncoveredNeighborCountTileName
+    value: achievementsUncoveredNeighborCountTileValue
+  Achievement.Uncovered8NeighborCountTile: *UNCOVEREDNEIGHBORCOUNT
   Achievement.Won1StarGame: &WONSTARS
     name: achievementsWonStarsName
     value: achievementsWonStarsValue
@@ -222,6 +226,8 @@ strings:
   achievementsMooName: "Deployed the cow to eat a mine!"
   achievementsMostClearedInSingleMoveName: Largest area cleared in a single move
   achievementsMostPointsInSingleMoveName: Most points earned in a single move
+  achievementsUncoveredNeighborCountTileName: "Uncovered a tile with <minedNeighborCount#minedNeighborCount#formattedMinedNeighborCount>!"
+  achievementsUncoveredNeighborCountTileValue: "<minedNeighborCount>✷"
   achievementsWonStarsName: "Won a <value>-star difficulty game"
   achievementsWonStarsValue: "<value>★"
   analysisChartMoveNumberLabel: Moves
@@ -405,6 +411,7 @@ pluralStrings:
   gotPoints: ["got 0 points", "got 1 point", "got # points"]
   mineCount: ["0 mines", "1 mine", "# mines"]
   mineCountCleared: ["0 mines cleared", "1 mine cleared", "# mines cleared"]
+  minedNeighborCount: ["0 adjacent mines", "1 adjacent mine", "# adjacent mines"]
   flaggedKnownMines: ["Flagged 0 known mines", "Flagged a known mine", "Flagged # known mines"]
   _es:
     clearedTileCountPhrase: ["descubierto 0 cuadrados", "descubierto un cuadrado", "descubierto # cuadrados"]
