@@ -428,12 +428,59 @@ moo.preparing, moo.performing, moo.finishing {
     opacity: 0;
 }
 
+stories {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+stories ul {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    list-style-type: none;
+    margin: 0.75em 0 0 0.5em;
+    padding: 0;
+}
+
+stories li {
+    list-style-type: none;
+    display: block;
+    margin: 0 3pt;
+    padding: 0;
+    width: 28pt;
+    height: 28pt;
+    box-sizing: border-box;
+    border: 2pt solid var(--border-color-3);
+    border-radius: 14pt;
+    background-color: var(--background-color-3);
+    font-size: 14pt;
+    line-height: 28pt;
+    text-align: center;
+    cursor: pointer;
+}
+
+storyDialog comment {
+    display: block;
+    position: relative;
+}
+
+storyDialog comment span {
+    padding: 2pt 3pt;
+    font-size: 18pt;
+    font-weight: 600;
+    color: hsl(0, 0%, 20%);
+    background-color: hsl(0, 0%, 100%);
+    border-radius: 2pt;
+    box-shadow: 0 0 2pt hsla(0, 0%, 0%, 0.5);
+}
+
 </style>
 
 </head>
 <body>
 
-<header><controls><row></row></controls><message></message></header>
+<header><stories></stories><controls><row></row></controls><message></message></header>
 
 <main>
     <board class="hidden"><canvas></canvas></board>
@@ -503,6 +550,13 @@ moo.preparing, moo.performing, moo.finishing {
 <analysis class="hidden">
     <div class="history-chart"><canvas></canvas></div>
 </analysis>
+
+<storyDialog class="hidden">
+    <board>
+        <canvas></canvas>
+        <comment><span></span></comment>
+    </board>
+</storyDialog>
 
 <script type="module">
     import { initialize } from './sweep.js';

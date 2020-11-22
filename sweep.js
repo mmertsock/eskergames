@@ -333,6 +333,7 @@ class Game {
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
         GameAnalysisDialog.initialize(content.analysisView);
+        SweepStory.initialize(content.storiesView);
         Moo.initialize(content.moo);
     }
 
@@ -771,7 +772,8 @@ export class GameSession {
         this.mostRecentActionView = new ActionDescriptionView({ session: this, elem: document.querySelector("message") });
         this.boardView = new GameBoardView({ session: this, boardContainer: this.elems.boardContainer });
         this.statusView = new GameStatusView({ session: this, elem: document.querySelector("footer") });
-        this.views = [this.controlsView, this.mostRecentActionView, this.boardView, this.statusView];
+        this.storiesView = new SweepStoriesView({ session: this, elem: document.querySelector("stories") });
+        this.views = [this.controlsView, this.mostRecentActionView, this.boardView, this.statusView, this.storiesView];
         this.moo = new Moo({ session: this, elem: document.querySelector("moo"), boardView: this.boardView, inputController: this.inputController });
     }
 
@@ -3780,6 +3782,215 @@ class SweepPerfTimer extends Gaming.PerfTimer {
     }
 }
 SweepPerfTimer.shared = null;
+
+class SweepStory {
+    static Kvo() { return { "seen": "seen" }; }
+    
+    static initialize(config) {
+        SweepStory.metrics = config;
+    }
+    
+    constructor(config) {
+        this.game = config.game;
+        this.name = config.name.full;
+        this.possessive = config.name.possessive;
+        this.initials = config.name.initials;
+        this.comment = config.comment;
+        this.color = config.color;
+        this.seen = false;
+        this.kvo = new Gaming.Kvo(this);
+    }
+    
+    render() {
+        this.elem.style.borderColor = this.seen ? "" : this.color;
+    }
+}
+
+class SweepStoriesView {
+    constructor(config) {
+        this.session = config.session;
+        this.elem = config.elem;
+        this.elem.addRemClass("hidden", true);
+        
+        GameScriptEngine.shared.registerCommand("showStory", (subject, evt) => this.showStory(subject));
+        
+        if (this.isEnabled) {
+            let metrics = SweepStory.metrics;
+            let games = Array.from(metrics.games).shuffle();
+            let names = Array.from(Strings.value("randomNames", true)).shuffle();
+            let comments = Array.from(Strings.value("randomComments", true)).shuffle();
+            
+            this.stories = games.map((game, index) => {
+                let hue = Gaming.Rng.shared.nextIntOpenRange(0, 360);
+                let color = `hsl(${hue}, ${metrics.circle.s}, ${metrics.circle.l})`;
+                let story = new SweepStory({
+                    game: game,
+                    name: names[index % names.length],
+                    comment: comments[index % comments.length],
+                    color: color
+                });
+                story.kvo.seen.addObserver(this, () => this.render());
+                return story;
+            });
+        } else {
+            this.stories = [];
+        }
+    }
+    
+    get isEnabled() {
+        return SweepStory.metrics.isAvailable;
+    }
+    
+    showStory(story) {
+        story.kvo.seen.setValue(true);
+        story.render();
+        new StoryDialog(story).show();
+    }
+    
+    configureView() {
+        if (!!this.elem.querySelector("ul")) { return; }
+        this.elem.addRemClass("hidden", !this.isEnabled);
+        if (this.isEnabled) {
+            let list = document.createElement("ul");
+            this.stories.forEach(story => {
+                let circle =  document.createElement("li");
+                circle.innerText = story.initials;
+                circle.addGameCommandEventListener("click", true, "showStory", story);
+                list.append(circle);
+                story.elem = circle;
+            });
+            this.elem.append(list);
+        }
+    }
+    
+    render() {
+        if (!this.session.game) { return; }
+        this.configureView();
+        this.stories.forEach(story => {
+            story.elem.style.borderColor = story.seen ? "" : story.color;
+        });
+    }
+}
+
+class StoryDialog extends GameDialog {
+    constructor(story) {
+        super();
+        this.story = story;
+        this.contentElem = GameDialog.createContentElem();
+        
+        let elem = document.querySelector("body > storyDialog")
+            .cloneNode(true).addRemClass("hidden", false);
+            
+        this.player = new StoryGamePlayer({
+            story: story,
+            boardContainer: elem.querySelector("board")
+        });
+        
+        elem.querySelector("comment").configure(comment => {
+            comment.querySelector("span").innerText = this.story.comment;
+            let position = Gaming.Rng.shared.nextIntOpenRange(1, 3);
+            comment.addRemClass(`position-${position}`, true);
+        });
+
+        this.contentElem.append(elem);
+        this.x = new ToolButton({
+            title: Strings.str("storyDialogDismiss"),
+            click: () => this.dismiss()
+        });
+    }
+
+    get isModal() { return false; }
+    get title() { return Strings.template("storyDialogTitle", this.story); }
+
+    get dialogButtons() {
+        return [this.x.elem];
+    }
+    
+    show() {
+        super.show();
+        this.player.start();
+    }
+    
+    dismiss() {
+        super.dismiss();
+        this.player.end();
+    }
+}
+
+class StoryGamePlayer {
+    constructor(config) {
+        this.story = config.story;
+        this.boardContainer = config.boardContainer;
+        this.remainingMoves = Array.from(this.story.game.displayMoves);
+        
+        try {
+            let object = Array.fromHexString(config.story.game.code);
+            let game = Sharing.gameFromBoardObject(object);
+        } catch (e) {
+            this.session = null;
+            debugWarn(e);
+            return;
+        }
+        debugLog(this);
+    }
+    
+    start() {
+        if (!this.session) { return; }
+        this.prep();
+        this.render();
+        setTimeout(() => this.nextMove(), SweepStory.metrics.moveInterval);
+    }
+    
+    prep() {
+        this.story.game.flags.forEach(index => this.flag(index));
+        this.story.game.prepMoves.forEach(index => this.clear(index));
+    }
+    
+    nextMove() {
+        if (!this.session || (this.remainingMoves.length == 0)) {
+            this.end();
+            return;
+        }
+        let index = this.remainingMoves.shift();
+        this.clear(index);
+        this.render();
+        setTimeout(() => this.nextMove(), SweepStory.metrics.moveInterval);
+    }
+    
+    getTile(index) {
+        return this.session ? this.session.game.board._allTiles[index] : null;
+    }
+    
+    flag(index) {
+        if (!this.session) { return; }
+        let tile = this.getTile(index);
+        if (!tile) { return; }
+        let action = new SetFlagAction({ tile: tile, flag: TileFlag.assertMine });
+        this.session.performAction(action);
+    }
+    
+    clear(index) {
+        this.session.performAction(action);
+        let tile = this.getTile(index);
+        if (!tile) { return; }
+        let action = new RevealTileAction({ tile: tile, revealBehavior: GameSession.revealBehaviors.safe });
+        this.session.performAction(action);
+    }
+    
+    end() {
+        if (!this.session) { return; }
+        this.session = null;
+        this.boardView = null;
+    }
+    
+    render() {
+        if (!this.boardView) {
+            debugLog("make board view");
+            this.boardView = new GameBoardView({ session: this, boardContainer: this.boardContainer });
+        }
+        this.boardView.render();
+    }
+}
 
 export let initialize = async function() {
     let content = await GameContent.loadYamlFromLocalFile("sweep-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);

@@ -121,6 +121,31 @@ gameTileViewState:
     borderStrokeWidth: 3
   debug:
     fillColor: "hsla(83, 100%, 50%, 0.2)"
+storiesView:
+  isAvailable: true
+  circle:
+    s: "85%"
+    l: "75%"
+  moveInterval: 1500
+  difficulty:
+    width: 10
+    height: 10
+    mineCount: 16
+  games:
+    - code: "0100040a0a00080f0404000000000048224041000000"
+      flags: [2, 54, 57, 78]
+      prepMoves: [25, 95, 79, 56, 55, 52]
+      # wins
+      displayMoves: [25, 95, 79, 56, 55, 52, 62, 71, 50, 60]
+    - code: "0100040a0a001010047000860010008000c740200400"
+      flags: [78]
+      prepMoves: [99, 77, 75, 76, 79]
+      displayMoves: [69, 58]
+    - code: "0100040a0a001010047000860010008000c740200400"
+      flags: []
+      prepMoves: []
+      # loses
+      displayMoves: [99, 77, 76, 85]
 achievements:
   Achievement.MostPointsInSingleMove:
     name: achievementsMostPointsInSingleMoveName
@@ -330,6 +355,8 @@ strings:
   stars3: "★★★☆☆"
   stars4: "★★★★☆"
   stars5: "★★★★★"
+  storyDialogDismiss: "Haha Stories Everywhere"
+  storyDialogTitle: "<possessive> Story"
   toggleDebugModeButton: "Debug"
   toggleRainbowButton: "🌈"
   trophiesDialogDismiss: Done
@@ -339,6 +366,18 @@ strings:
   warningAbortRevealNeighborsNoCandidates: No tiles to clear in this area
   warningAllNeighborsAlreadyFlagged: All tiles in this area are already flagged
   warningIncorrectUncoveredTileCount: "Can’t flag this area: incorrect number of covered tiles"
+  randomNames:
+    - { full: "Stumbleduckle", possessive: "Stumbleduckle’s", initials: S }
+    - { full: "Honeystring", possessive: "Honeystring’s", initials: H }
+    - { full: "Ringo Shuffles", possessive: "Ringo Shuffles’", initials: R }
+    - { full: "Ponny Stonecharle", possessive: "Ponny Stonecharle’s", initials: P }
+    - { full: "Desert Cat", possessive: "Desert Cat’s", initials: D }
+    - { full: "Annata Shortscale", possessive: "Annata Shortscale’s", initials: A }
+  randomComments:
+    - Cool
+    - "Yikes 👀"
+    - Check this out
+    - Hnnnnng
   _es:
     analysisChartMoveNumberLabel: Movimientos
     analysisChartSeriesNameAssertMineFlagCount: Minas Marcadas
