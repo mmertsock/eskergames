@@ -718,7 +718,10 @@ var stringsTest = function() {
         hello: "henlo",
         helloTemplate: "henlo, <first> x. <last> of <last>land",
         pluralsTemplate: "henlo <first>: <mineCountCleared#mineCount> and <customPlaceholder#hashtags>",
-        pluralsTemplateFormattedMagnitude: "henlo <first>: <mineCountCleared#mineCount#formattedMineCount> and <customPlaceholder#hashtags#formatMyHashtags>"
+        pluralsTemplateFormattedMagnitude: "henlo <first>: <mineCountCleared#mineCount#formattedMineCount> and <customPlaceholder#hashtags#formatMyHashtags>",
+        obj1: 123,
+        obj2: false,
+        obj3: { x: "x1" }
     };
     let l10ns = {
         mineCountCleared: ["# mines cleared", "1 mine cleared", "# mines cleared"],
@@ -731,6 +734,13 @@ var stringsTest = function() {
         this.assertEqual(Strings.str("bogus"), "?bogus?");
         this.assertEqual(Strings.str("bogus", "fallback"), "fallback");
     }).build()(null, null);
+    
+    new UnitTest("Strings.value", function() {
+        this.assertEqual(Strings.value("obj1"), 123, "obj1: number");
+        this.assertEqual(Strings.value("obj2"), false, "obj2: bool");
+        this.assertEqual(Strings.value("obj3").x, "x1", "obj3: obj");
+        this.assertEqual(typeof(Strings.value("bogus")), "undefined", "bogus: undefined");
+    }).buildAndRun();
 
     new UnitTest("Strings.template", function() {
         this.assertEqual(Strings.template("hello"), "henlo");
@@ -808,13 +818,17 @@ var stringsTest = function() {
             tc: "en-c-<value>",
             pa: "en-a/<mineCountClearedA#mineCount#formattedMineCount>",
             pc: "en-c/<mineCountClearedC#mineCount#formattedMineCount>",
+            obj1: { x: "en-1" },
+            obj3: { x: "en-3" },
             _es: {
                 a: "es-a",
                 b: "es-b",
                 ta: "es-a-<value>",
                 tb: "es-b-<value>",
                 pa: "es-a/<mineCountClearedA#mineCount#formattedMineCount>",
-                pb: "es-b/<mineCountClearedB#mineCount#formattedMineCount>"
+                pb: "es-b/<mineCountClearedB#mineCount#formattedMineCount>",
+                obj1: { x: "es-1" },
+                obj2: { x: "es-2" }
             }
         };
         let l10ns = {
@@ -833,13 +847,21 @@ var stringsTest = function() {
         };
         Strings.initialize(l10n, l10ns);
 
-        this.assertEqual(Strings.str("a"), "en-a", "uses default language");
+        this.assertEqual(Strings.str("a"), "en-a", "a: uses default language");
+        this.assertEqual(Strings.value("obj1").x, "en-1", "obj1: default language");
         Strings.setRegion("es-us");
         this.assertEqual(Strings.str("a"), "es-a", "uses specified language");
+        this.assertEqual(Strings.value("obj1").x, "es-1", "obj1: es");
+        this.assertEqual(typeof(Strings.value("obj3")), "undefined", "obj3: undefined in es");
+        this.assertEqual(Strings.value("obj3", true).x, "en-3", "obj3: fallback to en");
         Strings.setRegion("en-us");
         this.assertEqual(Strings.str("a"), "en-a", "uses specified language en");
+        this.assertEqual(Strings.value("obj1").x, "en-1", "obj1: en");
+        this.assertEqual(typeof(Strings.value("obj2")), "undefined", "obj2: undefined in en");
+        this.assertEqual(typeof(Strings.value("obj2", true)), "undefined", "obj2: undefined in en, fallback fails");
         Strings.setRegion("es-us");
         this.assertEqual(Strings.str("b"), "es-b");
+        this.assertEqual(Strings.value("obj2").x, "es-2", "obj2: es");
         this.assertEqual(Strings.str("c"), "?en-c?", "fallback to default language with debug marker");
         this.assertEqual(Strings.str("bogus"), "?bogus?", "unknown key");
         this.assertEqual(Strings.template("ta", obj), "es-a-test");

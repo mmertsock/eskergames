@@ -51,8 +51,7 @@ if (!EventTarget.prototype.addGameCommandEventListener) {
     EventTarget.prototype.addGameCommandEventListener = function(eventType, preventDefault, command, subject) {
         this.addEventListener(eventType, (evt) => {
             if (preventDefault) { evt.preventDefault(); }
-            if (!Gaming.GameScriptEngine || !Gaming.GameScriptEngine.shared) { return; }
-            Gaming.GameScriptEngine.shared.execute(command, subject);
+            GameScriptEngine.shared.execute(command, subject);
         });
     };
 }

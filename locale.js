@@ -72,6 +72,17 @@ export class Strings {
         }
         return missingString(Strings.all.source.hasOwnProperty(id) ? Strings.all.source[id] : id);
     }
+    
+    static value(id, fallback) {
+        if (Strings.source.hasOwnProperty(id)) {
+            return Strings.source[id];
+        }
+        if (!!fallback) {
+            return Strings.all.source[id];
+        } else {
+            return undefined;
+        }
+    }
 
     // id: key in Strings config data
     // data: object
