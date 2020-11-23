@@ -136,7 +136,7 @@ storiesView:
       flags: [2, 54, 57, 78]
       prepMoves: [25, 95, 79, 56, 55, 52]
       # wins
-      displayMoves: [25, 95, 79, 56, 55, 52, 62, 71, 50, 60]
+      displayMoves: [62, 71, 50, 60]
     - code: "0100040a0a001010047000860010008000c740200400"
       flags: [78]
       prepMoves: [99, 77, 75, 76, 79]

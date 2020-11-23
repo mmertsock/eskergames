@@ -333,6 +333,7 @@ class Game {
         Game.content = content;
         Game.content.rules.allowDebugMode = Game.content.rules.allowDebugMode || (self.location ? (self.location.hostname == "localhost") : false);
         Game.content.rules.maxStarCount = Game.content.rules.highScoreThresholds.length + 1;
+        GameScriptEngine.shared = new GameScriptEngine();
         Achievement.initialize();
         GameBoardView.initialize(content.gameBoardView);
         GameTileView.initialize(content.gameTileView);
@@ -743,20 +744,6 @@ export class GameSession {
         }
     }
 
-    static begin(game) {
-        // TODO how about: if (!s) { GameSession.shared = new GameSession(); } GameSession.shared.start(game);
-        if (GameSession.shared) {
-            GameSession.shared.start(game);
-        } else {
-            GameSession.shared = new GameSession({ game: game });
-            GameSession.shared.start();
-        }
-    }
-
-    static isShowingDialog() {
-        return !!Gaming.GameDialogManager.shared.currentDialog;
-    }
-
     constructor(config) {
         this.game = config.game;
         this.state = GameState.playing;
@@ -769,23 +756,12 @@ export class GameSession {
         this.hintTile = null;
         this.solver = null;
         this.debugTiles = [];
-        this.elems = {
-            boardContainer: document.querySelector("board")
-        };
-        this.inputController = new InputController();
-        this.controlsView = new GameControlsView({ session: this, elem: document.querySelector("header row") });
-        this.mostRecentActionView = new ActionDescriptionView({ session: this, elem: document.querySelector("message") });
-        this.boardView = new GameBoardView({ session: this, boardContainer: this.elems.boardContainer });
-        this.statusView = new GameStatusView({ session: this, elem: document.querySelector("footer") });
-        this.storiesView = new SweepStoriesView({ session: this, elem: document.querySelector("stories") });
-        this.views = [this.controlsView, this.mostRecentActionView, this.boardView, this.statusView, this.storiesView];
-        this.moo = new Moo({ session: this, elem: document.querySelector("moo"), boardView: this.boardView, inputController: this.inputController });
     }
 
     start(newGame) {
+        let oldGame = this.game;
         if (newGame) {
             this.game = newGame;
-            this.boardView.game = this.game;
         }
         GameStorage.shared.lastDifficultyIndex = this.game.difficulty.index;
         if (this.game.difficulty.isCustom) {
@@ -800,16 +776,14 @@ export class GameSession {
         this.isClean = !this.debugMode;
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
-        this.moo.beginMove();
         this.warningMessage = null;
-        this.elems.boardContainer.addRemClass("hidden", false);
 
         let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
         this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
 
-        if (newGame) {
-            this.boardView.game = this.game;
-        }
+        this.forEachDelegate(d => {
+            if (d.gameStarted) { d.gameStarted(this, this.game, oldGame); }
+        });
         this.renderViews();
     }
 
@@ -828,7 +802,9 @@ export class GameSession {
 
     renderViews() {
         // SweepPerfTimer.startShared("renderViews");
-        this.views.forEach(view => view.render());
+        this.forEachDelegate(d => {
+            if (d.render) { d.render(this); }
+        });
         SweepPerfTimer.endShared();
     }
 
@@ -894,7 +870,9 @@ export class GameSession {
             this.debugTiles = [];
             this.warningMessage = null;
             this.moveState = MoveState.active;
-            this.moo.beginMove();
+            this.forEachDelegate(d => {
+                if (d.beginMove) { d.beginMove(this); }
+            });
         }
     }
 
@@ -998,11 +976,6 @@ export class GameSession {
         this.endTime = Date.now();
         this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
         Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
-        new AlertDialog({
-            title: Strings.str("lostAlertTitle"),
-            message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.game.statistics)),
-            buttons: [{ title: Strings.str("lostAlertButton") }]
-        }).show();
     }
 
     undoLoss() {
@@ -1043,7 +1016,7 @@ export class GameSession {
         }
     }
 }
-GameSession.shared = null;
+Gaming.Mixins.Gaming.DelegateSet(GameSession);
 GameSession.moveCompletedEvent = "GameSession.moveCompletedEvent";
 GameSession.gameCompletedEvent = "GameSession.gameCompletedEvent";
 GameSession.gameControlsView = null;
@@ -1053,6 +1026,13 @@ GameSession.revealBehaviors = {
     assertFlag: 2
 };
 // end class GameSession
+
+// views, etc., can implement this pattern
+class GameSessionDelegate {
+    gameStarted(session, newGame, oldGame) { }
+    beginMove(session) { }
+    render(session) { }
+}
 
 function mark__Serialization() {} // ~~~~~~ Serialization ~~~~~~
 
@@ -1301,7 +1281,7 @@ class AttemptHintAction extends SweepAction {
         if (!session) return false;
         return (session.state == GameState.playing)
             && !session.hintTile
-            && !GameSession.isShowingDialog();
+            && !UI.isShowingDialog();
     }
 
     get debugDescription() {
@@ -1512,7 +1492,7 @@ class AttemptSolverStepAction extends SweepAction {
     static isValid(session) {
         if (!session || !session.solver) return false;
         return (session.state == GameState.playing)
-            && !GameSession.isShowingDialog();
+            && !UI.isShowingDialog();
     }
 
     get debugDescription() {
@@ -1860,9 +1840,11 @@ export class Achievement {
         // debugLog("init: " + this.debugDescription);
         this.target = new DispatchTarget();
         this.target.register(GameSession.moveCompletedEvent, (e, session) => {
+            if (!InteractiveSessionView.isMain(session)) { return; }
             if (this.isValid(session)) { this.moveCompleted(session, Date.now()); }
         });
         this.target.register(GameSession.gameCompletedEvent, (e, session) => {
+            if (!InteractiveSessionView.isMain(session)) { return; }
             if (this.isValid(session)) { this.gameCompleted(session, session.endTime); }
         });
     }
@@ -2227,7 +2209,6 @@ function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
 
 class InputController {
     constructor() {
-        GameScriptEngine.shared = new GameScriptEngine();
         this.keyController = new Gaming.KeyInputController();
         this.keyController.addShortcutsFromSettings(Game.content.keyboard);
         // this.keyController.debug = true;
@@ -2439,6 +2420,8 @@ class GameControlsView {
         gse.registerCommand("showHint", () => this.showHint());
         gse.registerCommand("solverStep", () => this.solverStep());
         gse.registerCommand("toggleRainbowMode", () => this.toggleRainbowMode());
+        
+        this.session.addDelegate(this);
     }
 
     render() {
@@ -2479,22 +2462,22 @@ class GameControlsView {
                 ]
             }).show();
         } else {
-            GameSession.begin(new Game({ difficulty: this.session.game.difficulty }));
+            InteractiveSessionView.begin(new Game({ difficulty: this.session.game.difficulty }));
         }
     }
 
     showNewGameDialog() {
-        if (GameSession.isShowingDialog()) { return; }
+        if (UI.isShowingDialog()) { return; }
         new NewGameDialog().show();
     }
 
     showHelp() {
-        if (GameSession.isShowingDialog()) { return; }
+        if (UI.isShowingDialog()) { return; }
         new HelpDialog().show();
     }
 
     showTrophies() {
-        if (GameSession.isShowingDialog()) { return; }
+        if (UI.isShowingDialog()) { return; }
         let difficulty = null;
         if (this.session && this.session.game) {
             difficulty = this.session.game.difficulty;
@@ -2503,7 +2486,7 @@ class GameControlsView {
     }
 
     showAnalysis() {
-        if (GameSession.isShowingDialog()) { return; }
+        if (UI.isShowingDialog()) { return; }
         if (GameAnalysisDialog.isValid(this.session)) {
             new GameAnalysisDialog({ history: this.session.history }).show();
         }
@@ -2538,14 +2521,67 @@ class GameControlsView {
 
 function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 
+class UI {
+    static isShowingDialog() {
+        return !!Gaming.GameDialogManager.shared.currentDialog;
+    }
+}
+
+// fully interactive with all controls. long-lived singleton.
+class InteractiveSessionView {
+    static isMain(session) {
+        return InteractiveSessionView.shared ? (InteractiveSessionView.shared.session == session) : false;
+    }
+    
+    static begin(game) {
+        if (InteractiveSessionView.shared) {
+            InteractiveSessionView.shared.session.start(game);
+        } else {
+            let session = new GameSession({ game: game });
+            InteractiveSessionView.shared = new InteractiveSessionView(session);
+            InteractiveSessionView.shared.session.start();
+        }
+    }
+    
+    constructor(session) {
+        this.session = session;
+        this.inputController = new InputController();
+        this.controlsView = new GameControlsView({ session: this.session, elem: document.querySelector("header row") });
+        this.mostRecentActionView = new ActionDescriptionView({ session: this.session, elem: document.querySelector("message") });
+        let boardContainer = document.querySelector("board");
+        this.boardView = new GameBoardView({ session: this.session, boardContainer: boardContainer, interactive: true });
+        this.statusView = new GameStatusView({ session: this.session, elem: document.querySelector("footer") });
+        this.storiesView = new SweepStoriesView({ session: this.session, elem: document.querySelector("stories") });
+        this.moo = new Moo({ session: this.session, elem: document.querySelector("moo"), boardView: this.boardView, inputController: this.inputController });
+        
+        this.target = new DispatchTarget();
+        this.target.register(GameSession.gameCompletedEvent, (e, session) => {
+            this.gameCompleted(session);
+        });
+    }
+    
+    gameCompleted(session) {
+        if (session == this.session && this.session.state == GameState.lost) {
+            new AlertDialog({
+                title: Strings.str("lostAlertTitle"),
+                message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.session.game.statistics)),
+                buttons: [{ title: Strings.str("lostAlertButton") }]
+            }).show();
+        }
+    }
+}
+InteractiveSessionView.shared = null;
+
 class ActionDescriptionView {
     constructor(config) {
         this.session = config.session;
         this.elem = config.elem;
+        this.session.addDelegate(this);
     }
 
     get welcomeMessage() {
         let hour = new Date().getHours();
+        // TODO if this.session.wasResumed return Strings.str("welcomeBack")
         if (hour >= 4 && hour < 12) {
             return Strings.str("goodMorning");
         } else if (hour >= 12 && hour < 18) {
@@ -2586,6 +2622,7 @@ class GameStatusView {
     constructor(config) {
         this.session = config.session;
         this.elem = config.elem;
+        this.session.addDelegate(this);
     }
 
     render() {
@@ -2612,15 +2649,29 @@ class GameBoardView {
     constructor(config) {
         this.session = config.session;
         this.tileViews = [];
+        this.boardContainer = config.boardContainer;
         this.canvas = config.boardContainer.querySelector("canvas");
         this.game = config.session.game;
-        this.controller = new GameBoardController(this);
+        if (!!config.interactive) {
+            this.controller = new GameBoardController(this);
+        } else {
+            this.controller = null;
+        }
+        
+        this.session.addDelegate(this);
+    }
+    
+    gameStarted(session, newGame, oldGame) {
+        this.game = newGame;
+        this.boardContainer.addRemClass("hidden", false);
     }
 
     get game() { return this._game; }
     set game(newGame) {
-        this._game = newGame;
-        this.configure();
+        if (newGame != this._game) {
+            this._game = newGame;
+            this.configure();
+        }
     }
 
     getScreenRect(tile) {
@@ -2909,10 +2960,16 @@ class Moo {
         this.debug = false;
         config.inputController.keyController.addDelegate(this);
         GameScriptEngine.shared.registerCommand("moo", value => this.advance(value));
+        
+        this.session.addDelegate(this);
     }
 
     get debugDescription() {
         return `<moo@${this.state}>`;
+    }
+    
+    gameStarted() {
+        this.beginMove();
     }
 
     beginMove() {
@@ -3142,7 +3199,7 @@ class NewGameDialog extends GameDialog {
     }
 
     get isDismissable() {
-        return !!GameSession.shared;
+        return !!InteractiveSessionView.shared;
     }
 
     get isModal() { return !this.isDismissable; }
@@ -3267,9 +3324,9 @@ class NewGameDialog extends GameDialog {
         }
         this.dismiss();
         if (this.showImportControls) {
-            GameSession.begin(this.game);
+            InteractiveSessionView.begin(this.game);
         } else {
-            GameSession.begin(new Game({ difficulty: this.difficulty }));
+            InteractiveSessionView.begin(new Game({ difficulty: this.difficulty }));
         }
     }
 
@@ -3788,6 +3845,8 @@ class SweepPerfTimer extends Gaming.PerfTimer {
 }
 SweepPerfTimer.shared = null;
 
+function mark__Stories() {} // ~~~~~~ Stories ~~~~~~
+
 class SweepStory {
     static Kvo() { return { "seen": "seen" }; }
     
@@ -3840,13 +3899,20 @@ class SweepStoriesView {
         } else {
             this.stories = [];
         }
+        
+        this.session.addDelegate(this);
     }
     
     get isEnabled() {
         return SweepStory.metrics.isAvailable;
     }
     
+    gameStarted() {
+        this.render();
+    }
+    
     showStory(story) {
+        if (UI.isShowingDialog()) { return; }
         story.kvo.seen.setValue(true);
         story.render();
         new StoryDialog(story).show();
@@ -3913,12 +3979,15 @@ class StoryDialog extends GameDialog {
     
     show() {
         super.show();
-        this.player.start();
+        if (this.player) { this.player.start(); }
     }
     
     dismiss() {
         super.dismiss();
-        this.player.end();
+        if (this.player) {
+            this.player.end();
+            this.player = null;
+        }
     }
 }
 
@@ -3927,28 +3996,29 @@ class StoryGamePlayer {
         this.story = config.story;
         this.boardContainer = config.boardContainer;
         this.remainingMoves = Array.from(this.story.game.displayMoves);
+        this.boardView = null;
         
         try {
             let object = Array.fromHexString(config.story.game.code);
             let game = Sharing.gameFromBoardObject(object);
+            this.session = new GameSession({ game: game });
         } catch (e) {
             this.session = null;
             debugWarn(e);
-            return;
         }
-        debugLog(this);
     }
     
     start() {
         if (!this.session) { return; }
         this.prep();
-        this.render();
+        this.boardView.render();
         setTimeout(() => this.nextMove(), SweepStory.metrics.moveInterval);
     }
     
     prep() {
         this.story.game.flags.forEach(index => this.flag(index));
-        this.story.game.prepMoves.forEach(index => this.clear(index));
+        this.story.game.prepMoves.forEach(index => this.reveal(index));
+        this.boardView = new GameBoardView({ session: this.session, boardContainer: this.boardContainer, interactive: false });
     }
     
     nextMove() {
@@ -3957,8 +4027,7 @@ class StoryGamePlayer {
             return;
         }
         let index = this.remainingMoves.shift();
-        this.clear(index);
-        this.render();
+        this.reveal(index);
         setTimeout(() => this.nextMove(), SweepStory.metrics.moveInterval);
     }
     
@@ -3967,15 +4036,13 @@ class StoryGamePlayer {
     }
     
     flag(index) {
-        if (!this.session) { return; }
         let tile = this.getTile(index);
         if (!tile) { return; }
         let action = new SetFlagAction({ tile: tile, flag: TileFlag.assertMine });
         this.session.performAction(action);
     }
     
-    clear(index) {
-        this.session.performAction(action);
+    reveal(index) {
         let tile = this.getTile(index);
         if (!tile) { return; }
         let action = new RevealTileAction({ tile: tile, revealBehavior: GameSession.revealBehaviors.safe });
@@ -3984,16 +4051,9 @@ class StoryGamePlayer {
     
     end() {
         if (!this.session) { return; }
+        this.session.removeAllDelegates();
         this.session = null;
         this.boardView = null;
-    }
-    
-    render() {
-        if (!this.boardView) {
-            debugLog("make board view");
-            this.boardView = new GameBoardView({ session: this, boardContainer: this.boardContainer });
-        }
-        this.boardView.render();
     }
 }
 
@@ -4010,5 +4070,5 @@ export let initialize = async function() {
     if (!self.isWorkerScope && !!document.querySelector("moo")) {
         new NewGameDialog().show();
     }
-    Gaming.debugExpose("Sweep", { GameSession: GameSession });
+    Gaming.debugExpose("Sweep", { Game: Game, InteractiveSessionView: InteractiveSessionView });
 };

@@ -385,6 +385,10 @@ Mixins.Gaming.DelegateSet = function(cls) {
         this._delegates.delete(d);
         this._sortDelegates();
     });
+    Mixins.mix(cls.prototype, "removeAllDelegates", function(d) {
+        this._delegates = new Set();
+        this._sortDelegates();
+    });
     Mixins.mix(cls.prototype, "_sortDelegates", function() {
         var sorting = [];
         this._delegates.forEach(function (d) {
