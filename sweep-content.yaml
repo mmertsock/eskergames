@@ -126,6 +126,7 @@ storiesView:
   circle:
     s: "85%"
     l: "75%"
+  commentClasses: ["position-0", "position-1", "position-2"]
   moveInterval: 1500
   difficulty:
     width: 10
@@ -458,4 +459,3 @@ pluralStrings:
     mineCount: ["0 minas", "1 mina", "# minas"]
     mineCountCleared: ["0 minas despejadas", "1 mina despejada", "# minas despejadas"]
     flaggedKnownMines: ["Marcado 0 minas conocidas", "Marcado una mina conocida", "Marcado # minas conocidas"]
-

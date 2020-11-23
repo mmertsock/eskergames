@@ -1012,7 +1012,6 @@ export class GameSession {
             this.endTime = Date.now();
             this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
             Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
-            new SaveHighScoreDialog(this).show();
         }
     }
 }
@@ -2561,12 +2560,20 @@ class InteractiveSessionView {
     }
     
     gameCompleted(session) {
-        if (session == this.session && this.session.state == GameState.lost) {
-            new AlertDialog({
-                title: Strings.str("lostAlertTitle"),
-                message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.session.game.statistics)),
-                buttons: [{ title: Strings.str("lostAlertButton") }]
-            }).show();
+        if (session != this.session) { return; }
+        switch (this.session.state) {
+            case GameState.won:
+                new SaveHighScoreDialog(this.session).show();
+                break;
+            case GameState.lost:
+                new AlertDialog({
+                    title: Strings.str("lostAlertTitle"),
+                    message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.session.game.statistics)),
+                    buttons: [{ title: Strings.str("lostAlertButton") }]
+                }).show();
+                break;
+            default:
+                break;
         }
     }
 }
@@ -3860,6 +3867,7 @@ class SweepStory {
         this.possessive = config.name.possessive;
         this.initials = config.name.initials;
         this.comment = config.comment;
+        this.commentClass = config.commentClass;
         this.color = config.color;
         this.seen = false;
         this.kvo = new Gaming.Kvo(this);
@@ -3883,6 +3891,7 @@ class SweepStoriesView {
             let games = Array.from(metrics.games).shuffle();
             let names = Array.from(Strings.value("randomNames", true)).shuffle();
             let comments = Array.from(Strings.value("randomComments", true)).shuffle();
+            let commentClasses = Array.from(metrics.commentClasses).shuffle();
             
             this.stories = games.map((game, index) => {
                 let hue = Gaming.Rng.shared.nextIntOpenRange(0, 360);
@@ -3891,7 +3900,8 @@ class SweepStoriesView {
                     game: game,
                     name: names[index % names.length],
                     comment: comments[index % comments.length],
-                    color: color
+                    color: color,
+                    commentClass: commentClasses[index % commentClasses.length]
                 });
                 story.kvo.seen.addObserver(this, () => this.render());
                 return story;
@@ -3959,8 +3969,7 @@ class StoryDialog extends GameDialog {
         
         elem.querySelector("comment").configure(comment => {
             comment.querySelector("span").innerText = this.story.comment;
-            let position = Gaming.Rng.shared.nextIntOpenRange(1, 3);
-            comment.addRemClass(`position-${position}`, true);
+            comment.addRemClass(story.commentClass, true);
         });
 
         this.contentElem.append(elem);
