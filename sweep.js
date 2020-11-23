@@ -24,12 +24,17 @@ const ToolButton = Gaming.ToolButton;
 function mark__Game_Model() {} // ~~~~~~ Game Model ~~~~~~
 
 export class TileFlag {
-    constructor(present) {
+    constructor(value, present) {
+        this.value = value;
         this.isPresent = present;
+    }
+    
+    isEqual(other) {
+        return this.value == other.value;
     }
 
     get objectForSerialization() {
-        return TileFlag.sz.indexOf(this);
+        return this.value;
     }
 
     get debugDescription() {
@@ -38,9 +43,9 @@ export class TileFlag {
         return "o";
     }
 }
-TileFlag.none = new TileFlag(false);
-TileFlag.assertMine = new TileFlag(true);
-TileFlag.maybeMine = new TileFlag(true);
+TileFlag.none = new TileFlag(0, false);
+TileFlag.assertMine = new TileFlag(1, true);
+TileFlag.maybeMine = new TileFlag(2, true);
 TileFlag.none.next = TileFlag.assertMine;
 TileFlag.assertMine.next = TileFlag.maybeMine;
 TileFlag.maybeMine.next = TileFlag.none;
@@ -196,7 +201,7 @@ export class GameTile {
         return this;
     }
     setFlag(value, moveNumber) {
-        if (this._flag == value) { return this; }
+        if (this._flag.isEqual(value)) { return this; }
         this._flag = value;
         if (this._flag.isPresent) {
             this.rainbow.flagged = moveNumber;
@@ -405,7 +410,7 @@ class Game {
             points: 0
         };
         this.board.visitTiles(null, tile => {
-            if (tile.flag == TileFlag.assertMine) { stats.assertMineFlagCount += 1; }
+            if (tile.flag.isEqual(TileFlag.assertMine)) { stats.assertMineFlagCount += 1; }
             if (!tile.isCovered && !tile.isMined) {
                 stats.clearedTileCount += 1;
                 stats.points += Game.pointsValue(tile);
@@ -916,7 +921,7 @@ export class GameSession {
             break;
         case GameSession.revealBehaviors.assertFlag:
             if (!tile.isCovered) return;
-            if (tile.isMined && tile.flag == TileFlag.assertMine) return SweepAction.Result.noop;
+            if (tile.isMined && tile.flag.isEqual(TileFlag.assertMine)) return SweepAction.Result.noop;
             // debugLog(`Revealing (asserting) ${tile.coord.debugDescription}`);
             break;
         case GameSession.revealBehaviors.assertTrustingFlags:
@@ -925,9 +930,9 @@ export class GameSession {
             var anyMaybeFlagNeighbors = false;
             let candidates = 0;
             tile.visitNeighbors(neighbor => {
-                if (neighbor.flag == TileFlag.maybeMine) { anyMaybeFlagNeighbors = true; }
-                if (neighbor.flag == TileFlag.assertMine) { assertFlagCount += 1; }
-                if (neighbor.isCovered && neighbor.flag != TileFlag.assertMine) { candidates += 1; }
+                if (neighbor.flag.isEqual(TileFlag.maybeMine)) { anyMaybeFlagNeighbors = true; }
+                if (neighbor.flag.isEqual(TileFlag.assertMine)) { assertFlagCount += 1; }
+                if (neighbor.isCovered && !neighbor.flag.isEqual(TileFlag.assertMine)) { candidates += 1; }
             });
             if (anyMaybeFlagNeighbors) {
                 this.warningMessage = Strings.str("warningAbortRevealNeighborsMaybeFlags");
@@ -1404,10 +1409,10 @@ SweepAction.ShowAlertDialogAction = ShowAlertDialogAction;
 
 class SetFlagAction extends TileBasedAction {
     static actionDescription(tile) {
-        switch (tile.flag) {
-        case TileFlag.assertMine: return Strings.str("setFlagAssertMineActionDescription");
-        case TileFlag.maybeMine: return Strings.str("setFlagMaybeMineActionDescription");
-        case TileFlag.none: return Strings.str("setFlagNoneActionDescription");
+        switch (tile.flag.value) {
+        case TileFlag.assertMine.value: return Strings.str("setFlagAssertMineActionDescription");
+        case TileFlag.maybeMine.value: return Strings.str("setFlagMaybeMineActionDescription");
+        case TileFlag.none.value: return Strings.str("setFlagNoneActionDescription");
         }
     }
 
@@ -1564,7 +1569,7 @@ class MooAction extends TileBasedAction {
     }
 
     isValid(session) {
-        return MooAction.isValid(session) && this.tile.isCovered && this.tile.isMined && this.tile.flag != TileFlag.assertMine;
+        return MooAction.isValid(session) && this.tile.isCovered && this.tile.isMined && !this.tile.flag.isEqual(TileFlag.assertMine);
     }
 
     perform(session) {
@@ -1733,11 +1738,11 @@ TileTransform.CoveredTilesFilter = CoveredTilesFilter;
 class FlaggedTilesFilter extends TileTransform {
     constructor(allowedFlags) {
         super();
-        this.allowedFlags = allowedFlags;
+        this.allowedFlags = allowedFlags.map(flag => flag.value);
     }
 
     map(tile, collection) {
-        return this.allowedFlags.includes(tile.flag);
+        return this.allowedFlags.includes(tile.flag.value);
     }
 }
 TileTransform.FlaggedTilesFilter = FlaggedTilesFilter;
@@ -2766,20 +2771,20 @@ class GameTileView {
 
     renderCovered(context, rect) {
         const ctx = context.ctx;
-        switch (this.model.flag) {
-        case TileFlag.none:
+        switch (this.model.flag.value) {
+        case TileFlag.none.value:
             if (context.showAllMines && this.model.isMined) {
                 return this.renderContent(context, rect, GameTileViewState.mineRevealed);
             } else {
                 return this.renderContent(context, rect, GameTileViewState.covered);
             }
-        case TileFlag.assertMine:
+        case TileFlag.assertMine.value:
             if (context.showAllMines && !this.model.isMined) {
                 return this.renderContent(context, rect, GameTileViewState.incorrectFlag);
             } else {
                 return this.renderContent(context, rect, GameTileViewState.assertMine);
             }
-        case TileFlag.maybeMine:
+        case TileFlag.maybeMine.value:
             if (context.showAllMines && !this.model.isMined) {
                 return this.renderContent(context, rect, GameTileViewState.incorrectFlag);
             } else {
