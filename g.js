@@ -2915,7 +2915,7 @@ export class GameDialog {
     }
 
     show() {
-        this.root = document.createElement("dialog").addRemClass("modal", this.isModal);
+        this.root = document.createElement("gameDialog").addRemClass("modal", this.isModal);
         (this.rootElemClass || "").split(" ").forEach(item => {
             if (item.length > 0) {
                 this.root.addRemClass(item, true);

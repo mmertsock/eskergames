@@ -67,22 +67,22 @@ input, textarea {
     background-color: -webkit-control-background;
 }
 
-dialog {
+gameDialog {
     background-color: var(--background-color-2);
     border-color: var(--border-color-2);
     max-height: calc(100% - 20px);
 }
 
-dialog header, dialog > nav {
+gameDialog header, gameDialog > nav {
     background-color: var(--background-color-bar);
 }
 
-dialog header a.tool span {
+gameDialog header a.tool span {
     line-height: 7pt;
     font-size: 10pt;
 }
 
-dialog content {
+gameDialog content {
     overflow-y: scroll;
 }
 
@@ -144,11 +144,11 @@ textarea {
     height: 2.5em;
 }
 
-dialog#help {
+gameDialog#help {
     max-width: 50em;
 }
 
-dialog content help ul {
+gameDialog content help ul {
     padding-left: 1.5em;
     list-style-type: disc;
 }
@@ -160,26 +160,26 @@ help li kbd {
     background-color: var(--background-color-3);
 }
 
-dialog content help ul.about {
+gameDialog content help ul.about {
     padding-left: 0;
     list-style-type: none;
 }
 
-dialog content help ul.about li {
+gameDialog content help ul.about li {
     display: inline;
     list-style-type: none;
     font-size: 85%;
 }
 
-dialog content help ul.about li:before {
+gameDialog content help ul.about li:before {
     content: " • ";
 }
 
-dialog content help ul.about li:first-child:before {
+gameDialog content help ul.about li:first-child:before {
     content: "";
 }
 
-dialog content shareGame p {
+gameDialog content shareGame p {
     max-width: 288pt;
     margin-left: auto;
     margin-right: auto;
@@ -222,7 +222,7 @@ highScores .scores {
     background-color: var(--background-color-3);
 }
 
-dialog content highScores ol {
+gameDialog content highScores ol {
     padding-left: 1.75em;
     margin: 0;
 }
@@ -325,24 +325,24 @@ p.message {
     text-align: center;
 }
 
-dialog.prompt > nav, dialog.newGame > nav {
+gameDialog.prompt > nav, gameDialog.newGame > nav {
     justify-content: space-between;
 }
-dialog.prompt.buttons-1 > nav {
+gameDialog.prompt.buttons-1 > nav {
     justify-content: flex-end;
 }
 
-dialog.newGame {
+gameDialog.newGame {
     min-width: 15em;
 }
 
-dialog > nav label {
+gameDialog > nav label {
     padding: 2px 4px;
     font-size: 10pt;
     line-height: 10pt;
 }
 
-dialog.analysis {
+gameDialog.analysis {
     width: 80%;
 }
 

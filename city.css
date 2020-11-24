@@ -433,7 +433,7 @@ gameForm div.singleChoiceInput > span:after { content: ":"; }
     background-color: hsla(0, 0%, 0%, 0.3);
 }
 
-dialog {
+gameDialog {
     display: flex;
     position: fixed;
     margin: 0;
@@ -444,7 +444,7 @@ dialog {
     box-shadow: 0px 0px 20px hsla(0, 0%, 0%, 0.5);
 }
 
-dialog header {
+gameDialog header {
     display: flex;
     flex-direction: row;
     margin: 0 0 8px 0;
@@ -453,12 +453,12 @@ dialog header {
     border-radius: 4px 4px 0 0;
 }
 
-dialog header a {
+gameDialog header a {
     display: block;
     flex-grow: 0;
 }
 
-dialog header h2 {
+gameDialog header h2 {
     flex-grow: 1;
     margin: 0;
     padding: 0;
@@ -468,13 +468,13 @@ dialog header h2 {
     text-align: center;
 }
 
-dialog content {
+gameDialog content {
     display: block;
     margin: 0 8px;
     padding: 0;
 }
 
-dialog > nav {
+gameDialog > nav {
     display: flex;
     flex-direction: row;
     justify-content: flex-end;
@@ -492,33 +492,33 @@ gameForm nav {
     padding: 0;
 }
 
-dialog nav a:hover, dialog header a:hover {
+gameDialog nav a:hover, gameDialog header a:hover {
     outline: 1px outset hsl(0, 0%, 50%);
 }
 
-dialog header a.tool, dialog nav a.tool { padding: 2px 4px; }
-dialog header a.tool span { font-size: 7pt; }
+gameDialog header a.tool, gameDialog nav a.tool { padding: 2px 4px; }
+gameDialog header a.tool span { font-size: 7pt; }
 /* so header > h2 remains centered */
-dialog header a.tool.hidden { display: flex; visibility: hidden; }
+gameDialog header a.tool.hidden { display: flex; visibility: hidden; }
 
 gameForm a.tool {
     margin: 0 8px 0 0;
     background-color: hsl(0, 0%, 95%);
 }
 
-dialog h3 {
+gameDialog h3 {
     margin: 0;
     padding: 0;
     font-size: 11pt;
     font-weight: 500;
 }
 
-dialog content h3, dialog content p {
+gameDialog content h3, gameDialog content p {
     margin: 0.5em 0;
     padding: 0;
 }
 
-dialog content ol, dialog content ul {
+gameDialog content ol, gameDialog content ul {
     margin: 0.5em 0;
     padding: 0;
 }
