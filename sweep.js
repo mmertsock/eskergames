@@ -564,7 +564,7 @@ class GameStorage {
     
     get storiesVisible() {
         let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
-        if (!item) { return false; }
+        if (!item) { return true; }
         return item.data.hasOwnProperty("storiesVisible") ? item.data.storiesVisible : true;
     }
     set storiesVisible(value) {
