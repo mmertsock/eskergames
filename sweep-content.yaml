@@ -75,7 +75,7 @@ gameBoardView:
       saturation: "75%"
       lightness: "40%"
 gameTileView:
-  font: bold 32px monospace
+  font: ["bold <size> monospace", 16, "px"]
   borderStrokeStyle: "#444444"
   borderStrokeWidth: 1
   coveredBevelStyle: "#eeeeee"
@@ -178,7 +178,7 @@ analysisView:
   historyChart:
     backgroundColor: "#ffffff"
     chartColor: "#eeeeee"
-    defaultFont: bold 32px 'Gill Sans', monospace
+    defaultFont: ["bold <size> 'Gill Sans', monospace", 16, "px"]
     series:
       score:
         lineWidth: 2
@@ -193,14 +193,14 @@ analysisView:
         strokeStyle: &AXISBORDERSTROKESTYLE "#000000"
         lineWidth: &AXISLINEWIDTH 1
         titlePadding: &AXISTITLEPADDING 4
-        titleFont: &AXISTITLEFONT 26px 'Gill Sans', monospace
+        titleFont: &AXISTITLEFONT ["<size> 'Gill Sans', monospace", 13, "px"]
         textColor: *AXISBORDERSTROKESTYLE
         valueLabels:
           maxTickCount: 25
           tickSize: &TICKSIZE 8
           tickLineWidth: &TICKLINEWIDTH 1
           showLabels: true
-          titleFont: &AXISLABELFONT 14px 'Gill Sans', monospace
+          titleFont: &AXISLABELFONT ["<size> 'Gill Sans', monospace", 7, "px"]
           textColor: *AXISBORDERSTROKESTYLE
           titlePadding: &AXISLABELTITLEPADDING 2
       y:

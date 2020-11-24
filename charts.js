@@ -102,7 +102,7 @@ export class ChartView {
         this.style = Object.assign({
             backgroundColor: "#ffffff",
             chartColor: null,
-            defaultFont: "bold 32px monospace",
+            defaultFont: "bold 24pt monospace",
             defaultTextColor: "#000000",
             titleFont: null,
             titleTextColor: null,

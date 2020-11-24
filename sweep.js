@@ -2336,7 +2336,7 @@ class GameBoardController {
             trackAllMovement: false
         });
         this.controller.pushDelegate(this);
-        this.pixelScale = HTMLCanvasElement.getDevicePixelScale();
+        this.pixelScale = window.devicePixelRatio;
     }
 
     pointSessionChanged(inputSequence, inputController) {
@@ -2535,6 +2535,13 @@ class UI {
     static isShowingDialog() {
         return !!Gaming.GameDialogManager.shared.currentDialog;
     }
+    
+    // for any canvas where width = devicePixelRatio * clientWidth
+    static resolveCanvasFont(config) {
+        let size = config[1] * window.devicePixelRatio;
+        let units = config[2];
+        return String.fromTemplate(config[0], { size: `${size}${units}` });
+    }
 }
 
 // fully interactive with all controls. long-lived singleton.
@@ -2711,7 +2718,7 @@ class GameBoardView {
         // tilePlane size = raw device pixel size (240)
         // canvas style width/height = 240
         // canvas.width/height == 240
-        this.pixelScale = HTMLCanvasElement.getDevicePixelScale();
+        this.pixelScale = window.devicePixelRatio;
         const tileDeviceWidth = GameBoardView.metrics.tileWidth * this.pixelScale;
         this.tilePlane = new TilePlane(this.game.difficulty, tileDeviceWidth);
         this.tilePlane.viewportSize = { width: this.tilePlane.size.width * tileDeviceWidth, height: this.tilePlane.size.height * tileDeviceWidth };
@@ -2775,6 +2782,7 @@ class GameBoardView {
 class GameTileView {
     static initialize(config) {
         GameTileView.config = config;
+        GameTileView.config.font = UI.resolveCanvasFont(GameTileView.config.font);
     }
 
     constructor(model, boardView) {
@@ -3551,6 +3559,13 @@ class HelpDialog extends GameDialog {
 class GameAnalysisDialog extends GameDialog {
     static initialize(config) {
         GameAnalysisDialog.metrics = config;
+        GameAnalysisDialog.metrics.historyChart.defaultFont = UI.resolveCanvasFont(config.historyChart.defaultFont);
+        GameAnalysisDialog.metrics.historyChart.axes.x.titleFont = UI.resolveCanvasFont(config.historyChart.axes.x.titleFont);
+        GameAnalysisDialog.metrics.historyChart.axes.y.primary.titleFont = UI.resolveCanvasFont(config.historyChart.axes.y.primary.titleFont);
+        GameAnalysisDialog.metrics.historyChart.axes.y.secondary.titleFont = UI.resolveCanvasFont(config.historyChart.axes.y.secondary.titleFont);
+        GameAnalysisDialog.metrics.historyChart.axes.x.valueLabels.titleFont = UI.resolveCanvasFont(config.historyChart.axes.x.valueLabels.titleFont);
+        GameAnalysisDialog.metrics.historyChart.axes.y.primary.valueLabels.titleFont = UI.resolveCanvasFont(config.historyChart.axes.y.primary.valueLabels.titleFont);
+        GameAnalysisDialog.metrics.historyChart.axes.y.secondary.valueLabels.titleFont = UI.resolveCanvasFont(config.historyChart.axes.y.secondary.valueLabels.titleFont);
     }
 
     static isValid(session) {
