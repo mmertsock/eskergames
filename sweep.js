@@ -447,7 +447,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
-Game.appVersion = "1.4.3";
+Game.appVersion = "1.4.4";
 
 let GameState = {
     playing: 0,
@@ -560,6 +560,15 @@ class GameStorage {
     }
     set rainbowMode(value) {
         this.setPreference("rainbowMode", value);
+    }
+    
+    get storiesVisible() {
+        let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
+        if (!item) { return false; }
+        return item.data.hasOwnProperty("storiesVisible") ? item.data.storiesVisible : true;
+    }
+    set storiesVisible(value) {
+        this.setPreference("storiesVisible", value);
     }
 
     setPreference(key, value) {
@@ -883,6 +892,7 @@ export class GameSession {
     attemptRevealTile(tile, revealBehavior) {
         if (this.state != GameState.playing) { return; }
         if (!tile) { return; }
+        // debugLog(this.game.board._allTiles.indexOf(tile));
 
         let dots = ".";
         while (!this.hasMoved && tile.isMined) {
@@ -1443,6 +1453,7 @@ class CycleFlagAction extends PointInputBasedAction {
         let tile = this.assertIsValidWithTile(session);
         if (!tile || !tile.isCovered) { return SweepAction.Result.noop; }
         session.beginMove();
+        // debugLog("FLAG:" + session.game.board._allTiles.indexOf(tile));
         tile.cycleFlag(session.history.moveNumber);
         session.mostRecentAction = new ActionResult({
             action: this,
@@ -3883,8 +3894,12 @@ class SweepStoriesView {
         this.session = config.session;
         this.elem = config.elem;
         this.elem.addRemClass("hidden", true);
+        this._isVisible = GameStorage.shared.storiesVisible;
         
         GameScriptEngine.shared.registerCommand("showStory", (subject, evt) => this.showStory(subject));
+        GameScriptEngine.shared.registerCommand("toggleStoriesVisible", () => {
+            this.isVisible = !GameStorage.shared.storiesVisible;
+        });
         
         if (this.isEnabled) {
             let metrics = SweepStory.metrics;
@@ -3917,6 +3932,16 @@ class SweepStoriesView {
         return SweepStory.metrics.isAvailable;
     }
     
+    get isVisible() {
+        return this.isEnabled && !!this.session.game && this._isVisible;
+    }
+    
+    set isVisible(value) {
+        this._isVisible = value;
+        GameStorage.shared.storiesVisible = value;
+        this.render();
+    }
+    
     gameStarted() {
         this.render();
     }
@@ -3930,7 +3955,6 @@ class SweepStoriesView {
     
     configureView() {
         if (!!this.elem.querySelector("ul")) { return; }
-        this.elem.addRemClass("hidden", !this.isEnabled);
         if (this.isEnabled) {
             let list = document.createElement("ul");
             this.stories.forEach(story => {
@@ -3940,11 +3964,17 @@ class SweepStoriesView {
                 list.append(circle);
                 story.elem = circle;
             });
+            this.x = new ToolButton({
+                parent: list,
+                title: Strings.str("storiesBarDismiss"),
+                click: () => { this.isVisible = false; }
+            });
             this.elem.append(list);
         }
     }
     
     render() {
+        this.elem.addRemClass("hidden", !this.isVisible);
         if (!this.session.game) { return; }
         this.configureView();
         this.stories.forEach(story => {
@@ -4021,13 +4051,17 @@ class StoryGamePlayer {
         if (!this.session) { return; }
         this.prep();
         this.boardView.render();
-        setTimeout(() => this.nextMove(), SweepStory.metrics.moveInterval);
+        setTimeout(() => this.nextMove(), this.randomMoveInterval());
     }
     
     prep() {
         this.story.game.flags.forEach(index => this.flag(index));
         this.story.game.prepMoves.forEach(index => this.reveal(index));
         this.boardView = new GameBoardView({ session: this.session, boardContainer: this.boardContainer, interactive: false });
+    }
+    
+    randomMoveInterval() {
+        return Gaming.Rng.shared.nextIntOpenRange(SweepStory.metrics.moveInterval.min, SweepStory.metrics.moveInterval.max);
     }
     
     nextMove() {
@@ -4037,7 +4071,7 @@ class StoryGamePlayer {
         }
         let index = this.remainingMoves.shift();
         this.reveal(index);
-        setTimeout(() => this.nextMove(), SweepStory.metrics.moveInterval);
+        setTimeout(() => this.nextMove(), this.randomMoveInterval());
     }
     
     getTile(index) {
@@ -4080,4 +4114,5 @@ export let initialize = async function() {
         new NewGameDialog().show();
     }
     Gaming.debugExpose("Sweep", { Game: Game, InteractiveSessionView: InteractiveSessionView });
+    Gaming.debugExpose("Gaming", Gaming);
 };

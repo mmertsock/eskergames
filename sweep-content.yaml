@@ -55,6 +55,7 @@ keyboard:
     - [Digit3, showAnalysis, null, helpKeyboardShowAnalysis] # pound
     - [Shift+Digit1, showHint, null, helpKeyboardShowHint] # bang
     - [Shift+Digit4, solverStep, null, helpKeyboardSolverStep] # dollar
+    - [Shift+KeyO, toggleStoriesVisible, null, helpKeyboardToggleStoriesVisible]
     - [KeyQ, toggleRainbowMode]
     - [KeyM, moo, m, helpKeyboardMoo]
     - [KeyO, moo, o]
@@ -127,7 +128,7 @@ storiesView:
     s: "85%"
     l: "75%"
   commentClasses: ["position-0", "position-1", "position-2"]
-  moveInterval: 1500
+  moveInterval: { min: 750, max: 1875 }
   difficulty:
     width: 10
     height: 10
@@ -137,11 +138,11 @@ storiesView:
       flags: [2, 54, 57, 78]
       prepMoves: [25, 95, 79, 56, 55, 52]
       # wins
-      displayMoves: [62, 71, 50, 60]
-    - code: "0100040a0a001010047000860010008000c740200400"
-      flags: [78]
-      prepMoves: [99, 77, 75, 76, 79]
-      displayMoves: [69, 58]
+      displayMoves: [62, 71, 50, 60, 53]
+    - code: "0100040a0a000c0a040101000100e210100000000904"
+      flags: [45, 46, 47]
+      prepMoves: [59]
+      displayMoves: [44, 34, 89, 99, 9, 43, 42]
     - code: "0100040a0a001010047000860010008000c740200400"
       flags: []
       prepMoves: []
@@ -297,6 +298,7 @@ strings:
   helpKeyboardShowHint: "!|: Get a hint"
   helpKeyboardShowNewGameDialog: "⇧ + N|: Show options for new game"
   helpKeyboardSolverStep: "$|: Auto-solve"
+  helpKeyboardToggleStoriesVisible: "⇧ + O|: Toggle stories"
   highScoresDialogTitle: High Scores
   importCodeTitle: Code
   importCodePlaceholder: Paste game code here
@@ -356,7 +358,8 @@ strings:
   stars3: "★★★☆☆"
   stars4: "★★★★☆"
   stars5: "★★★★★"
-  storyDialogDismiss: "Haha Stories Everywhere"
+  storiesBarDismiss: "✕"
+  storyDialogDismiss: Haha Stories Everywhere
   storyDialogTitle: "<possessive> Story"
   toggleDebugModeButton: "Debug"
   toggleRainbowButton: "🌈"
