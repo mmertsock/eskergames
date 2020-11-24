@@ -383,6 +383,15 @@ class Game {
         let ratio = stats.mineCount / Math.pow(stats.totalTileCount, 0.75)
         return 1 + highScoreThresholds.filter(value => value <= ratio).length;
     }
+    
+    static makeCustomDifficulty(size, mineCount) {
+        let base = Game.rules().difficulties.find(item => item.isCustom);
+        return Object.assign({}, base, {
+            width: size.width,
+            height: size.height,
+            mineCount: mineCount
+        });
+    }
 
     constructor(config) {
         this.difficulty = config.difficulty;
@@ -447,7 +456,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
-Game.appVersion = "1.4.4";
+Game.appVersion = "1.4.5";
 
 let GameState = {
     playing: 0,
@@ -3247,11 +3256,10 @@ class NewGameDialog extends GameDialog {
     get difficulty() {
         let difficulty = this.difficultyRules[this.difficulties.value];
         if (difficulty.isCustom) {
-            return Object.assign({}, difficulty, {
+            return Game.makeCustomDifficulty({
                 width: this.customWidthInput.value,
-                height: this.customHeightInput.value,
-                mineCount: this.customMineCountInput.value
-            });
+                height: this.customHeightInput.value
+            }, this.customMineCountInput.value);
         }
         if (difficulty.import && !!this.game) {
             return Object.assign({}, difficulty, {
@@ -3781,30 +3789,6 @@ class AchievementsSection {
         this.contentElem = document.createElement("achievements");
 
         let achievements = Achievement.all;
-        // let achievements = [
-        //     new Achievement({
-        //         id: "Achievement.MostPointsInSingleMove",
-        //         status: Achievement.Status.none,
-        //         value: 33,
-        //         date: Date.now(),
-        //         seen: true
-        //     }),
-        //     new Achievement({
-        //         id: "Achievement.MostClearedInSingleMove",
-        //         status: Achievement.Status.achieved,
-        //         value: 0.97,
-        //         date: Date.now(),
-        //         seen: false
-        //     }),
-        //     new Achievement({
-        //         id: "Achievement.HighestScoreInAnyGame",
-        //         status: Achievement.Status.achieved,
-        //         value: 2482,
-        //         date: Date.now(),
-        //         seen: true
-        //     })
-        // ];
-
         this.seen = achievements.filter(achievement => !achievement.seen);
 
         achievements = achievements.map(achievement => {
