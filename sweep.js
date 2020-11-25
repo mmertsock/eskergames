@@ -73,56 +73,6 @@ export class GameTile {
         };
     }
 
-    static testCompactSerialization() {
-        let specs = [
-            [false, false, TileFlag.none, 0, "____"],
-            [true,  false, TileFlag.none, 0, "m___"],
-            [true,  true, TileFlag.none, 0, "_c__"],
-            [true,  true, TileFlag.none, 0, "mc__"],
-            [false,  false, TileFlag.assertMine, 0, "__!_"],
-            [false,  false, TileFlag.maybeMine, 0, "__?_"],
-            [false,  false, TileFlag.none, 1, "___1"],
-            [false,  false, TileFlag.none, 2, "___2"],
-            [false,  false, TileFlag.none, 3, "___3"],
-            [false,  false, TileFlag.none, 4, "___4"],
-            [false,  false, TileFlag.none, 5, "___5"],
-            [false,  false, TileFlag.none, 6, "___6"],
-            [false,  false, TileFlag.none, 7, "___7"],
-            [false,  false, TileFlag.none, 8, "___8"],
-            [true,   true,  TileFlag.none, 5, "mc_5"]
-        ];
-        specs.forEach(item => {
-            let tile = new GameTile();
-            tile._mined = item[0];
-            tile._covered = item[1];
-            tile._flag = item[2];
-            tile._minedNeighborCount = item[3];
-            // debugLog(tile);
-            GameTile.testSzEqual(tile, GameTile.fromCompactSerialization(tile.compactSerialized), item[4]);
-        });
-    }
-
-    static testSzEqual(tile, config, message) {
-        let fails = 0;
-        fails += GameTile.assertSzEqual(tile.isMined, config.isMined, "isMined", message);
-        fails += GameTile.assertSzEqual(tile.isCovered, config.isCovered, "isCovered", message);
-        fails += GameTile.assertSzEqual(tile.flag.debugDescription, config.flag.debugDescription, "flag", message);
-        fails += GameTile.assertSzEqual(tile.minedNeighborCount, config.minedNeighborCount, "minedNeighborCount", message);
-        if (fails > 0) {
-            debugLog(`${fails} failures: ${message}`);
-        } else {
-            debugLog(`Passed: ${message}`);
-        }
-    }
-
-    static assertSzEqual(a, b, item, message) {
-        if (a != b) {
-            debugWarn(`${item}: ${a} != ${b}: ${message}`);
-            return 1;
-        }
-        return 0;
-    }
-
     // returns metadata, not a full GameTile
     static fromCompactSerialization(data) {
         let flag = (data & 0xc) >> 2;
@@ -245,7 +195,7 @@ export class GameTile {
     }
 } // end class GameTile
 
-class GameBoard {
+export class GameBoard {
     constructor(config) {
         this.size = { width: config.size.width, height: config.size.height };
         this.mineCount = config.mineCount;
@@ -324,7 +274,7 @@ class GameBoard {
     }
 } // end class GameBoard
 
-class Game {
+export class Game {
     static initialize(content) {
         if (content.rules && content.rules.difficulties) {
             GameContent.addIndexToItemsInArray(content.rules.difficulties);
@@ -4120,6 +4070,8 @@ export let initialize = async function() {
     Game.initialize(content);
     if (!self.isWorkerScope && !!document.querySelector("moo")) {
         new NewGameDialog().show();
+    } else {
+        debugLog("Sweep initialize: headless");
     }
     Gaming.debugExpose("Sweep", { Game: Game, InteractiveSessionView: InteractiveSessionView });
     Gaming.debugExpose("Gaming", Gaming);

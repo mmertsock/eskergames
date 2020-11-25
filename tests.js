@@ -16,6 +16,8 @@ import {
     Vector
 } from './g.js';
 
+import * as Sweep from './sweep.js';
+
 // import * as City from './city.js';
 
 function appendOutputItem(msg, className) {
@@ -187,6 +189,23 @@ class UnitTest {
             return false;
         }
         return true;
+    }
+    assertNoThrow(block, msg) {
+        try {
+            return block();
+        } catch(e) {
+            this.logFailure(this._assertMessage(`assertNoThrow failure ${e}`, msg));
+            return undefined;
+        }
+    }
+    assertThrows(block, msg) {
+        try {
+            block();
+            this.logFailure(this._assertMessage(`assertThrows failure`, msg));
+            return undefined;
+        } catch(e) {
+            return e;
+        }
     }
     _assertMessage(main, supplement) {
         var messages = [main];
@@ -2236,7 +2255,155 @@ let taskQueueTest = function() {
         this.assertTrue(sut.isEmpty);
         this.assertElementsEqual(DuplicatingTask.performOrder, [2, 1, 0]);
     }).buildAndRun();
-}
+};
+
+let swept = {};
+
+swept.gameTileTests = function() {
+    new UnitTest("Sweep.GameTile", function() {
+        const GameTile = Sweep.GameTile;
+        const TileFlag = Sweep.TileFlag;
+        let specs = [
+            [false, false, TileFlag.none, 0, "____"],
+            [true,  false, TileFlag.none, 0, "m___"],
+            [true,  true, TileFlag.none, 0, "_c__"],
+            [true,  true, TileFlag.none, 0, "mc__"],
+            [false,  false, TileFlag.assertMine, 0, "__!_"],
+            [false,  false, TileFlag.maybeMine, 0, "__?_"],
+            [false,  false, TileFlag.none, 1, "___1"],
+            [false,  false, TileFlag.none, 2, "___2"],
+            [false,  false, TileFlag.none, 3, "___3"],
+            [false,  false, TileFlag.none, 4, "___4"],
+            [false,  false, TileFlag.none, 5, "___5"],
+            [false,  false, TileFlag.none, 6, "___6"],
+            [false,  false, TileFlag.none, 7, "___7"],
+            [false,  false, TileFlag.none, 8, "___8"],
+            [true,   true,  TileFlag.none, 5, "mc_5"]
+        ];
+        specs.forEach(item => {
+            let tile = new GameTile();
+            tile._mined = item[0];
+            tile._covered = item[1];
+            tile._flag = item[2];
+            tile._minedNeighborCount = item[3];
+            
+            let config = GameTile.fromCompactSerialization(tile.compactSerialized);
+            let message = item[4];
+            
+            this.assertEqual(config.isMined, item[0], "isMined," + message);
+            this.assertEqual(config.isCovered, item[1], "isCovered," + message);
+            this.assertEqual(config.flag.debugDescription, item[2].debugDescription, "flag," + message);
+            this.assertEqual(config.minedNeighborCount, item[3], "minedNeighborCount," + message);
+        });
+    }).buildAndRun();
+};
+
+swept.sharingTests = async function() {
+    await initSweep();
+    new UnitTest("Sweep.Sharing", function() {
+        const Sharing = Sweep.Sharing;
+        let codes = {
+            easy1: "-- Try this Sweep game: 10x10, 8 mines, 1/5 difficulty --\n0100000a0a0008050420001000060200400004000100",
+            int1: "-- Try this Sweep game: 24x16, 36 mines, 2/5 difficulty --\n0100011810002407008000004000214020000000000000420010000800008010\n 890088013200080200400000d6200002002040020000080020   ",
+            custom1: "0100040808000c01001022030801320202",
+            // two-byte  mine count (0110)
+            custom2: "010004221001101100b754b152def04e9fe5e6b7f677d631696420e153f46479\n8dd6610d1211aa142d3f37c4185509c7694a42ca98ab32a098a296369c0dd7bf\n60067275fce93aed915ecd5cd2"
+        };
+        let bogusCodes = {
+            empty:              "",
+            noGameData:         "0100",
+            // based on:         0100000a0a0008050420001000060200400004000100
+            badSchema:          "0200000a0a0008050420001000060200400004000100",
+            badMode:            "0101000a0a0008050420001000060200400004000100",
+            badDifficulty:      "0100a00a0a0008050420001000060200400004000100",
+            badWidth:           "0100000b0a0008050420001000060200400004000100",
+            badHeight:          "0100000a030008050420001000060200400004000100",
+            badMineCount:       "0100000a0a0009050420001000060200400004000100",
+            badChecksum:        "0100000a0a0008060420001000060200400004000100",
+            badTileArrayHeader: "0100000a0a0008050720001000060200400004000100",
+            missingTileByte:    "0100000a0a00080504200010000602004000000100",
+            missingMine:        "0100000a0a0008050420001000060200400002000100",
+            extraMine:          "0100000a0a0008050420001000060200400104000100",
+            // custom difficulty bounds checking
+            // based on:         0100040808000c01001022030801320202
+            tooNarrow:          "0100040708000c01001022030801320202",
+            tooWide:            "0100044108000c01001022030801320202",
+            tooShort:           "0100040807000c01001022030801320202",
+            tooTall:            "0100040841000c01001022030801320202",
+            notEnoughMines:     "0100040808000301001022030801320202",
+            tooManyMines:       "0100040808040101001022030801320202"
+        };
+        
+        this.assertEqual(Sharing.cleanSharingCode(""), "");
+        this.assertEqual(Sharing.cleanSharingCode(codes.easy1), "0100000a0a0008050420001000060200400004000100");
+
+        let game = null;        
+        game = this.assertNoThrow(() => {
+            let object = Array.fromHexString(Sharing.cleanSharingCode(codes.easy1));
+            return Sharing.gameFromBoardObject(object);
+        }, "dz easy1");
+        if (game) {
+            this.assertEqual(game.difficulty.index, 0, "easy1 difficulty");
+            this.assertEqual(game.board.size.width, 10, "easy1 width");
+            this.assertEqual(game.board.size.height, 10, "easy1 height");
+            this.assertEqual(game.board.mineCount, 8, "easy1 mineCount");
+            this.assertEqual(game.board._allTiles.length, 100, "easy1 tile count");
+            let mines = Sweep.TileCollection.allTiles({ game: game })
+                .applying(new Sweep.TileTransform.MineFilter(true));
+            this.assertEqual(mines.tiles.length, game.board.mineCount, "easy1 mines on board");
+            let code = Sharing.gameBoardObject({ game: game }).toHexString();
+            this.assertEqual(code, codes.easy1.split("\n")[1], "codes match");
+        }
+        
+        game = this.assertNoThrow(() => {
+            let object = Array.fromHexString(Sharing.cleanSharingCode(codes.int1));
+            return Sharing.gameFromBoardObject(object);
+        }, "dz int1");
+        if (game) {
+            this.assertEqual(game.difficulty.index, 1, "int1 difficulty");
+            this.assertEqual(game.board.size.width, 24, "int1 width");
+            this.assertEqual(game.board.size.height, 16, "int1 height");
+            this.assertEqual(game.board.mineCount, 36, "int1 mineCount");
+            this.assertEqual(game.board._allTiles.length, 384, "int1 tile count");
+            let mines = Sweep.TileCollection.allTiles({ game: game })
+                .applying(new Sweep.TileTransform.MineFilter(true));
+            this.assertEqual(mines.tiles.length, game.board.mineCount, "int1 mines on board");
+        }
+        
+        game = this.assertNoThrow(() => {
+            let object = Array.fromHexString(Sharing.cleanSharingCode(codes.custom1));
+            return Sharing.gameFromBoardObject(object);
+        }, "dz custom1");
+        if (game) {
+            this.assertTrue(game.difficulty.isCustom, "custom1 difficulty");
+            this.assertEqual(game.board.size.width, 8, "custom1 width");
+            this.assertEqual(game.board.size.height, 8, "custom1 height");
+            this.assertEqual(game.board.mineCount, 12, "custom1 mineCount");
+            this.assertEqual(game.board._allTiles.length, 64, "custom1 tile count");
+            let mines = Sweep.TileCollection.allTiles({ game: game })
+                .applying(new Sweep.TileTransform.MineFilter(true));
+            this.assertEqual(mines.tiles.length, game.board.mineCount, "custom1 mines on board");
+            let code = Sharing.gameBoardObject({ game: game }).toHexString();
+            this.assertEqual(code, codes.custom1, "codes match");
+        }
+        
+        game = this.assertNoThrow(() => {
+            let object = Array.fromHexString(Sharing.cleanSharingCode(codes.custom2));
+            return Sharing.gameFromBoardObject(object);
+        }, "dz custom1");
+        if (game) {
+            this.assertEqual(game.board.mineCount, 272, "custom2 mineCount");
+        }
+        
+        Object.getOwnPropertyNames(bogusCodes).forEach(name => {
+            let code = bogusCodes[name];
+            this.assertThrows(() => {
+                let object = Array.fromHexString(Sharing.cleanSharingCode(code));
+                Sharing.gameFromBoardObject(object);
+            }, name);
+        });
+    }).buildAndRun();
+};
 
 let standardSuite = new TestSession([
     // rectHashTest,
@@ -2260,11 +2427,21 @@ let standardSuite = new TestSession([
     flexCanvasGridTest2,
     flexCanvasGridTest3,
     cityRectExtensionsTest,
+    swept.gameTileTests,
+    swept.sharingTests
     // simDateTest
 ]);
 
 let taskSuite = new TestSession([
-    boolArrayTest
+    swept.gameTileTests,
+    swept.sharingTests
     ]);
+
+swept.initialized = false;
+async function initSweep() {
+    if (swept.initialized) { return; }
+    swept.initialized = true;
+    await Sweep.initialize();
+}
 
 TestSession.current = standardSuite;
