@@ -44,6 +44,4 @@ cp sweep-content.yaml "$SWEEP_DEST"
 cp sweep-solver.js "$SWEEP_DEST"
 cp sweep.js "$SWEEP_DEST"
 
-sed -i '~' -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./city.css|./$SWEEP_V_URL/city.css|g" "$SWEEP_ROOT/index.html"
-
-rm "$SWEEP_ROOT/index.html~"
+sed -i -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./city.css|./$SWEEP_V_URL/city.css|g" "$SWEEP_ROOT/index.html"
