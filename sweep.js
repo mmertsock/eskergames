@@ -456,7 +456,7 @@ class Game {
     }
 } // end class Game
 Game.schemaVersion = 1;
-Game.appVersion = "1.4.5";
+Game.appVersion = "0.0.0";
 
 let GameState = {
     playing: 0,
@@ -987,6 +987,7 @@ export class GameSession {
         tile._boardConstructed();
         tile.visitNeighbors(neighbor => neighbor._boardConstructed());
         this.game.board.mineCount -= 1;
+        this.game.difficulty = Game.makeCustomDifficulty(this.game.board.size, this.game.board.mineCount);
     }
 
     mineTriggered(tile) {
@@ -4100,7 +4101,15 @@ class StoryGamePlayer {
 }
 
 export let initialize = async function() {
-    let content = await GameContent.loadYamlFromLocalFile("sweep-content.yaml", GameContent.cachePolicies.forceOnFirstLoad);
+    let version = import.meta.url.match(/sweep\/([0-9.]+)\//);
+    if (version && version.length == 2) {
+        Game.appVersion = version[1];
+        Game.versionPath = `./${Game.appVersion}`;
+    } else {
+        Game.versionPath = ".";
+    }
+    
+    let content = await GameContent.loadYamlFromLocalFile(`${Game.versionPath}/sweep-content.yaml`, GameContent.cachePolicies.forceOnFirstLoad);
     if (!content) {
         alert(Strings.str("failedToLoadGameMessage"));
         return;
