@@ -2428,6 +2428,7 @@ swept.autosaveTests = async function() {
             if (!!restored) {
                 this.assertTrue(!!restored.game, "game");
                 if (restored.game) {
+                    this.assertEqual(restored.game.id, session.game.id);
                     this.assertEqual(restored.game.difficulty.index, session.game.difficulty.index);
                     this.assertEqual(restored.game.board.size.width, session.game.board.size.width);
                     this.assertEqual(restored.game.board.size.height, session.game.board.size.height);
@@ -2465,7 +2466,8 @@ swept.autosaveTests = async function() {
                 return Sweep.GameSession.fromAutosave(data);
             }, "restore autosave");
             this.assertTrue(!!restored, "restored");
-            if (restored.game) {
+            if (!!restored && restored.game) {
+                this.assertEqual(restored.game.id, session.game.id);
                 this.assertEqual(restored.game.difficulty.index, session.game.difficulty.index);
                 this.assertEqual(restored.game.board.size.width, session.game.board.size.width);
                 this.assertEqual(restored.game.board.size.height, session.game.board.size.height);

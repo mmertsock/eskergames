@@ -352,6 +352,7 @@ export class Game {
     }
 
     constructor(config) {
+        this.id = config.id ? config.id : Gaming.Rng.shared.nextHexString(16);
         this.difficulty = config.difficulty;
         this.board = config.board || new GameBoard({ size: config.difficulty, mineCount: config.difficulty.mineCount });
     }
@@ -438,6 +439,7 @@ export class GameStorage {
     addHighScore(session, playerName) {
         const stats = session.game.statistics;
         const highScore = {
+            gameID: session.game.id,
             playerName: playerName,
             points: stats.points,
             timestamp: session.endTime,
@@ -457,12 +459,19 @@ export class GameStorage {
         data.difficulties[difficultyIndex].highScores.push(highScore);
         data.difficulties[difficultyIndex].highScores.sort((a, b) => b.points - a.points);
         data.difficulties[difficultyIndex].highScores = data.difficulties[difficultyIndex].highScores.slice(0, 100);
+        
         let item = new SaveStateItem(this.highScoresCollection.namespace, this.highScoresCollection.namespace, Date.now(), { highScoresByDifficulty: data });
         this.highScoresCollection.saveItem(item, {});
 
         this.lastPlayerName = highScore.playerName;
     }
-
+    
+    hasHighScoreForGame(id) {
+        let highScores = this.highScoresByDifficulty.difficulties.flatMap(difficulty => difficulty.highScores);
+        let found = highScores.find(item => (id == item.gameID));
+        return !!found;
+    }
+    
     get highScoresByDifficulty() {
         let item = this.highScoresCollection.getItem(this.highScoresCollection.namespace);
         if (item) {
@@ -789,6 +798,7 @@ export class GameSession {
         let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
         this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
 
+        this.recordGameState();
         this.forEachDelegate(d => {
             if (d.gameResumed) { d.gameResumed(this, this.game, oldGame); }
         });
@@ -858,6 +868,7 @@ export class GameSession {
             SweepPerfTimer.shared.counters.action = this.mostRecentAction.description;
         }
         SweepPerfTimer.endShared();
+        this.recordGameState();
         Dispatch.shared.postEventSync(GameSession.moveCompletedEvent, this);
         this.renderViews();
     }
@@ -884,7 +895,6 @@ export class GameSession {
     // contexts like tile clearing.
     beginMove() {
         if (this.moveState == MoveState.pending) {
-            this.recordGameState();
             this.hintTile = null;
             this.debugTiles = [];
             this.warningMessage = null;
@@ -1222,6 +1232,7 @@ GameSession.fromAutosave = function(data) {
 
 Game.prototype.objectForAutosave = function() {
     return {
+        id: this.id,
         // custom width/height/etc. stored in GameBoard sz
         difficulty: this.difficulty.index,
         board: this.board.objectForAutosave()
@@ -1230,7 +1241,7 @@ Game.prototype.objectForAutosave = function() {
 
 Game.fromAutosave = function(data) {
     if (!data) { throw new Error("noGameData"); }
-    Gaming.deserializeAssertProperties(data, ["difficulty", "board"]);
+    Gaming.deserializeAssertProperties(data, ["id", "difficulty", "board"]);
     let board = GameBoard.fromAutosave(data.board);
     let difficulty = Game.getDifficulty(data.difficulty);
     if (!difficulty) {
@@ -1240,6 +1251,7 @@ Game.fromAutosave = function(data) {
         difficulty = Game.makeCustomDifficulty(board.size, board.mineCount);
     }
     return new Game({
+        id: data.id,
         difficulty: difficulty,
         board: board
     });
@@ -3620,6 +3632,8 @@ class SaveHighScoreDialog extends GameDialog {
     constructor(session) {
         super();
         this.session = session;
+        this.isEnabled = this.session.isClean && !GameStorage.shared.hasHighScoreForGame(this.session.game.id);
+        
         this.saveButton = new ToolButton({
             title: Strings.str(this.isEnabled ? "saveHighScoreButton" : "saveHighScoreDisabledButton"),
             click: () => this.save()
@@ -3656,10 +3670,7 @@ class SaveHighScoreDialog extends GameDialog {
     get dialogButtons() {
         return [this.saveButton.elem];
     }
-
-    get isEnabled() {
-        return this.session.isClean;
-    }
+    
     get isValid() {
         return this.allInputs.every(input => input.isValid);
     }
