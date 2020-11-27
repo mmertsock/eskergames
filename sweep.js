@@ -2542,11 +2542,11 @@ class GameControlsView {
             title: Strings.str("showTrophiesButton"),
             click: () => this.showTrophies()
         });
-        this.showAnalysisButton = new ToolButton({
-            parent: this.elem,
-            title: Strings.str("showAnalysisButton"),
-            click: () => this.showAnalysis()
-        });
+        // this.showAnalysisButton = new ToolButton({
+        //     parent: this.elem,
+        //     title: Strings.str("showAnalysisButton"),
+        //     click: () => this.showAnalysis()
+        // });
         this.showHintButton = new ToolButton({
             parent: this.elem,
             title: Strings.str("showHintButton"),
@@ -2598,7 +2598,7 @@ class GameControlsView {
 
     render() {
         this.showTrophiesButton.elem.addRemClass("new", Achievement.hasAnyNew());
-        this.showAnalysisButton.isEnabled = GameAnalysisDialog.isValid(this.session);
+        // this.showAnalysisButton.isEnabled = GameAnalysisDialog.isValid(this.session);
         this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
         this.solverStepButton.isEnabled = AttemptSolverStepAction.isValid(this.session);
         this.toggleRainbowButton.isSelected = this.session ? this.session.rainbowMode : false;
