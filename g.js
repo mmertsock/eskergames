@@ -53,6 +53,12 @@ export function deserializeAssert(condition, message) {
     throw new Error(error);
 }
 
+export function deserializeAssertProperties(object, names) {
+    names.forEach(name => {
+        deserializeAssert(object.hasOwnProperty(name), `field ${name} not found`);
+    });
+}
+
 const _primes = [3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71];
 export function hashArrayOfInts(values) {
     var result = 0;

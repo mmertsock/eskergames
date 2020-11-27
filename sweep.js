@@ -61,11 +61,15 @@ export class GameTile {
         this._flag = TileFlag.none;
         this.rainbow = { cleared: -1, flagged: -1 };
     }
+    
+    get coordForSerialization() {
+        return { x: this.coord.x, y: this.coord.y };
+    }
 
     get objectForSerialization() {
         // easy game: about 8.5 KB for entire board
         return {
-            coord: { x: this.coord.x, y: this.coord.y },
+            coord: this.coordForSerialization,
             isMined: this.isMined,
             minedNeighborCount: this.minedNeighborCount,
             isCovered: this.isCovered,
@@ -102,7 +106,7 @@ export class GameTile {
         bits.setValue(6, this.bitValue(value, 2));
         bits.setValue(7, this.bitValue(value, 3));
 
-        // easy game: about 243 bytes for enitre board
+        // easy game: about 243 bytes for entire board
         return bits.getByte(0);
 
         // easy game: about 1 KB for entire board.
@@ -199,7 +203,7 @@ export class GameBoard {
     constructor(config) {
         this.size = { width: config.size.width, height: config.size.height };
         this.mineCount = config.mineCount;
-        this.gameState = {}; // arbitrary metadata
+        this.gameState = config.hasOwnProperty("gameState") ? config.gameState : {}; // arbitrary serializable metadata
         this._tiles = new Rect(new Point(0, 0), { width: 1, height: this.size.height }).allTileCoordinates.map(rowCoord => {
             return new Rect(new Point(0, rowCoord.y), { width: this.size.width, height: 1 }).allTileCoordinates.map(colCoord => {
                 return new GameTile(new Point(colCoord.x, rowCoord.y), this);
@@ -334,6 +338,10 @@ export class Game {
         return 1 + highScoreThresholds.filter(value => value <= ratio).length;
     }
     
+    static getDifficulty(index) {
+        return Game.rules().difficulties[index];
+    }
+    
     static makeCustomDifficulty(size, mineCount) {
         let base = Game.rules().difficulties.find(item => item.isCustom);
         return Object.assign({}, base, {
@@ -420,7 +428,7 @@ let MoveState = {
     active: 2
 };
 
-class GameStorage {
+export class GameStorage {
     constructor() {
         this.preferencesCollection = new SaveStateCollection(window.localStorage, "SweepSettings");
         this.highScoresCollection = new SaveStateCollection(window.localStorage, "SweepHighScores");
@@ -484,6 +492,14 @@ class GameStorage {
     saveAchievement(achievement) {
         let item = new SaveStateItem(achievement.id, achievement.id, achievement.date, achievement.objectForSerialization);
         this.achievementsCollection.saveItem(item);
+    }
+    
+    get autosaveGame() {
+        let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
+        return item ? item.data.autosave : null;
+    }
+    set autosaveGame(value) {
+        this.setPreference("autosave", value);
     }
 
     get lastDifficultyIndex() {
@@ -591,6 +607,30 @@ class GameHistory {
                 previous = moment;
             }
         }
+    }
+    
+    objectForAutosave() {
+        return {
+            moveNumber: this.moveNumber,
+            serializedMoves: this.serializedMoves,
+            lastMoveNumber: this.lastMove ? this.lastMove.moveNumber : null
+        };
+    }
+    
+    static fromAutosave(data) {
+        Gaming.deserializeAssert(Number.isInteger(data.moveNumber));
+        Gaming.deserializeAssert(Array.isArray(data.serializedMoves));
+        let history = new GameHistory();
+        history.moveNumber = data.moveNumber;
+        history.serializedMoves = data.serializedMoves;
+        if (Number.isInteger(data.lastMoveNumber)) {
+            history.visitHistory(move => {
+                if (move.moveNumber == data.lastMoveNumber) {
+                    history.lastMove = move;
+                }
+            });
+        }
+        return history;
     }
 }
 GameHistory.firstMoveNumber = 0;
@@ -745,12 +785,23 @@ export class GameSession {
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
         this.warningMessage = null;
-
+        
         let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
         this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
 
         this.forEachDelegate(d => {
-            if (d.gameStarted) { d.gameStarted(this, this.game, oldGame); }
+            if (d.gameResumed) { d.gameResumed(this, this.game, oldGame); }
+        });
+        this.renderViews();
+    }
+    
+    resume() {
+        this.moveState = MoveState.ready;
+        let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
+        this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
+        this.warningMessage = Strings.str("welcomeBack");
+        this.forEachDelegate(d => {
+            if (d.gameResumed) { d.gameResumed(this, this.game, null); }
         });
         this.renderViews();
     }
@@ -801,7 +852,7 @@ export class GameSession {
         let start = this.game.statistics;
         action.perform(this);
         this.checkForWin();
-        this.pendingMove = MoveState.ready;
+        this.moveState = MoveState.ready;
         this.mostRecentAction.setStatistics(start, this.game.statistics);
         if (SweepPerfTimer.shared) {
             SweepPerfTimer.shared.counters.action = this.mostRecentAction.description;
@@ -846,6 +897,7 @@ export class GameSession {
 
     recordGameState() {
         this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
+        GameStorage.shared.autosaveGame = this.objectForAutosave();
     }
     
     attemptRevealTile(tile, revealBehavior) {
@@ -998,7 +1050,7 @@ GameSession.revealBehaviors = {
 
 // views, etc., can implement this pattern
 class GameSessionDelegate {
-    gameStarted(session, newGame, oldGame) { }
+    gameResumed(session, newGame, oldGame) { }
     beginMove(session) { }
     render(session) { }
 }
@@ -1118,11 +1170,141 @@ GameBoard.fromObjectForSharing = function(data) {
     return board;
 };
 
+GameSession.prototype.objectForAutosave = function() {
+    if (!(this.moveState == MoveState.ready || this.moveState == MoveState.pending)) {
+        // Don't attempt to autosave inconsistent state
+        return null;
+    }
+    return {
+        schemaVersion: Game.schemaVersion,
+        game: this.game.objectForAutosave(),
+        state: this.state,
+        history: this.history.objectForAutosave(),
+        isClean: this.isClean,
+        mostRecentAction: this.mostRecentAction ? this.mostRecentAction.objectForAutosave() : null,
+        hintTileCoord: this.hintTile ? this.hintTile.coordForSerialization : null,
+        startTime: this.startTime,
+        endTime: this.endTime
+    };
+};
+
+GameSession.fromAutosave = function(data) {
+    if (!data) { return null; }
+    Gaming.deserializeAssertProperties(data, [
+        "schemaVersion",
+        "game",
+        "state",
+        "history",
+        "isClean",
+        "mostRecentAction",
+        "hintTileCoord",
+        "startTime",
+        "endTime"
+    ]);
+    if (data.schemaVersion != Game.schemaVersion) {
+        throw new Error("schemaVersionUnsupported");
+    }
+    let game = Game.fromAutosave(data.game);
+    let session = new GameSession({ game: game });
+    session.state = data.state;
+    session.history = GameHistory.fromAutosave(data.history);
+    session.isClean = data.isClean;
+    if (data.mostRecentAction) {
+        session.mostRecentAction = ActionResult.fromAutosave(data.mostRecentAction, session);
+    }
+    if (data.hintTileCoord) {
+        session.hintTile = session.game.board.tileAtCoord(data.hintTileCoord);
+    }
+    session.startTime = data.startTime;
+    session.endTime = data.endTime;
+    return session;
+};
+
+Game.prototype.objectForAutosave = function() {
+    return {
+        // custom width/height/etc. stored in GameBoard sz
+        difficulty: this.difficulty.index,
+        board: this.board.objectForAutosave()
+    };
+};
+
+Game.fromAutosave = function(data) {
+    if (!data) { throw new Error("noGameData"); }
+    Gaming.deserializeAssertProperties(data, ["difficulty", "board"]);
+    let board = GameBoard.fromAutosave(data.board);
+    let difficulty = Game.getDifficulty(data.difficulty);
+    if (!difficulty) {
+        throw new Error("badDifficulty");
+    }
+    if (difficulty.isCustom) {
+        difficulty = Game.makeCustomDifficulty(board.size, board.mineCount);
+    }
+    return new Game({
+        difficulty: difficulty,
+        board: board
+    });
+};
+
+GameBoard.prototype.objectForAutosave = function() {
+    return {
+        size: this.size,
+        mineCount: this.mineCount,
+        gameState: this.gameState,
+        tiles: {
+            data: this._allTiles.map(tile => tile.objectForAutosave()),
+            rainbow: {
+                cleared: this._allTiles.map(tile => tile.rainbow.cleared),
+                flagged: this._allTiles.map(tile => tile.rainbow.flagged)
+            }
+        }
+    }
+    let data = this.compactSerialized;
+    data.gameState = this.gameState;
+    return data;
+};
+
+GameBoard.fromAutosave = function(data) {
+    if (!data) { throw new Error("noBoardData"); }
+    Gaming.deserializeAssertProperties(data, ["size", "mineCount", "gameState", "tiles"]);
+    Gaming.deserializeAssert(Array.isArray(data.tiles.data));
+    Gaming.deserializeAssertProperties(data.tiles, ["rainbow"]);
+    Gaming.deserializeAssert(Array.isArray(data.tiles.rainbow.cleared));
+    Gaming.deserializeAssert(Array.isArray(data.tiles.rainbow.flagged));
+    let board = new GameBoard({
+        size: data.size,
+        mineCount: data.mineCount,
+        gameState: data.gameState
+    });
+    board._allTiles.forEach((tile, index) => {
+        tile.restoreAutosave(data.tiles.data[index], data.tiles.rainbow.cleared[index], data.tiles.rainbow.flagged[index]);
+    });
+    return board;
+};
+
+GameTile.prototype.objectForAutosave = function() {
+    return this.compactSerialized;
+};
+
+GameTile.prototype.restoreAutosave = function(data, rainbowCleared, rainbowFlagged) {
+    Gaming.deserializeAssert(Number.isInteger(data));
+    let config = GameTile.fromCompactSerialization(data);
+    this._mined = config.isMined;
+    this._minedNeighborCount = config.minedNeighborCount;
+    this._covered = config.isCovered;
+    this._flag = config.flag;
+    this.rainbow.cleared = rainbowCleared;
+    this.rainbow.flagged = rainbowFlagged;
+};
+
 function mark__Actions() {} // ~~~~~~ Actions ~~~~~~
 
 export class ActionResult {
     constructor(config) {
-        this.action = config ? config.action : null;
+        if (config) {
+            this.actionType = config.action ? config.action.constructor.name : config.actionType;
+        } else {
+            this.actionType = null;
+        }
         this.tile = config ? config.tile : null;
         this.description = config ? config.description : null;
         this.change = null; // a diff of statistics
@@ -1143,6 +1325,26 @@ export class ActionResult {
         data.clearedTileCount = Game.integerFormatObject(data.clearedTileCount);
         data.points = Game.integerFormatObject(data.points);
         return data;
+    }
+    
+    objectForAutosave() {
+        return {
+            actionType: this.actionType,
+            tileCoord: this.tile ? this.tile.coordForSerialization : null,
+            description: this.description,
+            change: this.change
+        };
+    }
+    
+    static fromAutosave(data, session) {
+        Gaming.deserializeAssertProperties(data, ["tileCoord", "description", "change"]);
+        let tile = data.tileCoord ? session.game.board.tileAtCoord(data.tileCoord) : null;
+        return new ActionResult({
+            actionType: data.actionType,
+            tile: tile,
+            description: data.description,
+            change: data.change
+        });
     }
 }
 
@@ -2065,7 +2267,7 @@ Achievement.Moo = class Moo extends Achievement {
     }
 
     moveCompleted(session, date) {
-        if (!this.value && session.mostRecentAction.action instanceof MooAction) {
+        if (!this.value && session.mostRecentAction.actionType == MooAction.name) {
             this.achieved(true, date);
         }
     }
@@ -2510,6 +2712,24 @@ class InteractiveSessionView {
         return InteractiveSessionView.shared ? (InteractiveSessionView.shared.session == session) : false;
     }
     
+    static initialize() {
+        try {
+            let data = GameStorage.shared.autosaveGame;
+            let session = data ? GameSession.fromAutosave(data) : null;
+            if (session) {
+                debugLog(`Restored game from ${JSON.stringify(data).length}-byte autosave`);
+                InteractiveSessionView.shared = new InteractiveSessionView(session);
+                InteractiveSessionView.shared.session.resume();
+            }
+        } catch(e) {
+            debugWarn("Failed to load autosave");
+            debugLog(e);
+        }
+        if (!InteractiveSessionView.shared) {
+            new NewGameDialog().show();
+        }
+    }
+    
     static begin(game) {
         if (InteractiveSessionView.shared) {
             InteractiveSessionView.shared.session.start(game);
@@ -2646,7 +2866,7 @@ class GameBoardView {
         this.session.addDelegate(this);
     }
     
-    gameStarted(session, newGame, oldGame) {
+    gameResumed(session, newGame, oldGame) {
         this.game = newGame;
         this.boardContainer.addRemClass("hidden", false);
     }
@@ -2954,7 +3174,7 @@ class Moo {
         return `<moo@${this.state}>`;
     }
     
-    gameStarted() {
+    gameResumed() {
         this.beginMove();
     }
 
@@ -3892,7 +4112,7 @@ class SweepStoriesView {
         this.render();
     }
     
-    gameStarted() {
+    gameResumed() {
         this.render();
     }
     
@@ -4069,10 +4289,10 @@ export let initialize = async function() {
     SweepSolver.initialize();
     Game.initialize(content);
     if (!self.isWorkerScope && !!document.querySelector("moo")) {
-        new NewGameDialog().show();
+        InteractiveSessionView.initialize();
     } else {
         debugLog("Sweep initialize: headless");
     }
-    Gaming.debugExpose("Sweep", { Game: Game, InteractiveSessionView: InteractiveSessionView });
+    Gaming.debugExpose("Sweep", { Game: Game, InteractiveSessionView: InteractiveSessionView, GameStorage: GameStorage });
     Gaming.debugExpose("Gaming", Gaming);
 };

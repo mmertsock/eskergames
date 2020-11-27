@@ -54,11 +54,11 @@ export class TestSession {
         this.testsPassed = 0;
         this.testsFailed = 0;
     }
-    run(outputElement) {
+    async run(outputElement) {
         TestSession.outputElement = outputElement;
-        this.testFuncs.forEach(function (t) {
-            t();
-        });
+        for (let i = 0; i < this.testFuncs.length; i += 1) {
+            await this.testFuncs[i]();
+        }
         this.summarize();
     }
     summarize() {
@@ -2405,6 +2405,84 @@ swept.sharingTests = async function() {
     }).buildAndRun();
 };
 
+swept.autosaveTests = async function() {
+    await initSweep();
+    new UnitTest("Sweep.autosave", function() {
+        // set up a game in the middle of gameplay
+        let game = new Sweep.Game({ difficulty: Sweep.Game.getDifficulty(0) });
+        let session = new Sweep.GameSession({ game: game });
+        session.start();
+        let tile = game.board._allTiles[0];
+        session.performAction(new Sweep.SweepAction.RevealTileAction({ tile: tile, revealBehavior: Sweep.GameSession.revealBehaviors.safe }));
+        session.hintTile = game.board._allTiles[2];
+        
+        let data = session.objectForAutosave();
+        // console.log(data);
+        // console.log({ length: JSON.stringify(data).length });
+        this.assertTrue(!!data, "objectForAutosave is defined");
+        if (!!data) {
+            let restored = this.assertNoThrow(() => {
+                return Sweep.GameSession.fromAutosave(data);
+            }, "restore autosave");
+            this.assertTrue(!!restored, "restored");
+            if (!!restored) {
+                this.assertTrue(!!restored.game, "game");
+                if (restored.game) {
+                    this.assertEqual(restored.game.difficulty.index, session.game.difficulty.index);
+                    this.assertEqual(restored.game.board.size.width, session.game.board.size.width);
+                    this.assertEqual(restored.game.board.size.height, session.game.board.size.height);
+                    this.assertEqual(restored.game.board.mineCount, session.game.board.mineCount);
+                }
+                this.assertEqual(restored.state, session.state);
+                this.assertTrue(!!restored.history, "history");
+                if (restored.history) {
+                    this.assertEqual(restored.history.moveNumber, session.history.moveNumber);
+                    this.assertEqual(restored.history.serializedMoves.length, session.history.serializedMoves.length);
+                }
+                this.assertEqual(restored.isClean, session.isClean);
+                this.assertTrue(!!restored.mostRecentAction, "mostRecentAction");
+                if (restored.mostRecentAction) {
+                    this.assertEqual(restored.mostRecentAction.actionType, session.mostRecentAction.actionType);
+                    this.assertEqual(restored.mostRecentAction.tile != null, session.mostRecentAction.tile != null);
+                }
+                this.assertTrue(!!restored.hintTile, "hintTile");
+                if (restored.hintTile) {
+                    this.assertEqual(restored.hintTile.coord.x, session.hintTile.coord.x);
+                    this.assertEqual(restored.hintTile.coord.y, session.hintTile.coord.y);
+                }
+                this.assertEqual(restored.startTime, session.startTime);
+                this.assertEqual(restored.endTime, session.endTime);
+            }
+        }
+        
+        game = new Sweep.Game({ difficulty: Sweep.Game.makeCustomDifficulty({ width: 12, height: 24, mineCount: 30 }) });
+        session = new Sweep.GameSession({ game: game });
+        session.start();
+        data = session.objectForAutosave();
+        this.assertTrue(!!data, "objectForAutosave is defined");
+        if (!!data) {
+            let restored = this.assertNoThrow(() => {
+                return Sweep.GameSession.fromAutosave(data);
+            }, "restore autosave");
+            this.assertTrue(!!restored, "restored");
+            if (restored.game) {
+                this.assertEqual(restored.game.difficulty.index, session.game.difficulty.index);
+                this.assertEqual(restored.game.board.size.width, session.game.board.size.width);
+                this.assertEqual(restored.game.board.size.height, session.game.board.size.height);
+                this.assertEqual(restored.game.board.mineCount, session.game.board.mineCount);
+            }
+        }
+    }).buildAndRun();
+};
+
+swept.initialized = false;
+async function initSweep() {
+    if (swept.initialized) { console.log({ already: Sweep.Game.rules() }); return; }
+    swept.initialized = true;
+    await Sweep.initialize();
+}
+
+
 let standardSuite = new TestSession([
     // rectHashTest,
     manhattanDistanceFromTest,
@@ -2428,20 +2506,14 @@ let standardSuite = new TestSession([
     flexCanvasGridTest3,
     cityRectExtensionsTest,
     swept.gameTileTests,
-    swept.sharingTests
+    swept.sharingTests,
+    swept.autosaveTests
     // simDateTest
 ]);
 
 let taskSuite = new TestSession([
-    swept.gameTileTests,
-    swept.sharingTests
+    swept.sharingTests,
+    swept.autosaveTests
     ]);
-
-swept.initialized = false;
-async function initSweep() {
-    if (swept.initialized) { return; }
-    swept.initialized = true;
-    await Sweep.initialize();
-}
 
 TestSession.current = standardSuite;

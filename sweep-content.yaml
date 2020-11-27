@@ -370,6 +370,7 @@ strings:
   warningAbortRevealNeighborsNoCandidates: No tiles to clear in this area
   warningAllNeighborsAlreadyFlagged: All tiles in this area are already flagged
   warningIncorrectUncoveredTileCount: "Can’t flag this area: incorrect number of covered tiles"
+  welcomeBack: "Welcome back!"
   randomNames:
     - { full: "Stumbleduckle", possessive: "Stumbleduckle’s", initials: S }
     - { full: "Honeystring", possessive: "Honeystring’s", initials: H }
