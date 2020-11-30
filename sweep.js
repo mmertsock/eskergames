@@ -289,9 +289,12 @@ export class Game {
         Game.content.rules.maxStarCount = Game.content.rules.highScoreThresholds.length + 1;
         GameScriptEngine.shared = new GameScriptEngine();
         Achievement.initialize();
+        
+        UI.localizeStaticHTML();
         GameBoardView.initialize(content.gameBoardView);
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
+        HelpDialog.initialize();
         GameAnalysisDialog.initialize(content.analysisView);
         SweepStory.initialize(content.storiesView);
         Moo.initialize(content.moo);
@@ -765,6 +768,8 @@ export class GameSession {
         this.game = config.game;
         this.state = GameState.playing;
         this.moveState = MoveState.ready;
+        this.startTime = Date.now();
+        this.endTime = null;
         this.debugMode = false;
         this.rainbowMode = GameStorage.shared.rainbowMode;
         this.history = new GameHistory();
@@ -2706,6 +2711,12 @@ class GameControlsView {
 function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 
 class UI {
+    static localizeStaticHTML() {
+        document.querySelectorAll("[data-Strings-str]").forEach(elem => {
+            elem.innerText = Strings.str(elem.dataset["stringsStr"]);
+        });
+    }
+    
     static isTouchFirst() {
         return !window.matchMedia("(any-pointer: fine)").matches;
     }
@@ -3611,7 +3622,6 @@ class ShareDialog extends GameDialog {
         this.contentElem = GameDialog.createContentElem();
         let elem = document.querySelector("body > shareGame")
             .cloneNode(true).addRemClass("hidden", false);
-        elem.querySelector("p").innerText = Strings.str("shareDialogInstructions");
         
         let data = Sharing.gameBoardObject(session).toHexString();
         if (!UI.isTouchFirst() && !UI.isNarrowViewport()) {
@@ -3706,11 +3716,18 @@ class SaveHighScoreDialog extends GameDialog {
 }
 
 class HelpDialog extends GameDialog {
-    constructor() {
-        super();
-        this.contentElem = GameDialog.createContentElem();
-        let elem = document.querySelector("body > help")
-            .cloneNode(true).addRemClass("hidden", false);
+    static initialize() {
+        let isTouchFirst = UI.isTouchFirst();
+        let elem = document.querySelector("body > help");
+        elem.querySelector("h3.content-point-interactions").innerText = Strings.str(isTouchFirst ? "helpContentTouchInteractionsHeader" : "helpContentMouseInteractionsHeader");
+        
+        let actionInfo = { point: Strings.str(isTouchFirst ? "tapAction" : "clickAction") };
+        elem.querySelectorAll("ul.content-point-interactions li").forEach(li => {
+            let tokens = Strings.template(li.dataset["stringsTemplate"], actionInfo).split("|");
+            li.querySelector("kbd").innerText = tokens[0];
+            li.querySelector("span").innerText = tokens[1];
+        });
+        
         Game.content.keyboard.keyPressShortcuts.forEach(item => {
             if (item.length < 4) { return; }
             let config = Strings.str(item[item.length - 1]);
@@ -3719,21 +3736,14 @@ class HelpDialog extends GameDialog {
             if (config.length == 1) {
                 config.push("???");
             }
-            this.appendShortcut(elem, config[0], config[1]);
+            HelpDialog.appendShortcut(elem, config[0], config[1]);
         });
         elem.querySelector(".shortcuts li:last-child").title = Strings.str("helpKeyboardMooTooltip");
-
-        elem.querySelector(".version").innerText = Strings.template("gameVersionLabelTemplate", { appVersion: Game.appVersion });
         
-        this.contentElem.append(elem);
-
-        this.x = new ToolButton({
-            title: Strings.str("helpDismiss"),
-            click: () => this.dismiss()
-        });
+        elem.querySelector(".version").innerText = Strings.template("gameVersionLabelTemplate", { appVersion: Game.appVersion });
     }
 
-    appendShortcut(elem, code, description) {
+    static appendShortcut(elem, code, description) {
         let content = document.createElement("li");
         let child = document.createElement("kbd");
         child.innerText = code;
@@ -3742,6 +3752,18 @@ class HelpDialog extends GameDialog {
         child.innerText = description;
         content.append(child);
         elem.querySelector(".shortcuts").append(content);
+    }
+    
+    constructor() {
+        super();
+        this.contentElem = GameDialog.createContentElem();
+        let elem = document.querySelector("body > help")
+            .cloneNode(true).addRemClass("hidden", false);
+        this.contentElem.append(elem);
+        this.x = new ToolButton({
+            title: Strings.str("helpDismiss"),
+            click: () => this.dismiss()
+        });
     }
 
     show() {

@@ -593,20 +593,20 @@ comment.position-2 {
 </prompt>
 
 <help class="hidden">
-    <h3>How to play</h3>
+    <h3 data-Strings-str="helpContentHowToPlayHeader"></h3>
     <ul>
-        <li>Clear all the tiles while avoiding mines</li>
-        <li>A cleared tile has a number indicating how many of the eight adjacent tiles are mined. No number means none of the adjacent tiles are mined</li>
-        <li>Work incrementally from the edge of the tiles you have cleared, deducing which tiles are safe based on the arrangement of numbers</li>
+        <li data-Strings-str="helpContentHowToPlay1"></li>
+        <li data-Strings-str="helpContentHowToPlay2"></li>
+        <li data-Strings-str="helpContentHowToPlay3"></li>
     </ul>
-    <h3>Mouse commands</h3>
-    <ul>
-        <li><kbd>Click</kbd>: Clears the selected tile, and adjacent tiles if mine count is zero</li>
-        <li><kbd>⇧ + click</kbd> on a covered tile: Toggle flags to mark potential mines. For safety, clicking on a flagged tile will not clear it</li>
-        <li><kbd>⇧ + click</kbd> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the tile clicked</li>
-        <li><kbd>⌥ + click or ⌘ + click</kbd>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any "?" flags are nearby, or if the number of flagged neighbors does match the number on the clicked tile</li>
+    <h3 class="content-point-interactions"></h3>
+    <ul class="content-point-interactions">
+        <li data-Strings-template="helpPointerInstructions1"><kbd></kbd><span></span></li>
+        <li data-Strings-template="helpPointerInstructions2"><kbd></kbd><span></span></li>
+        <li data-Strings-template="helpPointerInstructions3"><kbd></kbd><span></span></li>
+        <li data-Strings-template="helpPointerInstructions4"><kbd></kbd><span></span></li>
     </ul>
-    <h3>Keyboard shortcuts</h3>
+    <h3 data-Strings-str="helpContentShortcutsHeader"></h3>
     <ul class="shortcuts"></ul>
     <ul class="about">
         <li class="version"></li>
@@ -616,7 +616,7 @@ comment.position-2 {
 </help>
 
 <shareGame class="hidden">
-    <p>instructions</p>
+    <p data-Strings-str="shareDialogInstructions"></p>
     <div><pre></pre></div>
 </shareGame>
 
