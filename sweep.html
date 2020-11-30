@@ -2,6 +2,7 @@
 <html lang="en-US">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Sweep</title>
     <link rel="icon" href="/city-icon-192.png">
     <link rel="apple-touch-icon" href="/city-icon-180.png">
@@ -23,7 +24,7 @@
     --background-color-bar: hsl(0, 0%, 75%);
     --background-color-selected: hsl(120, 50%, 75%);
     --background-color-highlight: hsl(120, 75%, 90%);
-    --background-color-input-custom: hsl(0, 0%, 100%);
+    --background-color-input-custom: hsl(0, 0%, 95%);
     --border-color-main: hsl(0, 0%, 0%);
     --border-color-2: hsl(0, 0%, 0%);
     --border-color-3: hsl(0, 0%, 60%);
@@ -48,11 +49,17 @@
     }
 }
 
-/* system, and default overrides */
-
 body {
     color: var(--main-text-color);
     background-color: var(--background-color-main);
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
 }
 
 a:link, a:visited, a:active, a:hover {
@@ -76,7 +83,7 @@ input, textarea {
 gameDialog {
     background-color: var(--background-color-2);
     border-color: var(--border-color-2);
-    max-height: calc(100% - 20px);
+    max-height: calc( 100% - 20px );
 }
 
 gameDialog header, gameDialog > nav {
@@ -99,6 +106,11 @@ header controls {
     background-color: transparent;
 }
 
+controls > row {
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
 header row {
     margin: 0 auto;
     padding: 0.25em;
@@ -108,9 +120,14 @@ header a.tool {
     margin: 0 0.75em;
 }
 
+body > header, body > footer {
+    flex-grow: 0;
+}
+
 body > header a.tool {
     border-radius: 2px;
     padding: 0 2px;
+    margin-top: 1px;
 }
 
 body > header a.tool.new:before {
@@ -121,19 +138,33 @@ body > header a.tool.new:before {
 }
 
 main {
-    position: relative;
-    display: block;
+    position: static;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 2;
+    justify-content: center;
 }
 
 board {
-    margin: 0.75em 0 0.5em 0;
+    margin: 0.75em 0 0.5em 0; /* TODO move to header/footer? */
     display: block;
+}
+
+main board {
+    overflow: scroll;
+    margin: 0;
+    padding: 1em;
 }
 
 board canvas {
     display: block;
     margin: 0 auto;
     border: 3px outset black;
+    border-radius: 3px;
 }
 
 footer, message {
@@ -199,8 +230,11 @@ shareGame div {
 shareGame pre {
     display: inline-block;
     margin: 1em;
+    padding: 1pt;
     text-align: left;
     font-size: 8pt;
+    white-space: normal;
+    background-color: var(--background-color-input-custom);
 }
 
 .trophies h3 {
@@ -434,6 +468,15 @@ moo.preparing, moo.performing, moo.finishing {
     opacity: 0;
 }
 
+:root {
+    --stories-size: 28pt;
+}
+@media screen and (max-width: 700px) {
+    :root {
+        --stories-size: 21pt;
+    }
+}
+
 stories {
     display: block;
     margin: 0;
@@ -454,14 +497,14 @@ stories li {
     display: block;
     margin: 0 3pt;
     padding: 0;
-    width: 28pt;
-    height: 28pt;
+    width: var(--stories-size);
+    height: var(--stories-size);
     box-sizing: border-box;
     border: 2pt solid var(--border-color-3);
-    border-radius: 14pt;
+    border-radius: calc( 0.5 * var(--stories-size) );
     background-color: var(--background-color-3);
-    font-size: 14pt;
-    line-height: 25pt;
+    font-size: calc( 0.5 * var(--stories-size) );
+    line-height: calc( 0.92 * var(--stories-size) );
     text-align: center;
     cursor: pointer;
 }
@@ -495,6 +538,30 @@ comment.position-2 {
     top: -2.5em;
     left: 17px;
     transform: scale(0.95, 0.95);
+}
+
+@media screen and (max-width: 800px) {
+    gameDialog {
+        position: static;
+        left: 0;
+        top: 0;
+        width: calc( 100% - 8px );
+        max-height: 100%;
+    }
+    
+    shareGame pre {
+        display: block;
+        margin-left: 0;
+        margin-right: 0;
+        word-break: break-all;
+        text-align: left;
+    }
+}
+
+@media screen and (max-width: 700px) {
+    a.tool:any-link, message, footer {
+        font-size: 9pt;
+    }
 }
 
 </style>

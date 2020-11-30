@@ -2518,4 +2518,5 @@ let taskSuite = new TestSession([
     swept.autosaveTests
     ]);
 
+// TestSession.current = taskSuite;
 TestSession.current = standardSuite;

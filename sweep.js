@@ -2706,6 +2706,14 @@ class GameControlsView {
 function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 
 class UI {
+    static isTouchFirst() {
+        return !window.matchMedia("(any-pointer: fine)").matches;
+    }
+    
+    static isNarrowViewport() {
+        return window.matchMedia("(max-width: 800px)").matches;
+    }
+    
     static isShowingDialog() {
         return !!Gaming.GameDialogManager.shared.currentDialog;
     }
@@ -2798,7 +2806,6 @@ class ActionDescriptionView {
 
     get welcomeMessage() {
         let hour = new Date().getHours();
-        // TODO if this.session.wasResumed return Strings.str("welcomeBack")
         if (hour >= 4 && hour < 12) {
             return Strings.str("goodMorning");
         } else if (hour >= 12 && hour < 18) {
@@ -3606,9 +3613,12 @@ class ShareDialog extends GameDialog {
             .cloneNode(true).addRemClass("hidden", false);
         elem.querySelector("p").innerText = Strings.str("shareDialogInstructions");
         
-        let data = Sharing.gameBoardObject(session);
+        let data = Sharing.gameBoardObject(session).toHexString();
+        if (!UI.isTouchFirst() && !UI.isNarrowViewport()) {
+            data = data.hardWrap(64);
+        }
         let stats = Object.assign({}, Game.formatStatistics(session.game.statistics), {
-            data: data.toHexString().hardWrap(64),
+            data: data,
             maxStarCount: Game.rules().maxStarCount
         });
         elem.querySelector("pre").innerText = Strings.template("shareGameBoardCodeTemplate", stats);
@@ -4306,4 +4316,6 @@ export let initialize = async function() {
     }
     Gaming.debugExpose("Sweep", { Game: Game, InteractiveSessionView: InteractiveSessionView, GameStorage: GameStorage });
     Gaming.debugExpose("Gaming", Gaming);
+    
+    debugLog(`Touch-first: ${UI.isTouchFirst()}. Narrow-viewport: ${UI.isNarrowViewport()}`);
 };
