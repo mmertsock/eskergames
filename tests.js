@@ -10,7 +10,7 @@ import {
     Kvo,
     PeriodicRandomComponent, Point,
     RandomComponent, RandomBlobGenerator, RandomLineGenerator, Rect, Rng,
-    SaveStateItem, SelectableList, SaveStateCollection,
+    SaveStateItem, SelectableList, SaveStateCollection, Serializer,
     TaskQueue, TilePlane,
     UndoStack,
     Vector
@@ -626,6 +626,183 @@ var boolArrayTest = function() {
         }
     }).buildAndRun();
 }
+
+let serializerTests = function() {
+    class DataA {
+        static fromDz(a) { return new DataA(a); }
+        constructor(a) {
+            this.p1 = a.p1;
+            this.p2 = a.p2;
+            this.pNotSz = a.pNotSz;
+            this.pb = a.pb;
+            this.pAry1 = a.pAry1;
+            this.pAryB = a.pAryB;
+        }
+    }
+    class DataB {
+        static fromDz(a) { return new DataB(a); }
+        constructor(a) {
+            this.p1 = a.p1;
+        }
+    }
+    
+    new UnitTest("Serializer", function() {
+        let sut = new Serializer(1, new Serializer.VerboseObjectStrategy(), DataA.fromDz, [
+            Serializer.key("p1"),
+            Serializer.key("p2"),
+            Serializer.key("pb", DataB.name),
+            Serializer.key("pAry1", []),
+            Serializer.key("pAryB", [DataB.name])
+        ]);
+        sut = sut.ruleset(DataB.name, DataB.fromDz, [
+            Serializer.key("p1")
+        ]);
+        
+        // Basic test
+        let obja = new DataA({
+            p1: "p 1",
+            p2: 2,
+            pNotSz: "not sz",
+            pb: new DataB({ p1: "p1" }),
+            pAry1: [1, 2, 3],
+            pAryB: [new DataB({ p1: 0}), null, new DataB({ p1: 1 })]
+        });
+        let o = sut.serialize(obja);
+        this.assertEqual(o.schemaVersion, 1);
+        if (this.assertDefined(o.data)) {
+            this.assertEqual(Object.getOwnPropertyNames(o.data).length, 5);
+            this.assertEqual(o.data.p1, "p 1");
+            this.assertEqual(o.data.p2, 2);
+            if (this.assertDefined(o.data.pb)) {
+                this.assertEqual(o.data.pb.p1, "p1");
+            }
+            this.assertElementsEqual(o.data.pAry1, [1, 2, 3]);
+            if (this.assertTrue(Array.isArray(o.data.pAryB))) {
+                this.assertEqual(o.data.pAryB[0].p1, 0);
+                this.assertEqual(o.data.pAryB[1], null);
+                this.assertEqual(o.data.pAryB[2].p1, 1);
+            }
+        }
+        
+        // Test null values
+        let objaNull = new DataA({ p1: undefined, p2: null, pNotSz: null, pb: null });
+        o = sut.serialize(objaNull);
+        if (this.assertDefined(o.data)) {
+            this.assertEqual(o.data.p1, null);
+            this.assertEqual(o.data.p2, null);
+            this.assertEqual(o.data.pb, null);
+        }
+        
+        // Deserialization
+        let dzObja = sut.deserialize(sut.serialize(obja));
+        if (this.assertTrue(dzObja instanceof DataA)) {
+            this.assertEqual(dzObja.p1, "p 1");
+            this.assertEqual(dzObja.p2, 2);
+            if (this.assertTrue(dzObja.pb instanceof DataB)) {
+                this.assertEqual(dzObja.pb.p1, "p1");
+            }
+            if (this.assertTrue(Array.isArray(dzObja.pAry1))) {
+                this.assertElementsEqual(dzObja.pAry1, [1, 2, 3]);
+            }
+            if (this.assertTrue(Array.isArray(dzObja.pAryB))) {
+                this.assertTrue(dzObja.pAryB[0] instanceof DataB);
+                this.assertEqual(dzObja.pAryB[0].p1, 0);
+                this.assertEqual(dzObja.pAryB[1], null);
+                this.assertTrue(dzObja.pAryB[2] instanceof DataB);
+                this.assertEqual(dzObja.pAryB[2].p1, 1);
+            }
+        }
+        
+        // ObjectArrayStrategy
+        sut.strategy = new Serializer.ObjectArrayStrategy();
+        dzObja = sut.deserialize(sut.serialize(obja));
+        if (this.assertTrue(dzObja instanceof DataA)) {
+            this.assertEqual(dzObja.p1, "p 1");
+            this.assertEqual(dzObja.p2, 2);
+            if (this.assertTrue(dzObja.pb instanceof DataB)) {
+                this.assertEqual(dzObja.pb.p1, "p1");
+            }
+            if (this.assertTrue(Array.isArray(dzObja.pAry1))) {
+                this.assertElementsEqual(dzObja.pAry1, [1, 2, 3]);
+            }
+            if (this.assertTrue(Array.isArray(dzObja.pAryB))) {
+                this.assertTrue(dzObja.pAryB[0] instanceof DataB);
+                this.assertEqual(dzObja.pAryB[0].p1, 0);
+                this.assertEqual(dzObja.pAryB[1], null);
+                this.assertTrue(dzObja.pAryB[2] instanceof DataB);
+                this.assertEqual(dzObja.pAryB[2].p1, 1);
+            }
+        }
+    }).buildAndRun();
+        
+    new UnitTest("Serializer.CtxAndRefs", function() {
+        class CtxExample {
+            static fromDz(a, serializer) {
+                return new CtxExample(Object.assign({ now: serializer.context.now }, a));
+            }
+            
+            constructor(a) {
+                this.raFull = a.ra;
+                this.rbFull = a.rb;
+                this.ra = a.ra;
+                this.r2 = a.r2;
+                this.rb = a.rb;
+                this.now = a.now;
+            }
+        }
+        class RefExample {
+            static fromDz(a) { return new RefExample(a); }
+            constructor(a) {
+                this.id = a.id;
+                this.name = a.name;
+            }
+        }
+        class RefExample2 {
+            static fromDz(a) { return new RefExample2(a); }
+            constructor(a) {
+                this.id2 = a.id2;
+                this.name = a.name;
+            }
+        }
+        
+        // References and Serializer context
+        let sut = new Serializer(2, new Serializer.VerboseObjectStrategy(), CtxExample.fromDz, [
+            Serializer.key("raFull", RefExample.name),
+            Serializer.key("rbFull", RefExample2.name),
+            Serializer.key("ra", Serializer.reference("id", RefExample.name)),
+            Serializer.key("r2", Serializer.reference("id", RefExample.name)),
+            Serializer.key("rb", Serializer.reference("id2", RefExample2.name))
+        ]).ruleset(RefExample.name, RefExample.fromDz, [
+            Serializer.key("id"),
+            Serializer.key("name")
+        ]).ruleset(RefExample2.name, RefExample2.fromDz, [
+            Serializer.key("id2"),
+            Serializer.key("name")
+        ]);
+        
+        let r1 = new RefExample({ id: "id1", name: 1 });
+        let r2 = new RefExample({ id: "id2", name: 2 });
+        let r3 = new RefExample2({ id2: "idb", name: "b" });
+        let ctxex = new CtxExample({ raFull: r1, rbFull: r3, ra: r1, r2: r2, rb: r3, now: 1 });
+        let o = sut.serialize(ctxex);
+        this.assertEqual(o.data.raFull.name, r1.name);
+        this.assertEqual(o.data.rbFull.name, r3.name);
+        this.assertEqual(o.data.ra, r1.id);
+        this.assertEqual(o.data.r2, r2.id);
+        this.assertEqual(o.data.rb, r3.id2);
+        this.assertEqual(typeof(o.data.now), 'undefined');
+        
+        let ctxdz = sut.deserialize(o, { now: 2 });
+        this.assertTrue(ctxdz instanceof CtxExample);
+        this.assertTrue(ctxdz.ra instanceof RefExample);
+        // no full RefExample object serialized for r2 so the id lookup will fail
+        this.assertEqual(ctxdz.r2, null);
+        this.assertEqual(ctxdz.ra.name, r1.name);
+        this.assertTrue(ctxdz.rb instanceof RefExample2);
+        this.assertEqual(ctxdz.rb.name, r3.name);
+        this.assertEqual(ctxdz.now, 2);
+    }).buildAndRun();
+};
 
 var circularArrayTest = function() {
     new UnitTest("CircularArray", function() {
@@ -2503,6 +2680,7 @@ let standardSuite = new TestSession([
     rectTest,
     stringsTest,
     selectableListTest,
+    serializerTests,
     saveStateTest,
     dispatchTest,
     kvoTest,

@@ -54,6 +54,7 @@ export function deserializeAssert(condition, message) {
 }
 
 export function deserializeAssertProperties(object, names) {
+    deserializeAssert(object);
     names.forEach(name => {
         deserializeAssert(object.hasOwnProperty(name), `field ${name} not found`);
     });
@@ -519,6 +520,209 @@ export class TaskQueue {
         this.tasks.push(task);
     }
 }
+
+class SerializerRule {
+    static array(key, rulesetID) {
+        return { type: "array", key: key, ruleset: rulesetID };
+    }
+    static object(key, rulesetID) {
+        return { type: "object", key: key, ruleset: rulesetID };
+    }
+    static scalar(key) {
+        return { type: "scalar", key: key };
+    }
+}
+
+class SerializerReference {
+    constructor(idKeyName, rulesetID) {
+        this.idKeyName = idKeyName;
+        this.rulesetID = rulesetID;
+    }
+}
+
+export class Serializer {
+    static key(keyName, rulesetID) {
+        return { key: keyName, rulesetID: rulesetID };
+    }
+    
+    // Use as a rulesetID in Serializer.key
+    static reference(idKeyName, rulesetID) {
+        return new SerializerReference(idKeyName, rulesetID);
+    }
+    
+    constructor(schemaVersion, strategy, rehydrate, rules) {
+        this.schemaVersion = schemaVersion;
+        this.strategy = strategy;
+        this.rootRuleset = { rehydrate: rehydrate, rules: rules };
+        this.rulesets = [];
+        this.context = {};
+        this.referenceMaps = {};
+    }
+    
+    getRuleset(id) {
+        return (id == "") ? this.rootRuleset : this.rulesets[id];
+    }
+    
+    isNullish(value) {
+        return typeof(value) == 'undefined' || (typeof(value) == 'object' && !value);
+    }
+    
+    // id must be a string
+    ruleset(id, rehydrate, rules) {
+        this.rulesets[id] = { rehydrate: rehydrate, rules: rules };
+        return this;
+    }
+    
+    serialize(o, context) {
+        this.context = context;
+        let sz = this.strategy.rootObject(this.schemaVersion, this.serializeNode(o, this.rootRuleset), this);
+        this.context = {};
+        return sz;
+    }
+    
+    deserialize(data, context) {
+        this.context = context;
+        this.emptyReferenceMaps();
+        let root = this.strategy.getRootObject(this.schemaVersion, data, this);
+        let dz = this.deserializeNode(root, this.rootRuleset, "");
+        this.context = {};
+        this.emptyReferenceMaps();
+        return dz;
+    }
+    
+    // Private
+    
+    serializeNode(o, ruleset) {
+        if (this.isNullish(o)) { return null; }
+        if (!ruleset) {
+            throw new Error("Serializer.noRuleset");
+        }
+        let sz = this.strategy.createNode(this);
+        ruleset.rules.forEach((rule, index) => {
+            let value = this.mapValue(o[rule.key], rule.rulesetID);
+            this.strategy.append(sz, rule.key, index, value, this);
+        });
+        return sz;
+    }
+    
+    mapValue(value, rulesetID) {
+        if (this.isNullish(value)) { return null; }
+        if (!rulesetID) {
+            return value;
+        } else if (rulesetID instanceof SerializerReference) {
+            return value[rulesetID.idKeyName];
+        } else if (typeof(rulesetID) == 'string') {
+            let ruleset = this.getRuleset(rulesetID);
+            if (!ruleset) { throw new Error("Serializer.noRuleset"); }
+            return this.serializeNode(value, ruleset);
+        } else if (Array.isArray(rulesetID) && Array.isArray(value)) {
+            let elementRulesetID = rulesetID[0];
+            return value.map(e => this.mapValue(e, elementRulesetID));
+        } else {
+            throw new Error("Serializer.badRuleset");
+        }
+    }
+    
+    deserializeNode(o, ruleset, rulesetID) {
+        if (this.isNullish(o)) { return null; }
+        if (!ruleset) {
+            throw new Error("Serializer.noRuleset");
+        }
+        let data = {};
+        ruleset.rules.forEach((rule, index) => {
+            let value = this.strategy.fetch(o, rule.key, index, this);
+            data[rule.key] = this.demapValue(value, rule.rulesetID);
+        });
+        if (typeof(ruleset.rehydrate) == 'function') {
+            data = ruleset.rehydrate(data, this);
+        }
+        this.addToReferenceMap(data, rulesetID);
+        return data;
+    }
+    
+    demapValue(value, rulesetID) {
+        if (this.isNullish(value)) { return null; }
+        if (!rulesetID) {
+            return value;
+        } else if (rulesetID instanceof SerializerReference) {
+            return this.getReferencedObject(value, rulesetID);
+        } else if (typeof(rulesetID) == 'string') {
+            let ruleset = this.getRuleset(rulesetID);
+            if (!ruleset) {
+                throw new Error("Serializer.noRuleset");
+            }
+            return this.deserializeNode(value, ruleset, rulesetID);
+        } else if (Array.isArray(rulesetID) && Array.isArray(value)) {
+            let elementRulesetID = rulesetID[0];
+            return value.map(e => this.demapValue(e, elementRulesetID));
+        } else {
+            throw new Error("Serializer.badRuleset");
+        }
+    }
+    
+    emptyReferenceMaps() {
+        this.referenceMaps = {};
+    }
+    
+    addToReferenceMap(o, rulesetID) {
+        if (rulesetID == "") { return; }
+        if (!Array.isArray(this.referenceMaps[rulesetID])) {
+            this.referenceMaps[rulesetID] = [];
+        }
+        this.referenceMaps[rulesetID].push(o);
+    }
+    
+    getReferencedObject(id, reference) {
+        let values = this.referenceMaps[reference.rulesetID];
+        if (!Array.isArray(values)) { return null; }
+        return values.find(item => item[reference.idKeyName] == id);
+    }
+}
+
+Serializer.VerboseObjectStrategy = class VerboseObjectStrategy {
+    rootObject(schemaVersion, data) {
+        return { schemaVersion: schemaVersion, data: data };
+    }
+    
+    createNode() { return {}; }
+    
+    append(node, key, ruleIndex, value) {
+        node[key] = value;
+    }
+    
+    getRootObject(requiredSchemaVersion, data) {
+        deserializeAssertProperties(data, ["schemaVersion", "data"]);
+        deserializeAssert(data.schemaVersion == requiredSchemaVersion, "Serializer.unsupportedSchemaVersion");
+        return data.data;
+    }
+    
+    fetch(node, key, ruleIndex) {
+        return node[key];
+    }
+};
+
+Serializer.ObjectArrayStrategy = class ObjectArrayStrategy {
+    rootObject(schemaVersion, data) {
+        return [schemaVersion, data];
+    }
+    
+    createNode() { return []; }
+    
+    append(node, key, ruleIndex, value) {
+        node.push(value);
+    }
+    
+    getRootObject(requiredSchemaVersion, data) {
+        deserializeAssert(Array.isArray(data));
+        deserializeAssert(data.length == 2);
+        deserializeAssert(data[0] == requiredSchemaVersion, "Serializer.unsupportedSchemaVersion");
+        return data[1];
+    }
+    
+    fetch(node, key, ruleIndex) {
+        return node[ruleIndex];
+    }
+};
 
 export class Rng {
     nextUnitFloat() {
