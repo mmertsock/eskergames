@@ -4318,13 +4318,16 @@ class StoryGamePlayer {
 export let initialize = async function() {
     let version = import.meta.url.match(/sweep\/([0-9.]+)\//);
     if (version && version.length == 2) {
+        Game.isProduction = true;
         Game.appVersion = version[1];
         Game.versionPath = `./${Game.appVersion}`;
     } else {
+        Game.isProduction = false;
         Game.versionPath = ".";
     }
     
-    let content = await GameContent.loadYamlFromLocalFile(`${Game.versionPath}/sweep-content.yaml`, GameContent.cachePolicies.forceOnFirstLoad);
+    let cachePolicy = Game.isProduction ? GameContent.cachePolicies.auto : GameContent.cachePolicies.forceOnFirstLoad;
+    let content = await GameContent.loadYamlFromLocalFile(`${Game.versionPath}/sweep-content.yaml`, cachePolicy);
     if (!content) {
         alert(Strings.str("failedToLoadGameMessage"));
         return;
