@@ -1,0 +1,236 @@
+:root {
+    --default-font-family: sans-serif;
+    --heading-font-weight: bolder;
+    --toolbutton-font-weight: bolder;
+    --main-text-color: hsl(0, 0%, 0%);
+    --text-color-2: hsl(0, 0%, 25%);
+    --warning-text-color: hsl(0, 50%, 40%);
+    --link-text-color: hsl(120, 50%, 30%);
+    --toolbutton-text-color: hsl(0, 0%, 0%);
+    --background-color-main: hsl(0, 0%, 100%);
+    --background-color-2: hsl(0, 0%, 100%);
+    --background-color-3: hsl(0, 0%, 95%);
+    --background-color-bar: hsl(0, 0%, 75%);
+    --background-color-selected: hsl(120, 50%, 75%);
+    --background-color-highlight: hsl(120, 75%, 90%);
+    --background-color-warning: hsl(0, 50%, 85%);
+    --background-color-input-custom: hsl(0, 0%, 95%);
+    --border-color-main: hsl(0, 0%, 0%);
+    --border-color-2: hsl(0, 0%, 0%);
+    --border-color-3: hsl(0, 0%, 60%);
+}
+
+body {
+    color: var(--main-text-color);
+    background-color: var(--background-color-main);
+    font-family: var(--default-font-family);
+}
+
+.hidden, gameForm label.textAreaInput.hidden {
+    display: none;
+}
+
+a:any-link {
+    color: var(--link-text-color);
+}
+
+a.tool {
+    display: flex;
+}
+
+a.tool span {
+    display: block;
+    margin: auto;
+}
+
+a.tool:any-link {
+    color: var(--toolbutton-text-color);
+    text-decoration: none;
+    text-align: center;
+    font-weight: var(--toolbutton-font-weight);
+}
+a.tool.selected {
+    background-color: var(--background-color-selected);
+}
+a.tool.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+input, textarea {
+    color: var(--main-text-color);
+    background-color: var(--background-color-input-custom);
+    background-color: -webkit-control-background;
+}
+
+gameForm {
+    display: block;
+    margin: 0;
+    padding: 0;
+    font-size: 10pt;
+}
+
+gameForm .invalid input {
+    background-color: var(--background-color-warning);
+}
+
+gameForm label {
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+}
+
+gameForm label.textInput span { display: flex; }
+gameForm label.textInput input { display: flex; flex-grow: 1; }
+
+gameForm label.textAreaInput { display: block; }
+gameForm label.textAreaInput span { display: block; }
+gameForm label.textAreaInput textarea {
+    display: block;
+    width: calc(100% - 2em);
+    margin: 2pt auto 4pt auto;
+}
+
+gameForm label, gameForm div.singleChoiceInput {
+    margin: 2pt 0;
+}
+
+gameForm label.textInput span:after, label.textAreaInput span:after { content: ":"; }
+gameForm label.textInput span { padding-right: 3pt; }
+gameForm label.singleChoiceInput span { padding-left: 3pt; }
+
+gameForm div.singleChoiceInput > span { display: block; }
+gameForm div.singleChoiceInput > span:after { content: ":"; }
+
+#dialogs {
+    display: flex;
+    position: fixed;
+    align-items: center;
+    justify-content: center;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+#dialogs.hidden {
+    display: none;
+}
+#dialogs.hasModal {
+    background-color: hsla(0, 0%, 0%, 0.3);
+}
+
+gameDialog {
+    display: flex;
+    position: fixed;
+    margin: 0;
+    flex-direction: column;
+    max-height: calc( 100% - 20px );
+    background-color: var(--background-color-2);
+    border: 1px solid var(--border-color-2);
+    border-radius: 4px;
+    box-shadow: 0px 0px 20px hsla(0, 0%, 0%, 0.5);
+}
+
+gameDialog header {
+    display: flex;
+    flex-direction: row;
+    margin: 0 0 8px 0;
+    padding: 2px 4px;
+    background-color: var(--background-color-bar);
+    border-radius: 4px 4px 0 0;
+}
+
+gameDialog header a {
+    display: block;
+    flex-grow: 0;
+}
+
+gameDialog header h2 {
+    flex-grow: 1;
+    margin: 0;
+    padding: 0;
+    font-size: 12pt;
+    font-weight: var(--heading-font-weight);
+    text-transform: uppercase;
+    text-align: center;
+}
+
+gameDialog content {
+    display: block;
+    overflow-y: scroll;
+    margin: 0 8px;
+    padding: 0;
+}
+
+gameDialog > nav {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    margin: 8px 0 0 0;
+    padding: 2px 4px;
+    background-color: var(--background-color-bar);
+    border-radius: 0 0 3px 3px;
+}
+
+gameForm nav {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    margin: 0.5em 0;
+    padding: 0;
+}
+
+gameDialog nav a:hover, gameDialog header a:hover {
+    outline: 1px outset hsl(0, 0%, 50%);
+}
+gameDialog header a.tool, gameDialog nav a.tool { padding: 2px 4px; }
+gameDialog header a.tool span {
+    line-height: 7pt;
+    font-size: 10pt;
+}
+/* so bar content remains centered */
+gameDialog header a.tool.hidden, gameDialog nav > a.tool.hidden { display: flex; visibility: hidden; }
+
+gameForm a.tool {
+    margin: 0 8px 0 0;
+    background-color: var(--background-color-3);
+}
+
+gameDialog h3 {
+    margin: 0;
+    padding: 0;
+    font-size: 11pt;
+    font-weight: var(--heading-font-weight);
+}
+
+gameDialog content h3, gameDialog content p {
+    margin: 0.5em 0;
+    padding: 0;
+}
+
+gameDialog content ol, gameDialog content ul {
+    margin: 0.5em 0;
+    padding: 0;
+}
+
+controls > row {
+    display: flex;
+    flex-direction: row;
+}
+
+@media screen and (max-width: 800px) {
+    gameDialog {
+        position: static;
+        left: 0;
+        top: 0;
+        width: calc( 100% - 8px );
+        max-height: 100%;
+    }
+}
+
+@media screen and (max-width: 700px) {
+    a.tool:any-link, message, footer {
+        font-size: 9pt;
+    }
+}

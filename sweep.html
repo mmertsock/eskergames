@@ -9,11 +9,15 @@
 
     <script src="/js-yaml.min.js"></script>
 
-    <link rel="stylesheet" href="./city.css">
+    <link rel="stylesheet" href="./g.css">
 <style type="text/css">
 
 :root {
     color-scheme: light dark;
+    --default-font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
+    --heading-font-weight: 500;
+    --input-font-weight: 300;
+    --toolbutton-font-weight: 500;
     --main-text-color: hsl(0, 0%, 0%);
     --text-color-2: hsl(0, 0%, 25%);
     --warning-text-color: hsl(0, 50%, 40%);
@@ -50,8 +54,6 @@
 }
 
 body {
-    color: var(--main-text-color);
-    background-color: var(--background-color-main);
     position: absolute;
     top: 0;
     right: 0;
@@ -60,43 +62,12 @@ body {
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    font-weight: 300;
 }
 
-a:link, a:visited, a:active, a:hover {
-    color: var(--link-text-color);
-}
-
-a.tool:link, a.tool:visited, a.tool:active, a.tool:hover {
-    color: var(--main-text-color);
-}
-
-a.tool.selected {
-    background-color: var(--background-color-selected);
-}
-
-input, textarea {
-    color: var(--main-text-color);
-    background-color: var(--background-color-input-custom);
-    background-color: -webkit-control-background;
-}
-
-gameDialog {
-    background-color: var(--background-color-2);
-    border-color: var(--border-color-2);
-    max-height: calc( 100% - 20px );
-}
-
-gameDialog header, gameDialog > nav {
-    background-color: var(--background-color-bar);
-}
-
-gameDialog header a.tool span {
-    line-height: 7pt;
+a.tool:any-link {
     font-size: 10pt;
-}
-
-gameDialog content {
-    overflow-y: scroll;
+    text-transform: uppercase;
 }
 
 /* sweep layout */
@@ -541,26 +512,12 @@ comment.position-2 {
 }
 
 @media screen and (max-width: 800px) {
-    gameDialog {
-        position: static;
-        left: 0;
-        top: 0;
-        width: calc( 100% - 8px );
-        max-height: 100%;
-    }
-    
     shareGame pre {
         display: block;
         margin-left: 0;
         margin-right: 0;
         word-break: break-all;
         text-align: left;
-    }
-}
-
-@media screen and (max-width: 700px) {
-    a.tool:any-link, message, footer {
-        font-size: 9pt;
     }
 }
 

@@ -1,16 +1,21 @@
 /* ~~~~~~ GLOBALS ~~~~~~ */
 /* (defaults. non-structural colors, fonts, etc.) */
 
-body {
+:root {
+    color-scheme: light;
     /* retro-futuristic font */
-    font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
-    font-weight: 300;
-    color: hsl(0, 0%, 0%);
-    background-color: hsl(0, 0%, 100%);
+    --default-font-family: "Gill Sans", "Helvetica Neue", "Open Sans", sans-serif;
+    --default-font-weight: 300;
+    --heading-font-weight: 500;
+    --input-font-weight: 300;
+    --main-text-color: hsl(0, 0%, 0%);
+    --toolbutton-text-color: hsl(0, 0%, 0%);
+    --background-color-main: hsl(0, 0%, 100%);
+    --background-color-selected: hsl(120, 50%, 75%);
 }
 
-.hidden, gameForm label.textAreaInput.hidden {
-    display: none;
+body {
+    font-weight: var(--default-font-weight);
 }
 
 /* ~~~~~~ STRUCTURE ~~~~~~ */
@@ -83,11 +88,6 @@ minimaps canvas {
 controls {
     display: flex;
     flex-direction: column;
-}
-
-controls > row {
-    display: flex;
-    flex-direction: row;
 }
 
 block {
@@ -176,14 +176,6 @@ block.vertical-container > block a.tool {
 /* ~~~~~~ STYLE ~~~~~~ */
 /* (non structural. style for specific elements.) */
 
-a.tool {
-    display: flex;
-}
-a.tool span {
-    display: block;
-    margin: auto;
-}
-
 palette {
     background-color: hsl(0, 0%, 75%);
 }
@@ -205,49 +197,12 @@ block.vertical-container block h3 {
     text-align: left;
 }
 
-label.textLine {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-}
-label.textLine input {
-    order: 1;
-    background-color: transparent;
-    border: none;
-    text-align: center;
-    font-size: 10pt;
-    font-weight: 500;
-}
-label.textLine span {
-    order: 2;
-    font-size: 8pt;
-    font-weight: 300;
-    text-align: center;
-}
-label.textLine.minor input {
-    font-size: 8pt;
-    font-weight: 300;
-}
-
-a.tool:link, a.tool:visited, a.tool:active, a.tool:hover {
-    color: hsl(0, 0%, 0%);
-    text-decoration: none;
-    text-align: center;
+a.tool:any-link {
     text-transform: uppercase;
     font-size: 10pt;
-    font-weight: 500;
-}
-
-a.tool.selected {
-    background-color: hsl(120, 50%, 75%);
 }
 a.tool.selected.stop-indication {
     background-color: hsl(0, 50%, 75%);
-}
-
-a.tool.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
 }
 
 /* ~~~~~~ PROMPTS ~~~~~~ */
@@ -310,45 +265,29 @@ buttons.promptButtons a {
 
 /* ~~~~~~ FORMS ~~~~~~ */
 
-gameForm {
-    display: block;
-    margin: 0;
-    padding: 0;
-    font-size: 10pt;
-}
-
-gameForm .invalid input {
-    background-color: hsl(0, 50%, 85%);
-}
-
-gameForm label {
-    width: 100%;
+label.textLine {
     display: flex;
-    flex-direction: row;
-    align-items: baseline;
+    flex-direction: column;
+    align-items: stretch;
 }
-
-gameForm label.textInput span { display: flex; }
-gameForm label.textInput input { display: flex; flex-grow: 1; }
-
-gameForm label.textAreaInput { display: block; }
-gameForm label.textAreaInput span { display: block; }
-gameForm label.textAreaInput textarea {
-    display: block;
-    width: calc(100% - 2em);
-    margin: 2pt auto 4pt auto;
+label.textLine input {
+    order: 1;
+    background-color: transparent;
+    border: none;
+    text-align: center;
+    font-size: 10pt;
+    font-weight: 500;
 }
-
-gameForm label, gameForm div.singleChoiceInput {
-    margin: 2pt 0;
+label.textLine span {
+    order: 2;
+    font-size: 8pt;
+    font-weight: 300;
+    text-align: center;
 }
-
-gameForm label.textInput span:after, label.textAreaInput span:after { content: ":"; }
-gameForm label.textInput span { padding-right: 3pt; }
-gameForm label.singleChoiceInput span { padding-left: 3pt; }
-
-gameForm div.singleChoiceInput > span { display: block; }
-gameForm div.singleChoiceInput > span:after { content: ":"; }
+label.textLine.minor input {
+    font-size: 8pt;
+    font-weight: 300;
+}
 
 .edge-selector {
     display: flex;
@@ -416,111 +355,8 @@ gameForm div.singleChoiceInput > span:after { content: ":"; }
 
 /* ~~~~~~ DIALOGS ~~~~~~ */
 
-#dialogs {
-    display: flex;
-    position: fixed;
-    align-items: center;
-    justify-content: center;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    right: 0;
-}
-#dialogs.hidden {
-    display: none;
-}
-#dialogs.hasModal {
-    background-color: hsla(0, 0%, 0%, 0.3);
-}
-
 gameDialog {
-    display: flex;
-    position: fixed;
-    margin: 0;
-    flex-direction: column;
-    border: 1px solid hsl(0, 0%, 0%);
-    border-radius: 4px;
-    background-color: hsl(0, 0%, 100%);
-    box-shadow: 0px 0px 20px hsla(0, 0%, 0%, 0.5);
-}
-
-gameDialog header {
-    display: flex;
-    flex-direction: row;
-    margin: 0 0 8px 0;
-    padding: 2px 4px;
-    background-color: hsl(0, 0%, 75%);
-    border-radius: 4px 4px 0 0;
-}
-
-gameDialog header a {
-    display: block;
-    flex-grow: 0;
-}
-
-gameDialog header h2 {
-    flex-grow: 1;
-    margin: 0;
-    padding: 0;
-    font-size: 12pt;
-    font-weight: 500;
-    text-transform: uppercase;
-    text-align: center;
-}
-
-gameDialog content {
-    display: block;
-    margin: 0 8px;
-    padding: 0;
-}
-
-gameDialog > nav {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-end;
-    margin: 8px 0 0 0;
-    padding: 2px 4px;
-    background-color: hsl(0, 0%, 75%);
-    border-radius: 0 0 3px 3px;
-}
-
-gameForm nav {
-    display: flex;
-    flex-direction: row;
-    justify-content: flex-start;
-    margin: 0.5em 0;
-    padding: 0;
-}
-
-gameDialog nav a:hover, gameDialog header a:hover {
-    outline: 1px outset hsl(0, 0%, 50%);
-}
-
-gameDialog header a.tool, gameDialog nav a.tool { padding: 2px 4px; }
-gameDialog header a.tool span { font-size: 7pt; }
-/* so header > h2 remains centered */
-gameDialog header a.tool.hidden { display: flex; visibility: hidden; }
-
-gameForm a.tool {
-    margin: 0 8px 0 0;
-    background-color: hsl(0, 0%, 95%);
-}
-
-gameDialog h3 {
-    margin: 0;
-    padding: 0;
-    font-size: 11pt;
-    font-weight: 500;
-}
-
-gameDialog content h3, gameDialog content p {
-    margin: 0.5em 0;
-    padding: 0;
-}
-
-gameDialog content ol, gameDialog content ul {
-    margin: 0.5em 0;
-    padding: 0;
+    max-height: unset;
 }
 
 help ul {
