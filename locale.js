@@ -108,6 +108,24 @@ export class Strings {
             return String.pluralize(templates[2], placeholder, formattedMagnitude);
         }
     }
+    
+    static localizeDOM(root, templateDataProvider) {
+        root.querySelectorAll("[data-l10n-str]").forEach(elem => {
+            elem.innerText = Strings.str(elem.dataset.l10nStr);
+        });
+        root.querySelectorAll("[data-l10n-template]").forEach(elem => {
+            let tokens = elem.dataset.l10nTemplate.split(",");
+            let context = {};
+            if (tokens.length > 1){
+                context = templateDataProvider(tokens[1], elem);
+            }
+            if (elem.dataset.hasOwnProperty("l10nHtml")) {
+                elem.innerHTML = Strings.template(tokens[0], context);
+            } else {
+                elem.innerText = Strings.template(tokens[0], context);
+            }
+        });
+    }
 }
 Strings.source = {}; // call Strings.initialize() to configure
 
@@ -144,9 +162,10 @@ if (!String.fromTemplate) {
 const _stringTemplateTokenFindRegex = /<([^>]+)>/g;
 const _stringTemplateTokenScrubRegex = /[<>]/g
 String.fromTemplate = function(template, data) {
-    if (!template || !data) { return template; }
+    if (!template) { return template; } // || !data
     let matches = template.match(_stringTemplateTokenFindRegex);
     if (!matches) { return template; }
+    if (!data) { data = {}; }
 
     // yo, <mineCountTemplate#mineCount> cleared. { mineCount: { value: 3, formatted: "3" } }
     let rules = matches.map(token => {
@@ -154,13 +173,18 @@ String.fromTemplate = function(template, data) {
         let plural = token.replaceAll(_stringTemplateTokenScrubRegex, "").split("#");
         if (plural.length > 1) {
             return { token: token, templateKey: plural[0], magnitudeKey: plural[1], formattedMagnitudeKey: plural[2] };
+        } else if (plural[0].startsWith("%")) {
+            // "<%xx>": decode URL-encoded value
+            return { token: token, decode: plural[0] }
         } else {
             return { token: token, key: plural[0] };
         }
     });
 
     rules.forEach(rule => {
-        if (rule.hasOwnProperty("magnitudeKey")) {
+        if (rule.hasOwnProperty("decode")) {
+            template = template.replaceAll(rule.token, decodeURIComponent(rule.decode));
+        } else if (rule.hasOwnProperty("magnitudeKey")) {
             if (data.hasOwnProperty(rule.magnitudeKey)) {
                 let magnitude = data[rule.magnitudeKey];
                 if (typeof(magnitude) == 'object' && magnitude.hasOwnProperty("value")) {

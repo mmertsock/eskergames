@@ -289,8 +289,9 @@ export class Game {
         Game.content.rules.maxStarCount = Game.content.rules.highScoreThresholds.length + 1;
         GameScriptEngine.shared = new GameScriptEngine();
         Achievement.initialize();
+        GameScriptEngine.shared.registerCommand("getGameMetadata", UI.getGameMetadata);
         
-        UI.localizeStaticHTML();
+        UI.prepareStaticContent();
         GameBoardView.initialize(content.gameBoardView);
         GameTileView.initialize(content.gameTileView);
         GameTileViewState.initialize(content.gameTileViewState);
@@ -2711,10 +2712,11 @@ class GameControlsView {
 function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 
 class UI {
-    static localizeStaticHTML() {
-        document.querySelectorAll("[data-Strings-str]").forEach(elem => {
-            elem.innerText = Strings.str(elem.dataset["stringsStr"]);
-        });
+    static prepareStaticContent() {
+        Strings.localizeDOM(
+            document,
+            (token, elem) => GameScriptEngine.shared.execute(token, elem, null)
+        );
     }
     
     static isTouchFirst() {
@@ -2734,6 +2736,14 @@ class UI {
         let size = config[1] * window.devicePixelRatio * (inputAccomodationScale ? inputAccomodationScale : 1);
         let units = config[2];
         return String.fromTemplate(config[0], { size: `${size}${units}` });
+    }
+    
+    static getGameMetadata() {
+        return {
+            appVersion: Game.appVersion,
+            pointerActionVerb: Strings.str(UI.isTouchFirst() ? "tapAction" : "clickAction"),
+            pointerNoun: Strings.str(UI.isTouchFirst() ? "touchPointerNoun" : "mousePointerNoun")
+        };
     }
 }
 
@@ -3719,14 +3729,6 @@ class HelpDialog extends GameDialog {
     static initialize() {
         let isTouchFirst = UI.isTouchFirst();
         let elem = document.querySelector("body > help");
-        elem.querySelector("h3.content-point-interactions").innerText = Strings.str(isTouchFirst ? "helpContentTouchInteractionsHeader" : "helpContentMouseInteractionsHeader");
-        
-        let actionInfo = { point: Strings.str(isTouchFirst ? "tapAction" : "clickAction") };
-        elem.querySelectorAll("ul.content-point-interactions li").forEach(li => {
-            let tokens = Strings.template(li.dataset["stringsTemplate"], actionInfo).split("|");
-            li.querySelector("kbd").innerText = tokens[0];
-            li.querySelector("span").innerText = tokens[1];
-        });
         
         Game.content.keyboard.keyPressShortcuts.forEach(item => {
             if (item.length < 4) { return; }

@@ -796,7 +796,7 @@ var stringsTest = function() {
     }).build()(null, null);
 
     new UnitTest("String.fromTemplate", function() {
-        var metadata = { foo: "iamfoo", bar: 123 };
+        var metadata = { foo: "iamfoo", bar: 123, "%3C": "bogus" };
         this.assertEqual(String.fromTemplate(null, null), null);
         this.assertEqual(String.fromTemplate(null, metadata), null);
         this.assertEqual(String.fromTemplate("", null), "");
@@ -807,6 +807,8 @@ var stringsTest = function() {
         this.assertEqual(String.fromTemplate("test <foo> <iamfoo> <bar>", null), "test <foo> <iamfoo> <bar>");
         this.assertEqual(String.fromTemplate("test <foo> <iamfoo> <bar>", metadata), "test iamfoo <iamfoo> 123");
         this.assertEqual(String.fromTemplate("<bar><bar><bar>", metadata), "123123123");
+        this.assertEqual(String.fromTemplate("<%3C>test<%3E>", metadata), "<test>");
+        this.assertEqual(String.fromTemplate("<%3C>test<%3E>"), "<test>");
     }).build()(null, null);
 
     new UnitTest("String.pluralize", function() {
@@ -839,6 +841,7 @@ var stringsTest = function() {
             pc: "en-c/<mineCountClearedC#mineCount#formattedMineCount>",
             obj1: { x: "en-1" },
             obj3: { x: "en-3" },
+            html: "<%3C>b<%3E>henlo<%3C>/b<%3E>",
             _es: {
                 a: "es-a",
                 b: "es-b",
@@ -862,7 +865,8 @@ var stringsTest = function() {
             value: "test",
             zero: { mineCount: 0, formattedMineCount: "no" },
             one: { mineCount: 1, formattedMineCount: "one" },
-            two: { mineCount: 2, formattedMineCount: "2.0" }
+            two: { mineCount: 2, formattedMineCount: "2.0" },
+            "%3C": "bogus"
         };
         Strings.initialize(l10n, l10ns);
 
@@ -895,6 +899,7 @@ var stringsTest = function() {
         this.assertEqual(Strings.str("a"), "en-a", "unknown language, uses default language");
         this.assertEqual(Strings.template("ta", obj), "en-a-test", "unknown language, uses default language");
         this.assertEqual(Strings.template("pa", obj.one), "en-a/en-a-1 mine cleared");
+        this.assertEqual(Strings.template("html", obj), "<b>henlo</b>");
     }).build()(null, null);
 };
 

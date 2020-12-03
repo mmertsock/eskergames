@@ -292,13 +292,13 @@ strings:
   helpContentHowToPlay1: Clear all the tiles while avoiding mines
   helpContentHowToPlay2: A cleared tile has a number indicating how many of the eight adjacent tiles are mined. No number means none of the adjacent tiles are mined
   helpContentHowToPlay3: Work incrementally from the edge of the tiles you have cleared, deducing which tiles are safe based on the arrangement of numbers
-  helpContentMouseInteractionsHeader: Mouse interactions
   helpContentShortcutsHeader: Keyboard shortcuts
-  helpContentTouchInteractionsHeader: Touch interactions
-  helpPointerInstructions1: "<point>|: Clears the selected tile, and adjacent tiles if mine count is zero"
-  helpPointerInstructions2: "⇧ + <point>| on a covered tile: Toggle flags to mark potential mines. For safety, clicking on a flagged tile will not clear it"
-  helpPointerInstructions3: "⇧ + <point>| on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the tile clicked"
-  helpPointerInstructions4: "⌥ + <point> or ⌘ + <point>|: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the clicked tile"
+  helpPointerInstructionsHeader: "<pointerNoun> interactions"
+  # %3C == "<". %3E == ">"
+  helpPointerInstructions1: "<%3C>kbd<%3E><pointerActionVerb><%3C>/kbd<%3E>: Clears the selected tile, and adjacent tiles if mine count is zero"
+  helpPointerInstructions2: "<%3C>kbd<%3E>⇧ + <pointerActionVerb><%3C>/kbd<%3E> on a covered tile: Toggle flags to mark potential mines. For safety, clicking on a flagged tile will not clear it"
+  helpPointerInstructions3: "<%3C>kbd<%3E>⇧ + <pointerActionVerb><%3C>/kbd<%3E> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the tile clicked"
+  helpPointerInstructions4: "<%3C>kbd<%3E>⌥ + <pointerActionVerb> or ⌘ + <pointerActionVerb><%3C>/kbd<%3E>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the clicked tile"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   helpKeyboardEscapePressed: "esc|: Close popups, etc."
@@ -320,6 +320,7 @@ strings:
   lostAlertDialogTextTemplate: "Your score: <points>"
   lostAlertTitle: You Lost
   mooActionDescription: mooooo
+  mousePointerNoun: Mouse
   newGameButton: New
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
@@ -376,6 +377,7 @@ strings:
   storyDialogTitle: "<possessive> Story"
   toggleDebugModeButton: "Debug"
   toggleRainbowButton: "🌈"
+  touchPointerNoun: Touch
   tapAction: tap
   trophiesDialogDismiss: Done
   trophiesDialogTitle: "✷ Trophy Room ✷"
