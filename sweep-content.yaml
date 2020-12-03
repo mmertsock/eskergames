@@ -62,6 +62,7 @@ keyboard:
     - [KeyC, moo, c]
     - [KeyW, moo, w]
 gameBoardView:
+  touchScaleFactor: 1.25
   tileWidth: 24
   rainbow:
     hue:

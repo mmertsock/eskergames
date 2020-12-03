@@ -2730,8 +2730,8 @@ class UI {
     }
     
     // for any canvas where width = devicePixelRatio * clientWidth
-    static resolveCanvasFont(config) {
-        let size = config[1] * window.devicePixelRatio;
+    static resolveCanvasFont(config, inputAccomodationScale) {
+        let size = config[1] * window.devicePixelRatio * (inputAccomodationScale ? inputAccomodationScale : 1);
         let units = config[2];
         return String.fromTemplate(config[0], { size: `${size}${units}` });
     }
@@ -2879,6 +2879,7 @@ class GameStatusView {
 class GameBoardView {
     static initialize(config) {
         GameBoardView.metrics = config;
+        GameBoardView.metrics.inputAccomodationScale = UI.isTouchFirst() ? GameBoardView.metrics.touchScaleFactor : 1;
     }
 
     constructor(config) {
@@ -2929,12 +2930,13 @@ class GameBoardView {
         // canvas style width/height = 240
         // canvas.width/height == 240
         this.pixelScale = window.devicePixelRatio;
-        const tileDeviceWidth = GameBoardView.metrics.tileWidth * this.pixelScale;
+        
+        const tileDeviceWidth = GameBoardView.metrics.tileWidth * this.pixelScale * GameBoardView.metrics.inputAccomodationScale;
         this.tilePlane = new TilePlane(this.game.difficulty, tileDeviceWidth);
         this.tilePlane.viewportSize = { width: this.tilePlane.size.width * tileDeviceWidth, height: this.tilePlane.size.height * tileDeviceWidth };
 
-        this.canvas.style.width = `${this.tilePlane.size.width * GameBoardView.metrics.tileWidth}px`;
-        this.canvas.style.height = `${this.tilePlane.size.height * GameBoardView.metrics.tileWidth}px`;
+        this.canvas.style.width = `${this.tilePlane.size.width * GameBoardView.metrics.tileWidth * GameBoardView.metrics.inputAccomodationScale}px`;
+        this.canvas.style.height = `${this.tilePlane.size.height * GameBoardView.metrics.tileWidth * GameBoardView.metrics.inputAccomodationScale}px`;
         const canvasDeviceSize = this.tilePlane.viewportSize;
         this.canvas.width = canvasDeviceSize.width;
         this.canvas.height = canvasDeviceSize.height;
@@ -2992,7 +2994,7 @@ class GameBoardView {
 class GameTileView {
     static initialize(config) {
         GameTileView.config = config;
-        GameTileView.config.font = UI.resolveCanvasFont(GameTileView.config.font);
+        GameTileView.config.font = UI.resolveCanvasFont(GameTileView.config.font, GameBoardView.metrics.inputAccomodationScale);
     }
 
     constructor(model, boardView) {
@@ -3057,7 +3059,6 @@ class GameTileView {
     }
 
     renderCovered(context, rect) {
-        const ctx = context.ctx;
         switch (this.model.flag.value) {
         case TileFlag.none.value:
             if (context.showAllMines && this.model.isMined) {
@@ -3081,7 +3082,6 @@ class GameTileView {
     }
 
     renderRevealed(context, rect) {
-        const ctx = context.ctx;
         if (this.model.isMined) {
             return this.renderContent(context, rect, GameTileViewState.mineTriggered);
         } else if (this.model.minedNeighborCount > 0) {
