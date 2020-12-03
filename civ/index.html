@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Civ</title>
+    <link rel="icon" href="/city-icon-192.png">
+    <link rel="apple-touch-icon" href="/city-icon-180.png">
+
+    <script src="/js-yaml.min.js"></script>
+    <link rel="stylesheet" href="/g.css">
+
+<style type="text/css">
+:root {
+    color-scheme: light;
+    --default-font-family: "Georgia", sans-serif;
+    --main-text-color: hsl(0, 0%, 98%);
+    --toolbutton-text-color: hsl(0, 0%, 98%);
+    --text-color-2: hsl(0, 0%, 85%);
+    --warning-text-color: hsl(0, 50%, 55%);
+    --link-text-color: hsl(120, 50%, 65%);
+    --background-color-main: hsl(34, 5%, 15%);
+    --background-color-2: hsl(34, 5%, 18%);
+    --background-color-3: hsl(34, 10%, 28%);
+    --background-color-bar: hsl(34, 10%, 28%);
+    --background-color-selected: hsl(120, 75%, 25%);
+    --background-color-highlight: hsl(120, 75%, 15%);
+    --background-color-input-custom: hsl(0, 0%, 12%);
+    --border-color-main: hsl(0, 0%, 93%);
+    --border-color-2: hsl(34, 10%, 28%);
+    --border-color-3: hsl(34, 5%, 60%);
+}
+
+/* basics and g.css overrides */
+
+content {
+    display: block;
+}
+
+footer {
+    color: var(--text-color-2);
+}
+
+#dialogs.hasModal {
+    background-color: hsla(0, 0%, 0%, 0.5);
+}
+
+gameDialog.justify-nav > nav {
+    justify-content: space-between;
+}
+
+gameDialog gameForm {
+    min-width: 200pt;
+    min-height: 100pt;
+}
+
+/* full screen structure */
+
+.fullscreen {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+}
+.fullscreen.hidden {
+    display: none;
+}
+
+.fullscreen.centered {
+    justify-content: center;
+    align-items: center;
+}
+
+/* bars + content fullscreen stack */
+
+.fullscreen.stacked {
+    align-items: stretch;
+}
+
+.fullscreen > .bar {
+    flex-grow: 0;
+}
+
+.fullscreen > .fill {
+    position: static;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    display: flex;
+    flex-direction: column;
+    flex-grow: 2;
+    justify-content: center;
+}
+
+/*.fullscreen > .fill > .content-scroll {
+    overflow: scroll;
+}*/
+
+/* specific content views */
+
+.data-table-view {
+    border-collapse: collapse;
+}
+
+.data-table-view caption {
+    margin-bottom: 0.25em;
+    text-align: left;
+    font-size: 1rem;
+    font-weight: bolder;
+}
+
+.data-table-view td {
+    vertical-align: baseline;
+}
+
+.data-table-view td:first-child {
+    text-align: left;
+    padding-left: 0px;
+}
+
+.data-table-view td:last-child {
+    text-align: right;
+    font-weight: bolder;
+    padding-right: 0px;
+}
+
+menubar {
+    display: block;
+}
+
+statusbar {
+    display: block;
+}
+
+#firstrun {
+    text-align: center;
+}
+
+#firstrun content > * {
+    margin-bottom: 0.5em;
+}
+
+#firstrun content div a {
+    display: inline-block;
+    margin: 0.25em 0.5em;
+    padding: 3pt;
+    border: 1px solid var(--border-color-3);
+    border-radius: 1pt;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div id="firstrun" class="fullscreen centered hidden">
+    <content>
+        <h1 data-l10n-str="gameTitle"></h1>
+        <div></div>
+        <footer data-l10n-template="appVersionTemplate,getAppInfo"></footer>
+    </content>
+</div>
+
+<div id="game" class="fullscreen stacked hidden">
+    <menubar class="bar">menu</menubar>
+    <content class="fill">
+        <canvas class="world"></canvas>
+    </content>
+    <statusbar class="bar">footer</statusbar>
+</div>
+
+<div id="cutscene" class="fullscreen centered hidden">
+</div>
+
+<div id="pedia" class="fullscreen stacked hidden">
+    menu bar
+    content area
+    footer bar
+</div>
+    
+<div id="dialogs" class="hidden"></div>
+
+<templates class="hidden">
+    <table class="data-table-view">
+        <caption></caption>
+        <tbody></tbody>
+    </table>
+</templates>
+
+<script type="module">
+    import { initialize } from './civ.js';
+    initialize();
+</script>
+
+</body>
+
+</html>

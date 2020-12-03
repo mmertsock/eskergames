@@ -17,8 +17,8 @@ import {
 } from './g.js';
 
 import * as Sweep from './sweep.js';
-
-// import * as City from './city.js';
+import * as CivGame from './civ/game.js';
+import * as CivSystemUI from './civ/ui-system.js';
 
 function appendOutputItem(msg, className) {
     if (!TestSession.outputElement) { return; }
@@ -2659,13 +2659,63 @@ swept.autosaveTests = async function() {
     }).buildAndRun();
 };
 
+let civved = {};
+
+civved.systemUItests = function() {
+    new UnitTest("Civ.UI.traverseSubviews", function() {
+        const UI = CivSystemUI.UI;
+        let StubView = class {
+            constructor(name) { this.name = name; this.visitCount = 0; }
+            visit() { this.visitCount += 1; }
+        };
+        
+        let root = new StubView("root");
+        let mid = new StubView("mid");
+        let leafEmptyViews = new StubView("leafEmptyViews");
+        let leafNullViews = new StubView("leafNullViews");
+        let leafBogusViews = new StubView("leafBogusViews");
+        root.views = [
+            mid,
+            null,
+            "test",
+            leafEmptyViews
+        ];
+        mid.views = [
+            leafNullViews,
+            leafBogusViews
+        ];
+        leafNullViews.views = null;
+        leafEmptyViews.views = [];
+        leafBogusViews.views = 3;
+        
+        let nodeTraversalCount = 0;
+        let visitedNull = false;
+        let visitedString = false;
+        UI.traverseSubviews(root, view => {
+            nodeTraversalCount += 1;
+            if (view === null) { visitedNull = true; }
+            if (view == "test") { visitedString = true; }
+            if (!!view && view.visit) { view.visit(); }
+        });
+        
+        this.assertEqual(nodeTraversalCount, 6, "nodeTraversalCount");
+        this.assertEqual(root.visitCount, 0, "root");
+        this.assertTrue(visitedNull, "visited null");
+        this.assertTrue(visitedString, "visited string");
+        this.assertEqual(mid.visitCount, 1, "mid");
+        this.assertEqual(leafEmptyViews.visitCount, 1, "leafEmptyViews");
+        this.assertEqual(leafNullViews.visitCount, 1, "leafNullViews");
+        this.assertEqual(leafBogusViews.visitCount, 1, "leafBogusViews");
+    }).buildAndRun();
+};
+
 swept.initialized = false;
 async function initSweep() {
     if (swept.initialized) { console.log({ already: Sweep.Game.rules() }); return; }
     swept.initialized = true;
     await Sweep.initialize();
+    // TODO change the backing store for GameStorage from window.localStorage to some stub
 }
-
 
 let standardSuite = new TestSession([
     // rectHashTest,
@@ -2692,13 +2742,15 @@ let standardSuite = new TestSession([
     cityRectExtensionsTest,
     swept.gameTileTests,
     swept.sharingTests,
-    swept.autosaveTests
+    swept.autosaveTests,
+    civved.systemUItests
     // simDateTest
 ]);
 
 let taskSuite = new TestSession([
-    swept.sharingTests,
-    swept.autosaveTests
+    stringsTest,
+    serializerTests,
+    civved.systemUItests
     ]);
 
 // TestSession.current = taskSuite;

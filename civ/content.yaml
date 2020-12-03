@@ -1,0 +1,65 @@
+
+################## RULES ################
+
+difficulties:
+  - nameKey: difficulty0
+  - nameKey: difficulty1
+    isDefault: true
+  - nameKey: difficulty2
+  - nameKey: difficulty3
+  - nameKey: difficulty4
+
+################## UI ################
+
+worldView:
+  canvasFillStyle: "hsl(34, 5%, 15%)"
+  tileGrid:
+    strokeStyle: "hsla(0, 0%, 0%, 0.2)"
+    lineWidth: 1
+  zoomLevels:
+    - tileWidth: 1 # points per tile (see deviceMapping>zoomRatios for raw pixel sizes)
+      allowGrid: false # showGrid = allowGrid && userPreference.enableGrid
+      allowUnitAnimation: false
+      allowAmbientAnimation: false
+    - tileWidth: 3
+      allowGrid: false
+      allowUnitAnimation: true
+      allowAmbientAnimation: false
+    - tileWidth: 6
+      isDefault: true
+      allowGrid: true
+      allowUnitAnimation: true
+      allowAmbientAnimation: true
+    - tileWidth: 12
+      allowGrid: true
+      allowUnitAnimation: true
+      allowAmbientAnimation: true
+
+cutscenes:
+  loading:
+    - [showText, loadingLabel]
+
+################## STRINGS ################
+
+strings:
+  appVersionTemplate: "<appVersion>"
+  dialogDismissButton: "✕"
+  difficulty0: Chieftain
+  difficulty1: Warlord
+  difficulty2: Regent
+  difficulty3: Monarch
+  difficulty4: Emperor
+  difficultyChoiceLabel: Choose your difficulty
+  difficultyLabel: Difficulty
+  gameTitle: Civ
+  loadGameButton: Load Game
+  loadingLabel: "Loading…"
+  newGameButton: New Game
+  newGameDialogTitle: New Game
+  nextButton: Next
+  previousButton: Previous
+  readyToBegin: "Ready to begin?"
+  showHelpButton: Help
+  startGameButton: Start Game
+pluralStrings:
+  o: [o, oo, ooo]

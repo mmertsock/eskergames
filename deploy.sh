@@ -47,3 +47,25 @@ cp sweep-solver.js "$SWEEP_DEST"
 cp sweep.js "$SWEEP_DEST"
 
 sed -i -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./city.css|./$SWEEP_V_URL/city.css|g" "$SWEEP_ROOT/index.html"
+
+V_CIV=$(cat version.txt)
+CIV_ROOT="$DEST/civ"
+CIV_V_LIB_URL="$V_CIV"
+CIV_V_APP_URL="$V_CIV/app"
+CIV_LIB_PATH="$CIV_ROOT/$CIV_V_LIB_URL/"
+CIV_APP_PATH="$CIV_ROOT/$CIV_V_APP_URL/"
+
+echo "Deploying civ version $_CIV"
+
+mkdir -p "$CIV_APP_PATH"
+
+cd civ
+cp index.html "$CIV_ROOT/index.html"
+cp ../g.css ../g.js ../game-content.js ../locale.js "$CIV_LIB_PATH"
+cp civ.js content.yaml game.js ui-game.js ui-system.js "$CIV_APP_PATH"
+cd -
+
+sed -i -e "s|./civ.js|./$CIV_V_APP_URL/civ.js|g" -e "s|./g.css|./$CIV_V_LIB_URL/g.css|g" "$CIV_ROOT/index.html"
+
+
+echo "Deployment complete."

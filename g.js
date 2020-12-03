@@ -3064,6 +3064,9 @@ export class ToolButton {
         this._enabled = value;
         this.elem.addRemClass("disabled", !value);
     }
+    
+    get title() { return this.elem.querySelector("span").innerText; }
+    set title(value) { this.elem.querySelector("span").innerText = value; }
 }
 
 function mark__Dialog_Management() {} // ~~~~~~ Dialog Management ~~~~~~
