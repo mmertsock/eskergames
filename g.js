@@ -281,6 +281,16 @@ Element.prototype.configure = function(block) {
 
 var _testCanvas = document.createElement("canvas");
 
+// devicePixelRatio: 1 to disable high DPI support
+HTMLCanvasElement.prototype.configureSize = function(container, devicePixelRatio) {
+    const cssWidth = container.clientWidth;
+    const cssHeight = container.clientHeight;
+    this.width = cssWidth * devicePixelRatio;
+    this.height = cssHeight * devicePixelRatio;
+    this.style.width = `${cssWidth}px`;
+    this.style.height = `${cssHeight}px`;
+}
+
 HTMLCanvasElement.getDevicePixelScale = function() {
     return (window.devicePixelRatio || 1) / (_testCanvas.getContext("2d").webkitBackingStorePixelRatio || 1);
 };
@@ -518,6 +528,28 @@ export class TaskQueue {
 
     append(task) {
         this.tasks.push(task);
+    }
+}
+
+export class Debouncer {
+    constructor(a) {
+        this.intervalMilliseconds = a.intervalMilliseconds;
+        this.callback = a.callback;
+        // optional
+        this.newGroupCallback = a.newGroupCallback;
+        this.currentTimeout = undefined;
+    }
+    
+    trigger() {
+        if (this.currentTimeout) {
+            window.clearTimeout(this.currentTimeout);
+        } else if (this.newGroupCallback) {
+            this.newGroupCallback(this);
+        }
+        this.currentTimeout = setTimeout(() => {
+            this.currentTimeout = undefined;
+            this.callback(this);
+        }, this.intervalMilliseconds);
     }
 }
 
@@ -1401,6 +1433,7 @@ directions.isCardinal = function(id) { return id % 2 == 0 };
 directions.debugDescriptionOf = function(direction) {
     return ["N", "NE", "E", "SE", "S", "SW", "W", "NW"][direction];
 }
+directions.flippedY = [4, 3, 2, 1, 0, 7, 6, 5];
 
 export class XYValue {
     isEqual(p2, tol) {
@@ -1419,6 +1452,10 @@ export class XYValue {
         } else {
             return new this.constructor(this.x + x, this.y + y);
         }
+    }
+    
+    get inverted() {
+        return new this.constructor(-this.x, -this.y);
     }
     
     manhattanDistanceFrom(x, y) {
@@ -1562,6 +1599,9 @@ export class Rect {
             min: Point.max(e1.min, e2.min),
             max: Point.min(e1.max, e2.max)
         });
+    }
+    offsetBy(x, y) {
+        return new Rect(this.origin.adding(x, y), this.size);
     }
 
     // new Rect(7, 10, 40, 30).intersects(new Rect(0, 40, 90, 10)) produces "true",

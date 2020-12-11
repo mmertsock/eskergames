@@ -18,6 +18,7 @@ import {
 
 import * as Sweep from './sweep.js';
 import * as CivGame from './civ/game.js';
+import * as CivGameUI from './civ/ui-game.js';
 import * as CivSystemUI from './civ/ui-system.js';
 
 function appendOutputItem(msg, className) {
@@ -2661,6 +2662,160 @@ swept.autosaveTests = async function() {
 
 let civved = {};
 
+civved.baseGeometryTests = function() {
+    const Tile = CivGame.Tile;
+    new UnitTest("Civ.Tile", function() {
+        let tile15a = new Tile(1, 5);
+        let tile15b = new Tile(new Point(1, 5));
+        this.assertEqual(tile15b, tile15a);
+        this.assertEqual(tile15a.gridPoint.x, 1);
+        this.assertEqual(tile15a.gridPoint.y, 5);
+        this.assertEqual(tile15a.centerCoord, new Point(1.5, 5.5));
+        this.assertEqual(tile15a.rect, new Rect(1, 5, 1, 1));
+    }).buildAndRun();
+    
+    new UnitTest("Civ.Tile.gridPointForCoord", function(coords, gridPoints) {
+        for (let i = 0; i < coords.length; i += 1) {
+            let coord = new Point(coords[i][0], coords[i][1]);
+            let expected = new Point(gridPoints[i][0], gridPoints[i][1]);
+            let gridPoint = Tile.gridPointForCoord(coord);
+            this.assertEqual(gridPoint, expected, coord.debugDescription);
+        }
+    }).build()([
+        [0, 0],    [0.5, 0.5],     [0.999, 0.9999],
+        [1, 1],    [1.01, 0.99],   [57.234, 98.6],
+        [-0, -0],  [-0.01, -0.99], [-17.68, -4.03], [-7.00, 6.00]
+    ], [
+        [0, 0],    [0, 0],         [0, 0],
+        [1, 1],    [1, 0],         [57, 98],
+        [0, 0],    [-1, -1],       [-18, -5],       [-7, 6]
+    ]);
+};
+
+civved.worldModelTests = function() {
+    new UnitTest("Civ.Planet", function() {
+        let sut = new CivGame.Planet({ size: {width: 36, height: 25} });
+        this.assertEqual(sut.rect, new Rect(0, 0, 36, 25));
+        this.assertEqual(sut.size.width, 36);
+        this.assertEqual(sut.size.height, 25);
+        this.assertEqual(sut.centerTile, new CivGame.Tile(18, 12));
+        this.assertEqual(sut.centerCoord, new Point(18, 12.5));
+    }).buildAndRun();
+};
+
+civved.tileProjectionTests = function() {
+    new UnitTest("Civ.TileProjection", function() {
+        let sut = new CivGame.TileProjection(1);
+        this.assertEqual(sut.factor, 1);
+        this.assertEqual(sut.lengthForScreenLength(5), 5);
+        this.assertEqual(sut.lengthForScreenLength(0), 0);
+        this.assertEqual(sut.lengthForScreenLength(-3.1), -3.1);
+        this.assertEqual(sut.coordForScreenPoint(new Point(5, 7)), new Point(5, 7));
+        this.assertEqual(sut.coordForScreenPoint(new Point(-3.5, 2.7)), new Point(-3.5, 2.7));
+        this.assertEqual(sut.screenPointForCoord(new Point(5, 7)), new Point(5, 7));
+        this.assertEqual(sut.screenPointForCoord(new Point(-3.5, 2.7)), new Point(-3, 3));
+        this.assertEqual(sut.screenSizeForSize({width: 0, height: 17}).width, 0);
+        this.assertEqual(sut.screenSizeForSize({width: 0, height: 17}).height, 17);
+        this.assertEqual(sut.screenSizeForSize({width: 1.23, height: 4.99}).width, 1);
+        this.assertEqual(sut.screenSizeForSize({width: 1.23, height: 4.99}).height, 5);
+        this.assertEqual(sut.screenRectForTile(new CivGame.Tile(-2, 8)), new Rect(-2, 8, 1, 1));
+        this.assertEqual(sut.screenRectForRect(
+            new Rect(-1, 2.25, 37, 4.23)),
+            new Rect(-1, 2,    37, 4));
+        
+        sut.factor = 32;
+        this.assertEqual(sut.lengthForScreenLength(5), 160);
+        this.assertEqual(sut.lengthForScreenLength(0), 0);
+        this.assertEqual(sut.lengthForScreenLength(-3.1), -99.2);
+        this.assertEqual(sut.coordForScreenPoint(new Point(160, 224)), new Point(5, 7));
+        this.assertEqual(sut.coordForScreenPoint(new Point(-112, 88)), new Point(-3.5, 2.75));
+        this.assertEqual(sut.screenPointForCoord(new Point(5, -7)), new Point(160, -224));
+        this.assertEqual(sut.screenPointForCoord(new Point(1.23, 4.99)), new Point(39, 160));
+        this.assertEqual(sut.screenSizeForSize({width: 1.23, height: 4.99}).width, 39);
+        this.assertEqual(sut.screenSizeForSize({width: 1.23, height: 4.99}).height, 160);
+        this.assertEqual(sut.screenRectForTile(new CivGame.Tile(-2, 8)), new Rect(-64, 256, 32, 32));
+        this.assertEqual(sut.screenRectForRect(
+            new Rect( -1,  2.25,   37,   4.23)),
+            new Rect(-32, 72,    1184, 135));
+    }).buildAndRun();
+};
+
+UnitTest.prototype.civRun = function(injBlock) {
+    let oldContent = CivGame.inj().content;
+    if (injBlock) { injBlock(); }
+    this.buildAndRun();
+    CivGame.inj().content = oldContent;
+    return this;
+};
+
+civved.worldViewTests = function() {
+    const Tile = CivGame.Tile;
+    let world = { planet: new CivGame.Planet({size: {width: 15, height: 10}}) };
+    let zoomLevels = [10, 20, 30, 40, 50].map((z, i) => {
+        return new CivGame.ZoomLevel({tileWidth: z, index: i, isDefault: i == 3});
+    });
+    let setInj = function(edgePadding) {
+        CivGame.inj().content = {
+            zoomLevels: zoomLevels,
+            worldView: { edgePadding: edgePadding }
+        };
+    };
+    
+    new UnitTest("Civ.WorldViewModel", function() {
+        let sut = new CivGameUI.WorldViewModel({
+            world: world, zoomLevels: zoomLevels
+        });
+        this.assertEqual(CivGame.ZoomLevel.getDefault()?.index, 3);
+        this.assertEqual(sut.zoomLevel?.index, 3);
+        this.assertEqual(sut.worldScreenRect, new Rect(0, 0, 600, 400));
+        
+        sut.zoomLevel = zoomLevels[1];
+        this.assertEqual(sut.zoomLevel?.index, 1);
+        this.assertEqual(sut.worldScreenRect, new Rect(0, 0, 300, 200));
+    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing the basics
+    
+    new UnitTest("Civ.WorldViewport", function() {
+        let viewModel = new CivGameUI.WorldViewModel({
+            world: world, zoomLevels: zoomLevels
+        });
+        let canvas = document.createElement("canvas");
+        
+        canvas.width = 640;
+        canvas.height = 298;
+        let sut = new CivGameUI.WorldViewport({
+            model: viewModel, canvas: canvas, devicePixelRatio: 1
+        });
+        
+        this.assertEqual(sut.zoomLevel?.tileWidth, 40, "defaults to viewModel zoom");
+        let worldPointSize = { width: 600, height: 400 };
+        this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "defaults to viewModel center Tile.centerCoord");
+        // canvas is wider/shorter than the world
+        this.assertEqual(sut.viewportScreenRect, new Rect(-20, 71, canvas.width, canvas.height));
+        this.assertEqual(sut.coordForCanvasPoint(new Point(320, 149)), new Point(7.5, 5.5));
+        this.assertEqual(sut.coordForCanvasPoint(new Point(0, 0)), new Point(-0.5, 1.775));
+        
+        canvas.width = 400;
+        canvas.height = 400;
+        this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "retains center after canvas change");
+        this.assertEqual(sut.viewportScreenRect, new Rect(100, 20, canvas.width, canvas.height));
+        
+        sut.zoomLevel = zoomLevels[0];
+        this.assertEqual(sut.zoomLevel?.tileWidth, 10);
+        worldPointSize = { width: 150, height: 100 };
+        this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "retains center after jumping");
+        this.assertEqual(sut.viewportScreenRect, new Rect(-125, -145, canvas.width, canvas.height));
+        
+        sut.centerCoord = new Point(-1.5, 2);
+        this.assertEqual(sut.zoomLevel?.tileWidth, 10, "retains zoom after jumping");
+        this.assertEqual(sut.centerCoord, new Point(-1.5, 2));
+        this.assertEqual(sut.viewportScreenRect, new Rect(-215, -180, canvas.width, canvas.height));
+        
+        sut.setCenterTile(new CivGame.Tile(2, 4));
+        this.assertEqual(sut.zoomLevel?.tileWidth, 10, "retains zoom after jumping");
+        this.assertEqual(sut.centerCoord, new Point(2.5, 4.5));
+    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing the basics
+};
+
 civved.systemUItests = function() {
     new UnitTest("Civ.UI.traverseSubviews", function() {
         const UI = CivSystemUI.UI;
@@ -2743,15 +2898,21 @@ let standardSuite = new TestSession([
     swept.gameTileTests,
     swept.sharingTests,
     swept.autosaveTests,
+    civved.baseGeometryTests,
+    civved.worldModelTests,
+    civved.tileProjectionTest,
+    civved.worldViewTests,
     civved.systemUItests
     // simDateTest
 ]);
 
 let taskSuite = new TestSession([
-    stringsTest,
-    serializerTests,
+    civved.baseGeometryTests,
+    civved.worldModelTests,
+    civved.tileProjectionTests,
+    civved.worldViewTests,
     civved.systemUItests
-    ]);
+]);
 
 // TestSession.current = taskSuite;
 TestSession.current = standardSuite;

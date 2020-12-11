@@ -9,6 +9,8 @@ export function uiReady() {
     ScreenManager.initialize();
     FirstRunView.initialize();
     NewGameDialog.initialize();
+    inj().keyboardInputController = new KeyboardInputController();
+    inj().views.root = new DOMRootView();
     let game = null;
     try {
         let data = inj().storage.autosaveData;
@@ -46,7 +48,36 @@ export class UI {
             (token, elem) => inj().gse.execute(token, elem, null)
         );
     }
+    
+    static deviceLengthForDOMLength(px, devicePixelRatio) {
+        return px * devicePixelRatio;
+    }
 }
+
+export class DOMRootView {
+    constructor() {
+        this.resizeDebouncer = new Gaming.Debouncer({
+            intervalMilliseconds: 300,
+            callback: () => this.documentDidResize(),
+            newGroupCallback: () => this.documentWillResize()
+        });
+        document.defaultView.addEventListener("resize", evt => this.resizeDebouncer.trigger());
+    }
+    
+    documentWillResize() {
+        debugLog("willResize " + (0.001 * (Date.now() % 1000000)));
+        document.body.classList.add("resizing");
+        Gaming.Dispatch.shared.postEventSync(DOMRootView.willResizeEvent, this);
+    }
+    
+    documentDidResize() {
+        debugLog("didResize " + (0.001 * (Date.now() % 1000000)));
+        document.body.classList.remove("resizing");
+        Gaming.Dispatch.shared.postEventSync(DOMRootView.didResizeEvent, this);
+    }
+}
+DOMRootView.willResizeEvent = "DOMRootView.willResizeEvent";
+DOMRootView.didResizeEvent = "DOMRootView.didResizeEvent";
 
 // manages visibility of a set of ScreenViews
 export class ScreenManager {
@@ -100,6 +131,64 @@ export class ScreenView {
     didShow() { }
     didHide() { }
 }
+
+class KeyboardInputController {
+    constructor() {
+        this.keyController = new Gaming.KeyInputController();
+        this.keyController.addShortcutsFromSettings(inj().content.keyboard);
+        // this.keyController.debug = true;
+export class CanvasInputController {
+    constructor(a) {
+        this.canvas = a.canvas;
+        this.devicePixelRatio = a.devicePixelRatio;
+        this.isTrackingPointer = false;
+        this.canvas.addEventListener("click", evt => this._click(evt));
+        this.canvas.addEventListener("mouseleave", evt => this._mouseleave(evt));
+        this.canvas.addEventListener("mousemove", evt => this._mousemove(evt));
+        this._lastEvents = {};
+    }
+    
+    // Canvas device pixel under the input pointer, if applicable
+    get pointerCavasPoint() {
+        let evt = this._lastEvents["mousemove"];
+        if (!evt || !this.isTrackingPointer) { return null; }
+        return this._canvasPointForDOMPoint(evt);
+    }
+    
+    _canvasPointForDOMPoint(evt) {
+        return new Gaming.Point(
+            UI.deviceLengthForDOMLength(evt.offsetX, this.devicePixelRatio),
+            UI.deviceLengthForDOMLength(evt.offsetY, this.devicePixelRatio)
+        ).integral();
+    }
+    
+    _click(evt) {
+        this._lastEvents[evt.type] = evt;
+        let eventModel = {
+            evt: evt,
+            canvasPoint: this._canvasPointForDOMPoint(evt)
+        };
+        this.forEachDelegate(d => {
+            if (d.canvasClicked) { d.canvasClicked(eventModel); }
+        });
+    }
+    
+    _mouseenter(evt) {
+        this._lastEvents[evt.type] = evt;
+        this.isTrackingPointer = true;
+    }
+    
+    _mouseleave(evt) {
+        this._lastEvents[evt.type] = evt;
+        this.isTrackingPointer = false;
+    }
+    
+    _mousemove(evt) {
+        this._lastEvents[evt.type] = evt;
+        this.isTrackingPointer = true;
+    }
+}
+Gaming.Mixins.Gaming.DelegateSet(CanvasInputController);
 
 class FirstRunView extends ScreenView {
     static initialize() {

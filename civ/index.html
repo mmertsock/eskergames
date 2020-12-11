@@ -82,6 +82,13 @@ gameDialog gameForm {
 
 .fullscreen > .bar {
     flex-grow: 0;
+    display: flex;
+    flex-direction: row;
+    justify-content: start;
+}
+
+.fill {
+    flex-grow: 1;
 }
 
 .fullscreen > .fill {
@@ -100,7 +107,7 @@ gameDialog gameForm {
     overflow: scroll;
 }*/
 
-/* specific content views */
+/* specific content */
 
 .data-table-view {
     border-collapse: collapse;
@@ -128,12 +135,24 @@ gameDialog gameForm {
     padding-right: 0px;
 }
 
+.bar {
+    background-color: var(--background-color-bar);
+}
+
+.controls a {
+    margin-right: 0.75em;
+}
+
 menubar {
     display: block;
 }
 
-statusbar {
-    display: block;
+#world canvas {
+    position: absolute;
+}
+
+.resizing #world {
+    filter: blur(4px);
 }
 
 #firstrun {
@@ -168,10 +187,8 @@ statusbar {
 
 <div id="game" class="fullscreen stacked hidden">
     <menubar class="bar">menu</menubar>
-    <content class="fill">
-        <canvas class="world"></canvas>
-    </content>
-    <statusbar class="bar">footer</statusbar>
+    <content id="world" class="fill"></content>
+    <statusbar class="bar controls"></statusbar>
 </div>
 
 <div id="cutscene" class="fullscreen centered hidden">

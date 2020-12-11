@@ -2,7 +2,7 @@ import * as Gaming from '../g.js';
 import { Strings } from '../locale.js';
 import { GameContent } from '../game-content.js';
 
-const debugLog = Gaming.debugLog, Point = Gaming.Point;
+const debugLog = Gaming.debugLog, Point = Gaming.Point, Rect = Gaming.Rect;
 
 export class Env {
     static initialize() {
@@ -41,13 +41,15 @@ export function inj() { return Injection.shared; }
 export class Game {
     static initialize(content) {
         preprocessContent({
-            addIndexes: [content.difficulties, content.world.mapSizes],
-            addIsDefault: [content.difficulties, content.world.mapSizes],
+            addIndexes: [content.difficulties, content.world.mapSizes, content.zoomLevels],
+            addIsDefault: [content.difficulties, content.world.mapSizes, content.zoomLevels],
             localizeNames: [content.difficulties, content.world.mapSizes]
-        })
+        });
+        inj().views = { };
         inj().content = content;
         DifficultyOption.initialize();
         MapSizeOption.initialize();
+        ZoomLevel.initialize();
         inj().rng = Gaming.Rng.shared;
         inj().storage = new GameStorage(window.localStorage);
         
@@ -67,6 +69,8 @@ export class Game {
                 Sz.key("players", [Player.name])
             ]
         )
+        .pointRuleset()
+        .tileRuleset()
         .ruleset(World.name, World.fromSavegame, [
             Sz.key("planet", Planet.name),
             Sz.key("civs", [Civilization.name]),
@@ -85,14 +89,7 @@ export class Game {
         ])
         .ruleset(CivUnit.name, CivUnit.fromSavegame, [
             Sz.key("type"),
-            // when a rule's rulesetID is null, look for 
-            // Gaming's objectForSerialization/fromSerializedObject
-            // and use that instead of raw value sz/dz?
-            Sz.key("location", "Point")
-        ])
-        .ruleset("Point", p => new Point(p), [
-            Sz.key("x"),
-            Sz.key("y")
+            Sz.key("tile", Tile.name)
         ]);
     }
     
@@ -122,16 +119,95 @@ export class Game {
     }
 }
 
+// A discrete unit-rectangle tile located in a world. Immutable
+export class Tile {
+    static gridPointForCoord(coord) {
+        return new Point(Math.floor(coord.x), Math.floor(coord.y));
+    }
+    
+    constructor(xOrPoint, y) {
+        // Grid location and identity
+        this.gridPoint = new Point(xOrPoint, y);
+        // Precise center point, e.g. (1.5, -0.5)
+        this.centerCoord = new Point(this.gridPoint.x + 0.5, this.gridPoint.y + 0.5);
+        // Rect of unit size centered on centerCoord, e.g. (2,2,1,1)
+        // Rect's origin is == gridPoint
+        this.rect = new Rect(this.gridPoint, Tile.unitSize);
+    }
+    
+    isEqual(other) {
+        if (!(other instanceof Tile)) { return false; }
+        return this.gridPoint.x == other.gridPoint.x
+            && this.gridPoint.y == other.gridPoint.y;
+    }
+}
+Tile.unitSize = { width: 1, height: 1};
+
+Gaming.Serializer.prototype.pointRuleset = function() {
+    return this.ruleset(Point.name, a => new Point(a), [
+        Gaming.Serializer.key("x"),
+        Gaming.Serializer.key("y")
+    ]);
+};
+Gaming.Serializer.prototype.tileRuleset = function() {
+    return this.ruleset(Tile.name, a => new Tile(a.gridPoint), [
+        Gaming.Serializer.key("gridPoint", Point.name)
+    ]);
+};
+
+// Projects a plane of Tile coordinates onto screen points. Origin and y-direction of both coordinate systems are identical, and both are unbounded. All screen points returned are rounded to integers, but non-integer screenPoint inputs are ok. Tile coordinate output can be non-integer.
+export class TileProjection {
+    constructor(factor) {
+        // Number of screen points per tile coordinate
+        this.factor = factor;
+    }
+    
+    supportingOffset_screenPointForTileCoord(coord) {
+        this.centerCoord = new Point(7.5, 3.24);
+    }
+    
+    lengthForScreenLength(screenLength) {
+        return screenLength / this.factor;
+    }
+    
+    coordForScreenPoint(screenPoint) {
+        return new Point(screenPoint.x / this.factor, screenPoint.y / this.factor);
+    }
+    
+    screenPointForCoord(tileCoord) {
+        return new Point(tileCoord.x * this.factor, tileCoord.y * this.factor)
+            .integral();
+    }
+    
+    screenSizeForSize(tileSize) {
+        return {
+            width: Math.round(tileSize.width * this.factor),
+            height: Math.round(tileSize.height * this.factor)
+        };
+    }
+    
+    screenRectForRect(coordRect) {
+        return new Rect(
+            this.screenPointForCoord(coordRect.origin),
+            this.screenSizeForSize(coordRect.size));
+    }
+    
+    screenRectForTile(tile) {
+        return this.screenRectForRect(tile.rect);
+    }
+}
+
 export class World {
     static fromSavegame(a) { return new World(a); }
     
     static createNew(model) {
+        let planet = Planet.createNew(model.planet);
         return new World({
-            planet: Planet.createNew(model.planet),
+            planet: planet,
             civs: [new Civilization({ name: "Placelandia" })],
             units: [new CivUnit({
                 type: "Settler",
-                location: new Point(4, 2)
+                tile: new Tile(planet.centerTile.gridPoint.adding(2, 3))
             })]
         });
     }
@@ -151,8 +227,13 @@ export class Planet {
     }
     
     constructor(a) {
-        this.size = { width: a.size.width, height: a.size.height };
+        this.rect = new Rect(new Point(0, 0), a.size);
+        this._centerTile = new Tile(Tile.gridPointForCoord(this.rect.center));
     }
+    
+    get size() { return this.rect.size; }
+    get centerTile() { return this._centerTile; }
+    get centerCoord() { return this.rect.center; }
 }
 
 export class Civilization {
@@ -178,7 +259,7 @@ export class CivUnit {
     
     constructor(a) {
         this.type = a.type;
-        this.location = new Point(a.location);
+        this.tile = a.tile;
     }
 }
 
@@ -269,6 +350,33 @@ export class MapSizeOption {
         if (!other) { return false; }
         return this.id == other.id;
     }
+}
+
+export class ZoomLevel {
+    static initialize() {
+        inj().content.zoomLevels = inj().content.zoomLevels.map(item => new ZoomLevel(item));
+    }
+    
+    static all() { return inj().content.zoomLevels; }
+    static indexOrDefault(value) {
+        if (value instanceof ZoomLevel) { return value; }
+        return GameContent.itemOrDefaultFromArray(inj().content.zoomLevels, value);
+    }
+    static getDefault() { return GameContent.defaultItemFromArray(inj().content.zoomLevels); }
+    
+    constructor(a) {
+        Object.assign(this, a);
+    }
+    
+    get next() {
+        return ZoomLevel.all()[this.index + 1];
+    }
+    
+    get previous() {
+        return ZoomLevel.all()[this.index - 1];
+    }
+    
+    get debugDescription() { return `<ZoomLevel#${this.index} ${this.tileWidth}w>`; }
 }
 
 function preprocessContent(a) {

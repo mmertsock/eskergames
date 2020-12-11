@@ -22,14 +22,23 @@ world:
       nameKey: largeMapSize
       size: { width: 128, height: 80 }
     # huge: 160x100
+zoomLevels:
+  - tileWidth: 6
+  - tileWidth: 12
+  - tileWidth: 24
+    isDefault: true
+  - tileWidth: 48
+  - tileWidth: 96
 
 ################## UI ################
 
 worldView:
   canvasFillStyle: "hsl(34, 5%, 15%)"
   tileGrid:
-    strokeStyle: "hsla(0, 0%, 0%, 0.2)"
+    strokeStyle: "hsla(0, 0%, 100%, 0.1)"
     lineWidth: 1
+  smallPanPoints: 50
+  largePanScreenFraction: 0.4
   zoomLevels:
     - tileWidth: 1 # points per tile (see deviceMapping>zoomRatios for raw pixel sizes)
       allowGrid: false # showGrid = allowGrid && userPreference.enableGrid
@@ -48,6 +57,21 @@ worldView:
       allowGrid: true
       allowUnitAnimation: true
       allowAmbientAnimation: true
+
+keyboard:
+  keyPressShortcuts:
+    - [Escape, escapeKeyPressed, null, helpKeyboardEscapeKeyPressed]
+    - [Equal, gameWorldZoomIn, null, helpKeyboardPlusKeyPressed]
+    - [Minus, gameWorldZoomOut, null, helpKeyboardMinusKeyPressed]
+    - [Space, gameWorldCenterMapUnderCursor, null, helpKeyboardSpacebarPressed]
+    - [ArrowUp, gameWorldPan, 0, helpKeyboardArrowKeys]
+    - [Shift+ArrowUp, gameWorldPanLarge, 0, helpKeyboardShiftArrowKeys]
+    - [ArrowRight, gameWorldPan, 2]
+    - [Shift+ArrowRight, gameWorldPanLarge, 2]
+    - [ArrowDown, gameWorldPan, 4]
+    - [Shift+ArrowDown, gameWorldPanLarge, 4]
+    - [ArrowLeft, gameWorldPan, 6]
+    - [Shift+ArrowLeft, gameWorldPanLarge, 6]
 
 cutscenes:
   loading:
@@ -79,5 +103,7 @@ strings:
   showHelpButton: Help
   smallMapSize: Small
   startGameButton: Start Game
+  zoomInControlButton: "+"
+  zoomOutControlButton: "-"
 pluralStrings:
   o: [o, oo, ooo]
