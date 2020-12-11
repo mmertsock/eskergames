@@ -1,6 +1,6 @@
 import * as Gaming from '../g.js';
 import { Strings } from '../locale.js';
-import { inj, Difficulty, Game } from './game.js';
+import { inj, DifficultyOption, Game, MapSizeOption } from './game.js';
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, ToolButton = Gaming.ToolButton;
 
@@ -274,13 +274,13 @@ NewGameDialog.DifficultyStepView = class DifficultyStepView extends WizardStepVi
         this.model = a.model;
         this.elem = Gaming.GameDialog.createFormElem();
 
-        let initialDifficulty = Difficulty.index(inj().storage.lastDifficultyIndex);
+        let initialDifficulty = DifficultyOption.indexOrDefault(inj().storage.lastDifficultyIndex);
         this.difficulties = new Gaming.FormValueView.SingleChoiceInputCollection({
             id: "difficulty",
             parent: this.elem,
             title: Strings.str("difficultyChoiceLabel"),
             validationRules: [Gaming.FormValueView.SingleChoiceInputCollection.selectionRequiredRule],
-            choices: Difficulty.all().map(difficulty => { return {
+            choices: DifficultyOption.all().map(difficulty => { return {
                 title: difficulty.name,
                 value: difficulty.index,
                 selected: difficulty.isEqual(initialDifficulty)
@@ -290,7 +290,7 @@ NewGameDialog.DifficultyStepView = class DifficultyStepView extends WizardStepVi
     }
     
     get value() {
-        return Difficulty.index(this.difficulties.value);
+        return DifficultyOption.indexOrDefault(this.difficulties.value);
     }
     
     didShow() {
@@ -307,11 +307,40 @@ NewGameDialog.WorldStepView = class WorldStepView extends WizardStepView {
         super();
         this.model = a.model;
         this.elem = Gaming.GameDialog.createFormElem();
-        this.elem.innerText = "configure the world";
+        
+        let initialSize = MapSizeOption.getDefault();
+        this.mapSizes = new Gaming.FormValueView.SingleChoiceInputCollection({
+            id: "mapSize",
+            parent: this.elem,
+            title: Strings.str("mapSizeChoiceLabel"),
+            validationRules: [Gaming.FormValueView.SingleChoiceInputCollection.selectionRequiredRule],
+            choices: MapSizeOption.all().map(item => { return {
+                title: item.name,
+                value: item.id,
+                selected: item.isEqual(initialSize)
+            }; })
+        });
+        this.model.world = this.value;
+    }
+    
+    get value() {
+        return {
+            planet: {
+                mapSizeOption: this.mapSizeOption
+            }
+        };
+    }
+    
+    get mapSizeOption() {
+        return MapSizeOption.withIDorDefault(this.mapSizes.value);
     }
     
     didShow() {
-        this.model.world = "EARTH"; // temp
+        this.mapSizes.value = this.model.world.planet.mapSizeOption.id;
+    }
+    
+    didHide() {
+        this.model.world = this.value;
     }
 };
 
@@ -357,7 +386,7 @@ NewGameDialog.SummaryStepView = class SummaryStepView extends WizardStepView {
         this.elem = Gaming.GameDialog.createFormElem();
         let rows = [
             { label: Strings.str("difficultyLabel"), value: () => this.model.difficulty.name },
-            { label: Strings.str("worldConfigLabel"), value: () => this.model.world },
+            { label: Strings.str("worldConfigLabel"), value: () => this.model.world.planet.mapSizeOption.name },
             { label: Strings.str("playerCivLabel"), value: () => "Egypt: aggressive, perfectionist" },
             { label: Strings.str("playerNameLabel"), value: () => this.model.playerInfo.name },
             { label: Strings.str("opponentsConfigLabel"), value: () => this.model.opponents }

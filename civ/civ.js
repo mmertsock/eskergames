@@ -64,7 +64,6 @@ async function loadContent() {
     let cachePolicy = Env.isProduction ? GameContent.cachePolicies.auto : GameContent.cachePolicies.forceOnFirstLoad;
     let content = await GameContent.loadYamlFromLocalFile(`${Env.appURLPath}content.yaml`, cachePolicy);
     Strings.initialize(content.strings, content.pluralStrings, navigator.language);
-    Game.initialize(content);
     return content;
 }
 
@@ -76,6 +75,7 @@ export async function initialize() {
         document.body.innerText = "Failed to load";
         return;
     }
+    Game.initialize(content);
     uiGameInitialize();
     uiReady();
 }

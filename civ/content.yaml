@@ -8,6 +8,20 @@ difficulties:
   - nameKey: difficulty2
   - nameKey: difficulty3
   - nameKey: difficulty4
+world:
+  mapSizes:
+    # tiny: 48x30
+    - id: small
+      nameKey: smallMapSize
+      size: { width: 64, height: 40 }
+    - id: medium
+      isDefault: true
+      nameKey: mediumMapSize
+      size: { width: 88, height: 55 }
+    - id: large
+      nameKey: largeMapSize
+      size: { width: 128, height: 80 }
+    # huge: 160x100
 
 ################## UI ################
 
@@ -52,14 +66,18 @@ strings:
   difficultyChoiceLabel: Choose your difficulty
   difficultyLabel: Difficulty
   gameTitle: Civ
+  largeMapSize: Large
   loadGameButton: Load Game
   loadingLabel: "Loading…"
+  mapSizeChoiceLabel: Map size
+  mediumMapSize: Medium
   newGameButton: New Game
   newGameDialogTitle: New Game
   nextButton: Next
   previousButton: Previous
   readyToBegin: "Ready to begin?"
   showHelpButton: Help
+  smallMapSize: Small
   startGameButton: Start Game
 pluralStrings:
   o: [o, oo, ooo]

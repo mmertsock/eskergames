@@ -6,7 +6,6 @@ const debugLog = Gaming.debugLog, Point = Gaming.Point;
 
 export class Env {
     static initialize() {
-        Env.schemaVersion = 1;
         Gaming.debugExpose("Civ").inj = inj();
         Gaming.debugExpose("Civ").Env = Env;
         let version = import.meta.url.match(/civ\/([0-9.]+)\//);
@@ -22,6 +21,8 @@ export class Env {
         }
     }
 }
+Env.schemaVersion = 1;
+// Set via deployment script
 Env.appVersion = "v0.0.0";
 // These are relative to root document URL, with trailing slash
 Env.appURLPath = './';
@@ -39,11 +40,15 @@ export function inj() { return Injection.shared; }
 
 export class Game {
     static initialize(content) {
-        GameContent.addIndexToItemsInArray(content.difficulties);
-        content.difficulties = content.difficulties.map(item => new Difficulty(item));
-        inj().rng = Gaming.Rng.shared;
+        preprocessContent({
+            addIndexes: [content.difficulties, content.world.mapSizes],
+            addIsDefault: [content.difficulties, content.world.mapSizes],
+            localizeNames: [content.difficulties, content.world.mapSizes]
+        })
         inj().content = content;
-        
+        DifficultyOption.initialize();
+        MapSizeOption.initialize();
+        inj().rng = Gaming.Rng.shared;
         inj().storage = new GameStorage(window.localStorage);
         
         inj().gse.registerCommand("getAppInfo", (subject, env) => {
@@ -92,7 +97,7 @@ export class Game {
     }
     
     static createNewGame(model) {
-        let world = World.sample();
+        let world = World.createNew(model.world);
         return new Game({
             world: world,
             players: [new Player({
@@ -120,9 +125,9 @@ export class Game {
 export class World {
     static fromSavegame(a) { return new World(a); }
     
-    static sample() {
+    static createNew(model) {
         return new World({
-            planet: new Planet({ size: { width: 24, height: 12 } }),
+            planet: Planet.createNew(model.planet),
             civs: [new Civilization({ name: "Placelandia" })],
             units: [new CivUnit({
                 type: "Settler",
@@ -141,6 +146,10 @@ export class World {
 export class Planet {
     static fromSavegame(a) { return new Planet(a); }
     
+    static createNew(model) {
+        return new Planet({ size: model.mapSizeOption.size });
+    }
+    
     constructor(a) {
         this.size = { width: a.size.width, height: a.size.height };
     }
@@ -152,11 +161,6 @@ export class Civilization {
     constructor(a) {
         this.id = a.id || Identifier.random();
         this.name = a.name;
-        if (a.id) {
-            debugLog(`Restored civ ID ${this.id}`);
-        } else {
-            debugLog(`Created civ ID ${this.id}`);
-        }
     }
 }
 
@@ -223,21 +227,74 @@ class GameStorage {
     }
 }
 
-export class Difficulty {
+export class DifficultyOption {
+    static initialize() {
+        inj().content.difficulties = inj().content.difficulties.map(item => new DifficultyOption(item));
+    }
+    
     static all() { return inj().content.difficulties; }
-    static index(value) { return GameContent.itemOrDefaultFromArray(inj().content.difficulties, value); }
+    static indexOrDefault(value) { return GameContent.itemOrDefaultFromArray(inj().content.difficulties, value); }
     static getDefault() { return GameContent.defaultItemFromArray(inj().content.difficulties); }
     
     constructor(a) {
-        this.index = a.index;
-        this.isDefault = !!a.isDefault;
-        this.name = Strings.str(a.nameKey);
+        Object.assign(this, a);
     }
     
-    get debugDescription() { return `<Difficulty#${this.index} ${this.name}>`; }
+    get debugDescription() { return `<DifficultyOption#${this.index} ${this.name}>`; }
     
     isEqual(other) {
         if (!other) { return false; }
         return this.index == other.index;
     }
+}
+
+export class MapSizeOption {
+    static initialize() {
+        inj().content.world.mapSizes = inj().content.world.mapSizes.map(item => new MapSizeOption(item));
+    }
+    
+    static all() { return inj().content.world.mapSizes; }
+    static withIDorDefault(id) {
+        return MapSizeOption.all().find(item => item.id == id) || MapSizeOption.getDefault();
+    }
+    static getDefault() { return GameContent.defaultItemFromArray(MapSizeOption.all()); }
+    
+    constructor(a) {
+        Object.assign(this, a);
+    }
+    
+    get debugDescription() { return `<MapSizeOption#${this.id} ${this.size.width}x${this.size.height}>`; }
+    
+    isEqual(other) {
+        if (!other) { return false; }
+        return this.id == other.id;
+    }
+}
+
+function preprocessContent(a) {
+    function iterate(o, block) {
+        if (Array.isArray(o)) {
+            o.forEach((item, index) => block(item, index));
+        } else if (!!o) {
+            Object.getOwnPropertyNames(o).forEach(key => {
+                block(o[key], key);
+            });
+        }
+    }
+    
+    a.addIndexes.forEach(GameContent.addIndexToItemsInArray);
+    a.addIsDefault.forEach(obj => {
+        iterate(obj, item => { item.isDefault = !!item.isDefault; });
+    });
+    a.localizeNames.forEach(obj => {
+        if (obj.hasOwnProperty("nameKey")) {
+            obj.name = Strings.str(obj.nameKey);
+        } else {
+            iterate(obj, item => {
+                if (item && item.hasOwnProperty("nameKey")) {
+                    item.name = Strings.str(item.nameKey);
+                }
+            });
+        }
+    });
 }
