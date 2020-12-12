@@ -1443,7 +1443,7 @@ export class XYValue {
     isZero(tol) { return this.isEqual({x: 0, y: 0}, tol); }
 
     get debugDescription() {
-        return `(${this.x.toFixed(2)}, ${this.y.toFixed(2)})`;
+        return `(${this.x?.toFixed(2)}, ${this.y?.toFixed(2)})`;
     }
 
     adding(x, y) {
@@ -1619,6 +1619,8 @@ export class Rect {
         return !((e1.min.x >= e2.max.x) || (e1.max.x <= e2.min.x) || (e1.min.y >= e2.max.y) || (e1.max.y <= e2.min.y));
     }
     inset(xInset, yInset) {
+        if (xInset > 0.5 * this.width) { xInset = 0.5 * this.width; }
+        if (yInset > 0.5 * this.height) { yInset = 0.5 * this.height; }
         return new Rect(this.x + xInset, this.y + yInset, this.width - 2 * xInset, this.height - 2 * yInset);
     }
     rounded() {
@@ -1627,11 +1629,19 @@ export class Rect {
     integral() {
         return new Rect(this.origin.integral(), { width: Math.round(this.width), height: Math.round(this.height) });
     }
+    // Smallest integral rectangle inside this one
+    roundedIn() {
+        let ext = this.extremes;
+        return Rect.fromExtremes({
+            min: {x: Math.ceil(ext.min.x), y: Math.ceil(ext.min.y)},
+            max: {x: Math.floor(ext.max.x), y: Math.floor(ext.max.y)}
+        });
+    }
     clampedPoint(point) {
         let ext = this.extremes;
         return new Point(
-            Math.clamp(point.x, {min: ext.min.x, max: ext.max.x - 1}),
-            Math.clamp(point.y, {min: ext.min.y, max: ext.max.y - 1}));
+            Math.clamp(point.x, {min: ext.min.x, max: ext.max.x}),
+            Math.clamp(point.y, {min: ext.min.y, max: ext.max.y}));
     }
 
     // ordered by row then column

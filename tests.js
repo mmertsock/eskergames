@@ -21,6 +21,8 @@ import * as CivGame from './civ/game.js';
 import * as CivGameUI from './civ/ui-game.js';
 import * as CivSystemUI from './civ/ui-system.js';
 
+window.Gaming = { Point: Point, Rect: Rect, Vector: Vector };
+
 function appendOutputItem(msg, className) {
     if (!TestSession.outputElement) { return; }
     var elem = document.createElement("li");
@@ -161,6 +163,20 @@ class UnitTest {
         if (a != b) {
             this.logFailure(this._assertMessage(`assertEqual failure: ${this.describe(a)} != ${this.describe(b)}`, msg));
             return false;
+        }
+        return true;
+    }
+    assertEqualTol(a, b, tol, msg) {
+        if (typeof(a?.isEqual) == 'function') {
+            if (!a.isEqual(b, tol)) {
+                this.logFailure(this._assertMessage(`assertEqualTol failure: ${this.describe(a)} neq ${this.describe(b)}`, msg));
+                return false;
+            }
+        } else {
+            if (!Math.fequal(a, b, tol)) {
+                this.logFailure(this._assertMessage(`assertEqualTol failure: ${this.describe(a)} neq ${this.describe(b)}`, msg));
+                return false;
+            }
         }
         return true;
     }
@@ -543,6 +559,14 @@ let rectTest = function() {
         let rectFloat = new Rect(2.1, 2.8, 19.9, 30.1);
         let rectFloatInt = rectFloat.integral();
         this.assertTrue(rectFloatInt.isEqual(rectInt));
+        let r = rectFloat.inset(5, 2.5);
+        this.assertEqualTol(r.origin, new Point(7.1, 5.3), 0.01);
+        this.assertEqualTol(r.width, 9.9, 0.01);
+        this.assertEqualTol(r.height, 25.1, 0.01);
+        r = rectFloat.inset(10, 50);
+        this.assertEqualTol(r.origin, rectFloat.center, 0.01);
+        this.assertEqual(r.width, 0);
+        this.assertEqual(r.height, 0);
     }).buildAndRun();
 }
 
@@ -2724,9 +2748,9 @@ civved.tileProjectionTests = function() {
             new Rect(-1, 2,    37, 4));
         
         sut.factor = 32;
-        this.assertEqual(sut.lengthForScreenLength(5), 160);
+        this.assertEqual(sut.lengthForScreenLength(160), 5);
         this.assertEqual(sut.lengthForScreenLength(0), 0);
-        this.assertEqual(sut.lengthForScreenLength(-3.1), -99.2);
+        this.assertEqual(sut.lengthForScreenLength(-99.2), -3.1);
         this.assertEqual(sut.coordForScreenPoint(new Point(160, 224)), new Point(5, 7));
         this.assertEqual(sut.coordForScreenPoint(new Point(-112, 88)), new Point(-3.5, 2.75));
         this.assertEqual(sut.screenPointForCoord(new Point(5, -7)), new Point(160, -224));
@@ -2754,10 +2778,10 @@ civved.worldViewTests = function() {
     let zoomLevels = [10, 20, 30, 40, 50].map((z, i) => {
         return new CivGame.ZoomLevel({tileWidth: z, index: i, isDefault: i == 3});
     });
-    let setInj = function(edgePadding) {
+    let setInj = function(edgeOverscroll) {
         CivGame.inj().content = {
             zoomLevels: zoomLevels,
-            worldView: { edgePadding: edgePadding }
+            worldView: { edgeOverscroll: edgeOverscroll }
         };
     };
     
@@ -2786,8 +2810,8 @@ civved.worldViewTests = function() {
             model: viewModel, canvas: canvas, devicePixelRatio: 1
         });
         
+        // 600x400 world
         this.assertEqual(sut.zoomLevel?.tileWidth, 40, "defaults to viewModel zoom");
-        let worldPointSize = { width: 600, height: 400 };
         this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "defaults to viewModel center Tile.centerCoord");
         // canvas is wider/shorter than the world
         this.assertEqual(sut.viewportScreenRect, new Rect(-20, 71, canvas.width, canvas.height));
@@ -2800,8 +2824,7 @@ civved.worldViewTests = function() {
         this.assertEqual(sut.viewportScreenRect, new Rect(100, 20, canvas.width, canvas.height));
         
         sut.zoomLevel = zoomLevels[0];
-        this.assertEqual(sut.zoomLevel?.tileWidth, 10);
-        worldPointSize = { width: 150, height: 100 };
+        this.assertEqual(sut.zoomLevel?.tileWidth, 10); //150x100 world
         this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "retains center after jumping");
         this.assertEqual(sut.viewportScreenRect, new Rect(-125, -145, canvas.width, canvas.height));
         
@@ -2810,10 +2833,80 @@ civved.worldViewTests = function() {
         this.assertEqual(sut.centerCoord, new Point(-1.5, 2));
         this.assertEqual(sut.viewportScreenRect, new Rect(-215, -180, canvas.width, canvas.height));
         
-        sut.setCenterTile(new CivGame.Tile(2, 4));
+        sut.setCenterTile(new Tile(2, 4));
         this.assertEqual(sut.zoomLevel?.tileWidth, 10, "retains zoom after jumping");
         this.assertEqual(sut.centerCoord, new Point(2.5, 4.5));
+        
+        logTestMsg("With overscroll=1...")
+        sut.zoomLevel = zoomLevels[3];
+        // Viewport 10x7.5 tiles. With over=1, valid rect is:
+        // x:4...11, y:2.75....7.25
+        canvas.width = 400; canvas.height = 300;
+        CivGame.inj().content.worldView.edgeOverscroll = 1;
+        
+        sut = new CivGameUI.WorldViewport({
+            model: viewModel, canvas: canvas, devicePixelRatio: 1
+        });
+        sut.centerCoord = new Point(6, 4);
+        this.assertEqualTol(sut.centerCoord, new Point(6, 4), 0.01, "med canvas, overscroll, middle coord ok");
+        sut.setCenterTile(new Tile(6, 4));
+        this.assertEqualTol(sut.centerCoord, new Point(6.5, 4.5), 0.01, "med canvas, overscroll, middle tile ok");
+        sut.centerCoord = new Point(0, 0);
+        this.assertEqualTol(sut.centerCoord, new Point(4, 2.75), 0.01, "med canvas, overscroll, 0,0 -> inward");
+        sut.centerCoord = new Point(15, 10);
+        this.assertEqualTol(sut.centerCoord, new Point(11, 7.25), 0.01, "med canvas, overscroll, max -> inward");
+        
+        canvas.width = 2000; canvas.height = 1000;
+        sut.centerCoord = sut.centerCoord;
+        this.assertEqualTol(sut.centerCoord, new Point(7.5, 5), 0.01, "huge canvas, force to center");
+        
+        canvas.width = 10; canvas.height = 10;
+        sut.centerCoord = new Point(1, 1);
+        this.assertEqual(sut.zoomLevel?.tileWidth, 40);
+        this.assertEqualTol(sut.centerCoord, new Point(1, 1), 0.01, "reset to tiny canvas");
+        canvas.width = 450; canvas.height = 180;
+        sut.zoomLevel = zoomLevels[2]; // 450x300
+        this.assertEqual(sut.zoomLevel?.tileWidth, 30);
+        this.assertEqualTol(sut.centerCoord, new Point(6.5, 2), 0.01, "center reset after zooming out");
     }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing the basics
+    
+    new UnitTest("Civ.EdgeOverscroll", function() {
+        const p = new CivGame.Planet({size: {width: 15, height: 10}});
+        let sut = CivGameUI.EdgeOverscroll;
+        let c = { width: 0.2, height: 0.1 }; // canvasTileSize
+        let o = 0; // overscroll
+        this.assertEqualTol(sut.clampedCoord(new Point(6, 4), p, c, o), new Point(6, 4), 0.01, "tiny canvas, middle ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), p, c, o), new Point(0.1, 0.05), 0.01, "tiny canvas, 0,0 -> shift by half canvas size");
+        this.assertEqualTol(sut.clampedCoord(new Point(15, 10), p, c, o), new Point(14.9, 9.95), 0.01, "tiny canvas, corner -> shift back");
+        this.assertEqualTol(sut.clampedTile(new Tile(6, 4), p, c, o), new Tile(6, 4), 0.01, "tiny canvas, middle tile ok");
+        
+        // clamp y to center. x has 7 tiles of play
+        c = { width: 8, height: 20 };
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 4), p, c, o), new Point(9, 5), 0.01, "tall canvas, middle-x ok, y clamped");
+        this.assertEqualTol(sut.clampedCoord(new Point(-2, 14), p, c, o), new Point(4, 5), 0.01, "tall canvas, off-world, clamp");
+        
+        // clamp x to center. y has 8 tiles of play.
+        c = { width: 17, height: 2};
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), p, c, o), new Point(7.5, 3), 0.01, "wide canvas, middle-y ok, x clamped");
+        this.assertEqualTol(sut.clampedCoord(new Point(-2, 14), p, c, o), new Point(7.5, 9), 0.01, "wide canvas, off-world, clamp");
+        
+        c = { width: 73.06, height: 492.18};
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
+        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
+        this.assertEqualTol(sut.clampedCoord(new Point(-5, 15), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, off-map ok");
+        
+        o = 2.5;
+        c = { width: 0.2, height: 0.1 };
+        this.assertEqualTol(sut.clampedCoord(new Point(6, 4), p, c, o), new Point(6, 4), 0.01, "tiny canvas, middle ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(-1.5, 11), p, c, o), new Point(-1.5, 11), 0.01, "tiny canvas, inside overscroll ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(-3.5, 14.5), p, c, o), new Point(-2.4, 12.45), 0.01, "tiny canvas, shift to overscrolled edge");
+        
+        c = { width: 18, height: 10 };
+        logTestMsg(sut._validCoordRect(p, c, o).debugDescription);
+        this.assertEqualTol(sut.clampedCoord(new Point(8, 4), p, c, o), new Point(8, 4), 0.01, "similar canvas, middle ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), p, c, o), new Point(6.5, 2.5), 0.01, "tiny canvas, 0,0 shifted by half canvas size minus overscroll");
+    }).buildAndRun();
 };
 
 civved.systemUItests = function() {

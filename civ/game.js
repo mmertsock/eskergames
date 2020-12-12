@@ -124,6 +124,9 @@ export class Tile {
     static gridPointForCoord(coord) {
         return new Point(Math.floor(coord.x), Math.floor(coord.y));
     }
+    static integralTileHaving(coord) {
+        return new Tile(Tile.gridPointForCoord(coord));
+    }
     
     constructor(xOrPoint, y) {
         // Grid location and identity
@@ -137,8 +140,11 @@ export class Tile {
     
     isEqual(other) {
         if (!(other instanceof Tile)) { return false; }
-        return this.gridPoint.x == other.gridPoint.x
-            && this.gridPoint.y == other.gridPoint.y;
+        return this.gridPoint.isEqual(other.gridPoint, 0.01);
+    }
+    
+    get debugDescription() {
+        return "T" + this.gridPoint.debugDescription;
     }
 }
 Tile.unitSize = { width: 1, height: 1};
@@ -168,6 +174,10 @@ export class TileProjection {
     
     lengthForScreenLength(screenLength) {
         return screenLength / this.factor;
+    }
+    
+    sizeForScreenSize(size) {
+        return {width: size.width / this.factor, height: size.height / this.factor};
     }
     
     coordForScreenPoint(screenPoint) {
@@ -228,7 +238,7 @@ export class Planet {
     
     constructor(a) {
         this.rect = new Rect(new Point(0, 0), a.size);
-        this._centerTile = new Tile(Tile.gridPointForCoord(this.rect.center));
+        this._centerTile = Tile.integralTileHaving(this.rect.center);
     }
     
     get size() { return this.rect.size; }

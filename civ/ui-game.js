@@ -5,6 +5,7 @@ import { CanvasInputController, DOMRootView, ScreenView, UI } from './ui-system.
 import * as Drawables from './ui-drawables.js';
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn;
+const Point = Gaming.Point, Rect = Gaming.Rect;
 
 export function initialize() {
     inj().session = new GameSession();
@@ -117,6 +118,9 @@ class GameWorldView {
         // TODO pause animation on willResizeEvent, resume on didResize -- probably put that logic into the animation controller class not here.
         this.target.register(DOMRootView.didResizeEvent, () => {
             this.canvasView.resetCanvases();
+            // Reset center if too close to the edges
+            this.canvasView.viewportController.centerOnCoord(
+                this.canvasView.viewport.centerCoord);
             this.render();
         });
         
@@ -226,7 +230,7 @@ class GameWorldView {
     }
     
     _centerMapOnTileAtCoord(coord) {
-        let clickedTile = new Tile(Tile.gridPointForCoord(coord));
+        let clickedTile = Tile.integralTileHaving(coord);
         this.canvasView.viewportController.centerOnTile(clickedTile);
         this.render();
     }
@@ -330,37 +334,65 @@ export class WorldViewModel {
     }
 }
 
+export class EdgeOverscroll {
+    static clampedCoord(coord, planet, canvasTileSize, overscroll) {
+        return EdgeOverscroll._validCoordRect(planet, canvasTileSize, overscroll).clampedPoint(coord);
+    }
+    
+    static clampedTile(tile, planet, canvasTileSize, overscroll) {
+        let validTileRect = EdgeOverscroll._validCoordRect(planet, canvasTileSize, overscroll).inset(-1, -1);
+        return Tile.integralTileHaving(validTileRect.clampedPoint(tile.gridPoint));
+    }
+    
+    static _validCoordRect(planet, canvasTileSize, overscroll) {
+        let validCoordSize = {
+            width: Math.max(0, planet.rect.width + (2 * overscroll) - canvasTileSize.width),
+            height: Math.max(0, planet.rect.height + (2 * overscroll) - canvasTileSize.height)
+        };
+        return Rect.withCenter(planet.centerCoord, validCoordSize);
+    }
+}
+
 // Displays a WorldViewModel at a particular panning offset within an HTML canvas. Assign the centerCoord property or call setCenterTile to pan the view. Adjust the zoom level using the WorldViewModel.
 export class WorldViewport {
+    // Up on screen = negative Y offset. "South is up"
+    static worldUnitVectorForScreenDirection(direction) {
+        return Gaming.Vector.unitsByDirection[Gaming.directions.flippedY[direction]];
+    }
+    
     constructor(a) {
         this.model = a.model; // WorldViewModel
-        this.metrics = {
-            edgePadding: UI.deviceLengthForDOMLength(inj().content.worldView.edgePadding, a.devicePixelRatio)
-        };
+        this.metrics = inj().content.worldView;
         this.canvas = a.canvas;
         this._centerCoord = null;
-        // Setting centerTile sets centerCoord
+        // Setting centerTile sets _centerCoord
         this.setCenterTile(this.model.world.planet.centerTile);
+    }
+    
+    get zoomLevel() { return this.model.zoomLevel; }
+    set zoomLevel(value) {
+        this.model.zoomLevel = value;
+        // Adjust center for edge overscroll as needed
+        this.centerCoord = this._centerCoord;
     }
     
     // The world coordinate to draw at the center of the HTML canvas
     get centerCoord() { return this._centerCoord; }
     set centerCoord(value) {
-        this._centerCoord = value;
+        let canvasTileSize = this.model.projection.sizeForScreenSize(this.canvas);
+        this._centerCoord = EdgeOverscroll.clampedCoord(value, this.model.world.planet, canvasTileSize, this.metrics.edgeOverscroll);
     }
     
     // Use this instead of setting centerCoord directly, if you want to always "snap" the centerCoord to the center of a tile. e.g. so it doesn't drift around by a couple pixels if you repeatedly click the center tile on the screen.
     setCenterTile(tileOrCoord) {
         // And you center on the tile's center rather than the gridPoint, so the tile is nicely centered under your mouse. If you set to gridPoint, then a corner is under your mouse and if you drift 1 px left the next click will be on the adjacent tile.
-        if (tileOrCoord instanceof Tile) {
-            this.centerCoord = tileOrCoord.centerCoord;
-        } else {
-            this.centerCoord = new Tile(Tile.gridPointForCoord(tileOrCoord)).centerCoord;
+        if (!(tileOrCoord instanceof Tile)) {
+            tileOrCoord = Tile.integralTileHaving(tileOrCoord);
         }
+        let canvasTileSize = this.model.projection.sizeForScreenSize(this.canvas);
+        let clamped = EdgeOverscroll.clampedTile(tileOrCoord, this.model.world.planet, canvasTileSize, this.metrics.edgeOverscroll);
+        this._centerCoord = clamped.centerCoord;
     }
-    
-    get zoomLevel() { return this.model.zoomLevel; }
-    set zoomLevel(value) { this.model.zoomLevel = value; }
     
     // Returns a CanvasRenderingContext2D, with a translation applied
     // so tile coordinate identified by centerCoord renders at the 
@@ -396,7 +428,7 @@ export class WorldViewport {
         // given canvasPoint 256,63
         // relativeToCanvasCenter=56,-87
         // returns 0.25, -0.01125
-        let relativeToCanvasCenter = new Gaming.Point(
+        let relativeToCanvasCenter = new Point(
             canvasPoint.x - (0.5 * this.canvas.width),
             canvasPoint.y - (0.5 * this.canvas.height)
         );
@@ -410,12 +442,7 @@ export class WorldViewport {
         // in world coords, canvas left edge is 50 - half the canvas width.
         // transform: move canvas drawing x0 to 50 - half the canvas width.
         let centerScreenPoint = this.model.projection.screenPointForCoord(this.centerCoord);
-        return Gaming.Rect.withCenter(centerScreenPoint, {width: this.canvas.width, height: this.canvas.height}).integral();
-    }
-    
-    // Up on screen = negative Y offset. "South is up"
-    static worldUnitVectorForScreenDirection(direction) {
-        return Gaming.Vector.unitsByDirection[Gaming.directions.flippedY[direction]];
+        return Rect.withCenter(centerScreenPoint, {width: this.canvas.width, height: this.canvas.height}).integral();
     }
 }
 

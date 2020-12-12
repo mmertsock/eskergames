@@ -34,6 +34,7 @@ zoomLevels:
 
 worldView:
   canvasFillStyle: "hsl(34, 5%, 15%)"
+  edgeOverscroll: 1 # tile units
   tileGrid:
     strokeStyle: "hsla(0, 0%, 100%, 0.1)"
     lineWidth: 1
