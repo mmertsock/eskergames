@@ -2,6 +2,7 @@
 
 import { Strings } from './locale.js';
 import {
+    directions,
     Binding, BoolArray,
     CanvasStack, ChangeTokenBinding, CircularArray,
     Dispatch, DispatchTarget,
@@ -15,6 +16,7 @@ import {
     UndoStack,
     Vector
 } from './g.js';
+import { GameContent, GameScriptEngine } from './game-content.js';
 
 import * as Sweep from './sweep.js';
 import * as CivGame from './civ/game.js';
@@ -1275,15 +1277,6 @@ function saveStateTest() {
             this.assertEqual(gotItem.data.a, updatedData1.a);
         }
 
-        // this.assertEqual(sut.duplicateItem("bogus"), null);
-        // gotItem = sut.duplicateItem(item2.id);
-        // if (this.assertTrue(!!gotItem)) {
-        //     this.assertTrue(gotItem.id != item2.id);
-        //     this.assertEqual(gotItem.title, item2.title);
-        // }
-        // this.assertEqual(sut.itemsSortedByLastSaveTime.length, 3);
-        // console.table(sut.itemsSortedByLastSaveTime);
-
         this.assertTrue(sut.deleteItem(item1.id));
         this.assertEqual(sut.getItem(item1.id), null);
         this.assertEqual(sut.itemsSortedByLastSaveTime.length, 1);
@@ -2515,7 +2508,7 @@ let taskQueueTest = function() {
     }).buildAndRun();
 };
 
-let swept = {};
+class swept {}
 
 swept.gameTileTests = function() {
     new UnitTest("Sweep.GameTile", function() {
@@ -2735,50 +2728,202 @@ swept.autosaveTests = async function() {
     }).buildAndRun();
 };
 
-let civved = {};
+UnitTest.prototype.civRun = function(injBlock) {
+    let oldContent = CivGame.inj().content;
+    if (injBlock) { injBlock(); }
+    this.buildAndRun();
+    CivGame.inj().content = oldContent;
+    return this;
+};
 
-civved.baseGeometryTests = function() {
-    const Tile = CivGame.Tile;
-    new UnitTest("Civ.Tile", function() {
-        let tile15a = new Tile(1, 5);
-        let tile15b = new Tile(new Point(1, 5));
-        this.assertEqual(tile15b, tile15a);
-        this.assertEqual(tile15a.gridPoint.x, 1);
-        this.assertEqual(tile15a.gridPoint.y, 5);
-        this.assertEqual(tile15a.centerCoord, new Point(1.5, 5.5));
-        this.assertEqual(tile15a.rect, new Rect(1, 5, 1, 1));
-    }).buildAndRun();
+class civved {
+    static baseGeometryTests() {
+        const Tile = CivGame.Tile;
+        new UnitTest("Civ.Tile", function() {
+            let tile15a = new Tile(1, 5.83);
+            let tile15b = new Tile(new Point(1.07, 5));
+            let tile02 = new Tile(0, 2);
+            this.assertEqual(tile15b, tile15a);
+            this.assertEqual(tile15a.coord, new Point(1, 5));
+            this.assertEqual(tile15a.coord?.x, 1); // exact integer equality should always pass
+            this.assertEqual(tile15a.coord?.y, 5); // exact integer equality should always pass
+            this.assertEqual(tile15a.centerCoord, new Point(1.5, 5.5));
+            this.assertEqual(tile15a.rect, new Rect(1, 5, 1, 1));
+            this.assertTrue(!tile02.isEqual(tile15a));
+            this.assertEqual(tile02.adjacent(directions.N), new Tile(0, 3));
+            this.assertEqual(tile02.adjacent(directions.NE), new Tile(1, 3));
+            this.assertEqual(tile02.adjacent(directions.E), new Tile(1, 2));
+            this.assertEqual(tile02.adjacent(directions.SE), new Tile(1, 1));
+            this.assertEqual(tile02.adjacent(directions.NW), new Tile(-1, 3));
+        }).buildAndRun();
+        
+        new UnitTest("Civ.Tile.integralBehavior", function(coords, gridPoints) {
+            for (let i = 0; i < coords.length; i += 1) {
+                let coord = new Point(coords[i][0], coords[i][1]);
+                let expected = new Point(gridPoints[i][0], gridPoints[i][1]);
+                let tile = new Tile(coord);
+                this.assertEqual(tile.coord, expected, coord.debugDescription);
+            }
+        }).build()([
+            [0, 0],    [0.5, 0.5],     [0.999, 0.9999],
+            [1, 1],    [1.01, 0.99],   [57.234, 98.6],
+            [-0, -0],  [-0.01, -0.99], [-17.68, -4.03], [-7.00, 6.00]
+        ], [
+            [0, 0],    [0, 0],         [0, 0],
+            [1, 1],    [1, 0],         [57, 98],
+            [0, 0],    [-1, -1],       [-18, -5],       [-7, 6]
+        ]);
+    }
     
-    new UnitTest("Civ.Tile.gridPointForCoord", function(coords, gridPoints) {
-        for (let i = 0; i < coords.length; i += 1) {
-            let coord = new Point(coords[i][0], coords[i][1]);
-            let expected = new Point(gridPoints[i][0], gridPoints[i][1]);
-            let gridPoint = Tile.gridPointForCoord(coord);
-            this.assertEqual(gridPoint, expected, coord.debugDescription);
-        }
-    }).build()([
-        [0, 0],    [0.5, 0.5],     [0.999, 0.9999],
-        [1, 1],    [1.01, 0.99],   [57.234, 98.6],
-        [-0, -0],  [-0.01, -0.99], [-17.68, -4.03], [-7.00, 6.00]
-    ], [
-        [0, 0],    [0, 0],         [0, 0],
-        [1, 1],    [1, 0],         [57, 98],
-        [0, 0],    [-1, -1],       [-18, -5],       [-7, 6]
-    ]);
-};
+    static mapTests() {
+        const Tile = CivGame.Tile;
+        const MapSquare = CivGame.MapSquare;
+        new UnitTest("Civ.MapSquare", function() {
+            let sut = new MapSquare(null, new Tile(3, 4));
+            this.assertEqual(sut.tile, new Tile(3, 4));
+            this.assertEqual(sut.edges.length, 4);
+        }).buildAndRun();
+        
+        const RectMap = CivGame.RectMap;
+        new UnitTest("Civ.RectMap", function() {
+            let sut = new RectMap({ width: 4, height: 3 });
+            this.assertEqual(sut.size?.width, 4);
+            this.assertEqual(sut.size?.height, 3);
+            this.assertTrue(sut.isValidTile(new Tile(0, 0)));
+            this.assertTrue(sut.isValidTile(new Tile(0, 0)));
+            this.assertFalse(sut.isValidTile(new Tile(4, 0)));
+            this.assertFalse(sut.isValidTile(new Tile(0, 3)));
+            this.assertFalse(sut.isValidTile(new Tile(-1, 0)));
+            this.assertFalse(sut.isValidTile(new Tile(0, -1)));
+            let square = sut.squareAtTile(new Tile(0, 0));
+            this.assertEqual(square?.tile, new Tile(0, 0));
+            square = sut.squareAtTile(new Tile(3, 2));
+            this.assertEqual(square?.tile, new Tile(3, 2));
+            this.assertTrue(!sut.squareAtTile(new Tile(4, 0)));
+            this.assertTrue(!sut.squareAtTile(new Tile(0, 3)));
+            this.assertTrue(!sut.squareAtTile(new Tile(-1, 0)));
+            this.assertTrue(!sut.squareAtTile(new Tile(0, -1)));
+            
+            this.assertEqual(sut.adjacentSquare(sut.squareAtTile(new Tile(0, 0)), directions.N)?.tile, new Tile(0, 1));
+            this.assertEqual(sut.adjacentSquare(sut.squareAtTile(new Tile(0, 0)), directions.W), null);
+            this.assertEqual(sut.adjacentSquare(sut.squareAtTile(new Tile(0, 0)), directions.S), null);
+            this.assertEqual(sut.adjacentSquare(sut.squareAtTile(new Tile(0, 0)), directions.NE)?.tile, new Tile(1, 1));
+            this.assertEqual(sut.adjacentSquare(sut.squareAtTile(new Tile(3, 2)), directions.SW)?.tile, new Tile(2, 1));
+            this.assertEqual(sut.adjacentSquare(sut.squareAtTile(new Tile(3, 2)), directions.NE), null);
+            
+            let got = { x: "", y: "" };
+            sut.forEachSquare(s => {
+                got.x += `${s.tile.coord.x}`;
+                got.y += `${s.tile.coord.y}`;
+            });
+            this.assertEqual(got.y, "000011112222");
+            this.assertEqual(got.x, "012301230123");
+        }).buildAndRun();
+        
+        const TileEdge = CivGame.TileEdge;
+        new UnitTest("Civ.MapSquare.edges", function() {
+            let map = new RectMap({ width: 3, height: 5 });
+            let sut = map.squareAtTile(new Tile(0, 0));
+            if (!this.assertDefined(sut)) { return; }
+            let edge = sut.edge(MapSquare.edges.S);
+            if (this.assertDefined(edge)) {
+                this.assertEqual(edge.type, TileEdge.H);
+                this.assertTrue(edge.isHorizontal);
+                this.assertEqual(edge.tile, sut.tile);
+                this.assertEqual(edge.toTile, new Tile(0, -1));
+                this.assertEqual(edge.square?.tile, sut.tile);
+                this.assertEqual(edge.toSquare, null);
+                this.assertEqual(edge.unitRect, new Rect(0, -0.5, 1, 1));
+            }
+            edge = sut.edge(MapSquare.edges.E);
+            if (this.assertDefined(edge)) {
+                this.assertEqual(edge.type, TileEdge.V);
+                this.assertTrue(!edge.isHorizontal);
+                this.assertEqual(edge.tile, new Tile(1, 0));
+                this.assertEqual(edge.toTile, sut.tile);
+                this.assertEqual(edge.square?.tile, new Tile(1, 0));
+                this.assertEqual(edge.toSquare?.tile, sut.tile);
+                this.assertEqual(edge.unitRect, new Rect(0.5, 0, 1, 1));
+            }
+            this.assertDefined(sut.edge(MapSquare.edges.N));
+            this.assertDefined(sut.edge(MapSquare.edges.W));
+            
+            sut = map.squareAtTile(new Tile(2, 4));
+            if (!this.assertDefined(sut)) { return; }
+            edge = sut.edge(MapSquare.edges.N);
+            if (this.assertDefined(edge)) {
+                this.assertEqual(edge.type, TileEdge.H);
+                this.assertEqual(edge.tile, new Tile(2, 5));
+                this.assertEqual(edge.toTile, sut.tile);
+                this.assertEqual(edge.square, null);
+                this.assertEqual(edge.toSquare?.tile, sut.tile);
+            }
+            edge = sut.edge(MapSquare.edges.W);
+            if (this.assertDefined(edge)) {
+                this.assertEqual(edge.type, TileEdge.V);
+                this.assertEqual(edge.tile, sut.tile);
+                this.assertEqual(edge.toTile, new Tile(1, 4));
+                this.assertEqual(edge.square?.tile, sut.tile);
+                this.assertEqual(edge.toSquare?.tile, new Tile(1, 4));
+            }
+            
+            let result = "";
+            map.forEachEdge(edge => {
+                result += edge.type == TileEdge.H ? "H" : "V";
+                result += `${edge.tile.coord.x}${edge.tile.coord.y}`;
+            });
+            this.assertTrue(result.startsWith(
+                "H00V00H10V10H20V20V30H01V01H11V11H21V21V31"));
+            this.assertTrue(result.endsWith("V34H05H15H25"));
+        }).buildAndRun();
+    }
+    
+    static worldModelTests() {
+        const Tile = CivGame.Tile;
+        const Planet = CivGame.Planet;
+        const Terrain = CivGame.Terrain;
+        new UnitTest("Civ.Planet", function() {
+            let sut = new Planet({ size: {width: 6, height: 5} });
+            this.assertEqual(sut.map?.size?.width, 6);
+            this.assertEqual(sut.map?.size?.height, 5);
+            this.assertEqual(sut.rect, new Rect(0, 0, 6, 5));
+            let terrain = sut.map.squareAtTile(new Tile(2, 1))?.terrain;
+            if (this.assertTrue(terrain instanceof Terrain)) {
+                this.assertDefined(terrain.type?.id);
+                this.assertTrue(terrain.randomSeed >= 0);
+            }
+        }).civRun();
+        
+        const World = CivGame.World;
+        new UnitTest("Civ.World", function() {
+            let u1 = { unit: "a" };
+            let u2 = { unit: "b" };
+            let planet = new Planet({ size: { width: 4, height: 3 }});
+            let sut = new World({
+                planet: planet,
+                civs: [new CivGame.Civilization({name: "civA"}), new CivGame.Civilization({name: "civB"})],
+                units: [u1, u2]
+            });
+            this.assertEqual(sut.civs?.length, 2);
+            this.assertEqual(sut.planet, planet);
+            this.assertEqual(planet.world, sut);
+            if (sut.civs) {
+                this.assertEqual(sut.civs[0]?.world, sut);
+                this.assertEqual(sut.civs[1]?.world, sut);
+                this.assertEqual(sut.civs[0]?.name, "civA");
+                this.assertEqual(sut.civs[1]?.name, "civB");
+            }
+            this.assertEqual(sut.units?.length, 2);
+            if (sut.units) {
+                this.assertEqual(sut.units[0]?.world, sut);
+                this.assertEqual(sut.units[1]?.world, sut);
+                this.assertEqual(sut.units[0]?.unit, "a");
+                this.assertEqual(sut.units[1]?.unit, "b");
+            }
+        }).civRun();
+    }
 
-civved.worldModelTests = function() {
-    new UnitTest("Civ.Planet", function() {
-        let sut = new CivGame.Planet({ size: {width: 36, height: 25} });
-        this.assertEqual(sut.rect, new Rect(0, 0, 36, 25));
-        this.assertEqual(sut.size.width, 36);
-        this.assertEqual(sut.size.height, 25);
-        this.assertEqual(sut.centerTile, new CivGame.Tile(18, 12));
-        this.assertEqual(sut.centerCoord, new Point(18, 12.5));
-    }).buildAndRun();
-};
-
-civved.tileProjectionTests = function() {
+static tileProjectionTests() {
     new UnitTest("Civ.TileProjection", function() {
         let sut = new CivGame.TileProjection(1);
         this.assertEqual(sut.factor, 1);
@@ -2813,17 +2958,9 @@ civved.tileProjectionTests = function() {
             new Rect( -1,  2.25,   37,   4.23)),
             new Rect(-32, 72,    1184, 135));
     }).buildAndRun();
-};
+}
 
-UnitTest.prototype.civRun = function(injBlock) {
-    let oldContent = CivGame.inj().content;
-    if (injBlock) { injBlock(); }
-    this.buildAndRun();
-    CivGame.inj().content = oldContent;
-    return this;
-};
-
-civved.worldViewTests = function() {
+static worldViewTests() {
     const Tile = CivGame.Tile;
     let world = { planet: new CivGame.Planet({size: {width: 15, height: 10}}) };
     let zoomLevels = [10, 20, 30, 40, 50].map((z, i) => {
@@ -2836,8 +2973,8 @@ civved.worldViewTests = function() {
         };
     };
     
-    new UnitTest("Civ.WorldViewModel", function() {
-        let sut = new CivGameUI.WorldViewModel({
+    new UnitTest("Civ.GameWorldViewModel", function() {
+        let sut = new CivGameUI.GameWorldViewModel({
             world: world, zoomLevels: zoomLevels
         });
         this.assertEqual(CivGame.ZoomLevel.getDefault()?.index, 3);
@@ -2850,7 +2987,7 @@ civved.worldViewTests = function() {
     }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing the basics
     
     new UnitTest("Civ.WorldViewport", function() {
-        let viewModel = new CivGameUI.WorldViewModel({
+        let viewModel = new CivGameUI.GameWorldViewModel({
             world: world, zoomLevels: zoomLevels
         });
         let canvas = document.createElement("canvas");
@@ -2863,30 +3000,26 @@ civved.worldViewTests = function() {
         
         // 600x400 world
         this.assertEqual(sut.zoomLevel?.tileWidth, 40, "defaults to viewModel zoom");
-        this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "defaults to viewModel center Tile.centerCoord");
+        this.assertEqual(sut.centerCoord, new Point(7.5, 5), "defaults to viewModel exact center coord");
         // canvas is wider/shorter than the world
-        this.assertEqual(sut.viewportScreenRect, new Rect(-20, 71, canvas.width, canvas.height));
-        this.assertEqual(sut.coordForCanvasPoint(new Point(320, 149)), new Point(7.5, 5.5));
-        this.assertEqual(sut.coordForCanvasPoint(new Point(0, 0)), new Point(-0.5, 1.775));
+        this.assertEqual(sut.viewportScreenRect, new Rect(-20, 51, canvas.width, canvas.height));
+        this.assertEqual(sut.coordForCanvasPoint(new Point(320, 149)), new Point(7.5, 5.0));
+        this.assertEqual(sut.coordForCanvasPoint(new Point(0, 0)), new Point(-0.5, 1.275));
         
         canvas.width = 400;
         canvas.height = 400;
-        this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "retains center after canvas change");
-        this.assertEqual(sut.viewportScreenRect, new Rect(100, 20, canvas.width, canvas.height));
+        this.assertEqual(sut.centerCoord, new Point(7.5, 5), "retains center after canvas change");
+        this.assertEqual(sut.viewportScreenRect, new Rect(100, 0, canvas.width, canvas.height));
         
         sut.zoomLevel = zoomLevels[0];
         this.assertEqual(sut.zoomLevel?.tileWidth, 10); //150x100 world
-        this.assertEqual(sut.centerCoord, new Point(7.5, 5.5), "retains center after jumping");
-        this.assertEqual(sut.viewportScreenRect, new Rect(-125, -145, canvas.width, canvas.height));
+        this.assertEqual(sut.centerCoord, new Point(7.5, 5), "retains center after jumping");
+        this.assertEqual(sut.viewportScreenRect, new Rect(-125, -150, canvas.width, canvas.height));
         
         sut.centerCoord = new Point(-1.5, 2);
         this.assertEqual(sut.zoomLevel?.tileWidth, 10, "retains zoom after jumping");
         this.assertEqual(sut.centerCoord, new Point(-1.5, 2));
         this.assertEqual(sut.viewportScreenRect, new Rect(-215, -180, canvas.width, canvas.height));
-        
-        sut.setCenterTile(new Tile(2, 4));
-        this.assertEqual(sut.zoomLevel?.tileWidth, 10, "retains zoom after jumping");
-        this.assertEqual(sut.centerCoord, new Point(2.5, 4.5));
         
         logTestMsg("With overscroll=1...")
         sut.zoomLevel = zoomLevels[3];
@@ -2900,8 +3033,6 @@ civved.worldViewTests = function() {
         });
         sut.centerCoord = new Point(6, 4);
         this.assertEqualTol(sut.centerCoord, new Point(6, 4), 0.01, "med canvas, overscroll, middle coord ok");
-        sut.setCenterTile(new Tile(6, 4));
-        this.assertEqualTol(sut.centerCoord, new Point(6.5, 4.5), 0.01, "med canvas, overscroll, middle tile ok");
         sut.centerCoord = new Point(0, 0);
         this.assertEqualTol(sut.centerCoord, new Point(4, 2.75), 0.01, "med canvas, overscroll, 0,0 -> inward");
         sut.centerCoord = new Point(15, 10);
@@ -2923,44 +3054,70 @@ civved.worldViewTests = function() {
     
     new UnitTest("Civ.EdgeOverscroll", function() {
         const p = new CivGame.Planet({size: {width: 15, height: 10}});
+        const VM = class {
+            constructor(p) { this.p = p; }
+            get worldRect() { return this.p.rect; }
+        };
+        const vm = new VM(p);
         let sut = CivGameUI.EdgeOverscroll;
         let c = { width: 0.2, height: 0.1 }; // canvasTileSize
         let o = 0; // overscroll
-        this.assertEqualTol(sut.clampedCoord(new Point(6, 4), p, c, o), new Point(6, 4), 0.01, "tiny canvas, middle ok");
-        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), p, c, o), new Point(0.1, 0.05), 0.01, "tiny canvas, 0,0 -> shift by half canvas size");
-        this.assertEqualTol(sut.clampedCoord(new Point(15, 10), p, c, o), new Point(14.9, 9.95), 0.01, "tiny canvas, corner -> shift back");
-        this.assertEqualTol(sut.clampedTile(new Tile(6, 4), p, c, o), new Tile(6, 4), 0.01, "tiny canvas, middle tile ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(6, 4), vm, c, o), new Point(6, 4), 0.01, "tiny canvas, middle ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), vm, c, o), new Point(0.1, 0.05), 0.01, "tiny canvas, 0,0 -> shift by half canvas size");
+        this.assertEqualTol(sut.clampedCoord(new Point(15, 10), vm, c, o), new Point(14.9, 9.95), 0.01, "tiny canvas, corner -> shift back");
         
         // clamp y to center. x has 7 tiles of play
         c = { width: 8, height: 20 };
-        this.assertEqualTol(sut.clampedCoord(new Point(9, 4), p, c, o), new Point(9, 5), 0.01, "tall canvas, middle-x ok, y clamped");
-        this.assertEqualTol(sut.clampedCoord(new Point(-2, 14), p, c, o), new Point(4, 5), 0.01, "tall canvas, off-world, clamp");
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 4), vm, c, o), new Point(9, 5), 0.01, "tall canvas, middle-x ok, y clamped");
+        this.assertEqualTol(sut.clampedCoord(new Point(-2, 14), vm, c, o), new Point(4, 5), 0.01, "tall canvas, off-world, clamp");
         
         // clamp x to center. y has 8 tiles of play.
         c = { width: 17, height: 2};
-        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), p, c, o), new Point(7.5, 3), 0.01, "wide canvas, middle-y ok, x clamped");
-        this.assertEqualTol(sut.clampedCoord(new Point(-2, 14), p, c, o), new Point(7.5, 9), 0.01, "wide canvas, off-world, clamp");
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), vm, c, o), new Point(7.5, 3), 0.01, "wide canvas, middle-y ok, x clamped");
+        this.assertEqualTol(sut.clampedCoord(new Point(-2, 14), vm, c, o), new Point(7.5, 9), 0.01, "wide canvas, off-world, clamp");
         
         c = { width: 73.06, height: 492.18};
-        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
-        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
-        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
-        this.assertEqualTol(sut.clampedCoord(new Point(-5, 15), p, c, o), new Point(7.5, 5), 0.01, "huge canvas, off-map ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), vm, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
+        this.assertEqualTol(sut.clampedCoord(new Point(9, 3), vm, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
+        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), vm, c, o), new Point(7.5, 5), 0.01, "huge canvas, clamp all to middle");
+        this.assertEqualTol(sut.clampedCoord(new Point(-5, 15), vm, c, o), new Point(7.5, 5), 0.01, "huge canvas, off-map ok");
         
         o = 2.5;
         c = { width: 0.2, height: 0.1 };
-        this.assertEqualTol(sut.clampedCoord(new Point(6, 4), p, c, o), new Point(6, 4), 0.01, "tiny canvas, middle ok");
-        this.assertEqualTol(sut.clampedCoord(new Point(-1.5, 11), p, c, o), new Point(-1.5, 11), 0.01, "tiny canvas, inside overscroll ok");
-        this.assertEqualTol(sut.clampedCoord(new Point(-3.5, 14.5), p, c, o), new Point(-2.4, 12.45), 0.01, "tiny canvas, shift to overscrolled edge");
+        this.assertEqualTol(sut.clampedCoord(new Point(6, 4), vm, c, o), new Point(6, 4), 0.01, "tiny canvas, middle ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(-1.5, 11), vm, c, o), new Point(-1.5, 11), 0.01, "tiny canvas, inside overscroll ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(-3.5, 14.5), vm, c, o), new Point(-2.4, 12.45), 0.01, "tiny canvas, shift to overscrolled edge");
         
         c = { width: 18, height: 10 };
-        logTestMsg(sut._validCoordRect(p, c, o).debugDescription);
-        this.assertEqualTol(sut.clampedCoord(new Point(8, 4), p, c, o), new Point(8, 4), 0.01, "similar canvas, middle ok");
-        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), p, c, o), new Point(6.5, 2.5), 0.01, "tiny canvas, 0,0 shifted by half canvas size minus overscroll");
+        logTestMsg(sut._validCoordRect(vm, c, o).debugDescription);
+        this.assertEqualTol(sut.clampedCoord(new Point(8, 4), vm, c, o), new Point(8, 4), 0.01, "similar canvas, middle ok");
+        this.assertEqualTol(sut.clampedCoord(new Point(0, 0), vm, c, o), new Point(6.5, 2.5), 0.01, "tiny canvas, 0,0 shifted by half canvas size minus overscroll");
     }).buildAndRun();
-};
+} // end worldViewTests
 
-civved.systemUItests = function() {
+static savegameTests() {
+    new UnitTest("Civ.savegame", function() {
+        let newGameModel = CivSystemUI._unitTestSymbols.NewGameDialog.defaultModelValue();
+        let newGame = CivGame.Game.createNewGame(newGameModel);
+        this.assertDefined(newGame.world);
+        this.assertDefined(newGame.world?.planet?.map);
+        let terrain = newGame.world?.planet?.map?.squareAtTile(new CivGame.Tile(1, 3))?.terrain;
+        this.assertDefined(terrain);
+        this.assertTrue(terrain?.type?.index >= 0);
+        this.assertTrue(terrain?.randomSeed >= 0);
+        this.assertTrue(newGame.world?.civs?.length >= 0);
+        this.assertDefined(newGame.players[0]?.name);
+        this.assertDefined(newGame.players[0]?.civ);
+        let sz = newGame.serializedSavegameData;
+        let fromSz = CivGame.Game.fromSerializedSavegame(sz);
+        let sz2 = fromSz.serializedSavegameData;
+        let szs = JSON.stringify(sz);
+        let szs2 = JSON.stringify(sz2);
+        this.assertEqual(szs, szs2);
+    }).civRun();
+}
+
+static systemUItests() {
     new UnitTest("Civ.UI.traverseSubviews", function() {
         const UI = CivSystemUI.UI;
         let StubView = class {
@@ -3006,7 +3163,9 @@ civved.systemUItests = function() {
         this.assertEqual(leafNullViews.visitCount, 1, "leafNullViews");
         this.assertEqual(leafBogusViews.visitCount, 1, "leafBogusViews");
     }).buildAndRun();
-};
+}
+
+} // end class civved
 
 swept.initialized = false;
 async function initSweep() {
@@ -3044,20 +3203,50 @@ let standardSuite = new TestSession([
     swept.sharingTests,
     swept.autosaveTests,
     civved.baseGeometryTests,
+    civved.mapTests,
     civved.worldModelTests,
-    civved.tileProjectionTest,
+    civved.tileProjectionTests,
     civved.worldViewTests,
+    civved.savegameTests,
     civved.systemUItests
     // simDateTest
 ]);
 
 let taskSuite = new TestSession([
+    saveStateTest,
+    boolArrayTest,
+    base64Test,
     civved.baseGeometryTests,
+    civved.mapTests,
     civved.worldModelTests,
     civved.tileProjectionTests,
     civved.worldViewTests,
+    civved.savegameTests,
     civved.systemUItests
 ]);
 
+async function loadCivvedContent() {
+    console.log("loadCivvedContent");
+    CivGame.inj().gse = new GameScriptEngine();
+    let content = await GameContent.loadYamlFromLocalFile(`civ/content.yaml`, GameContent.cachePolicies.forceOnFirstLoad);
+    Strings.initialize(content.strings, content.pluralStrings, navigator.language);
+    return content;
+}
+
+async function initCivved() {
+    console.log("initCivved");
+    CivGame.Env.initialize();
+    let content = await loadCivvedContent();
+    CivGame.Game.initialize(content);
+    CivGame.inj().rng = Rng.shared;
+}
+
 // TestSession.current = taskSuite;
 TestSession.current = standardSuite;
+
+export async function uiReady() {
+    console.log("uiReady");
+    await initCivved();
+    console.log("gonna run");
+    TestSession.current.run(document.querySelector("#testOutput"));
+}

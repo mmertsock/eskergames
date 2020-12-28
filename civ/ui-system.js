@@ -1,6 +1,6 @@
 import * as Gaming from '../g.js';
 import { Strings } from '../locale.js';
-import { inj, DifficultyOption, Game, MapSizeOption } from './game.js';
+import { inj, DifficultyOption, Env, Game, MapSizeOption } from './game.js';
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, ToolButton = Gaming.ToolButton;
 
@@ -11,21 +11,6 @@ export function uiReady() {
     NewGameDialog.initialize();
     inj().keyboardInputController = new KeyboardInputController();
     inj().views.root = new DOMRootView();
-    let game = null;
-    try {
-        let data = inj().storage.autosaveData;
-        if (data) {
-            game = Game.fromSerializedSavegame(data);
-        }
-    } catch (e) {
-        debugWarn(`Failed to load autosave: ${e.message}`);
-        debugLog(e.stack);
-    }
-    if (game) {
-        inj().gse.execute("resumeSavedGame", game, null);
-    } else {
-        inj().gse.execute("showFirstRunView", null, null);
-    }
 }
 
 export class UI {
@@ -128,8 +113,20 @@ export class ScreenView {
         return this.screenManager.show(this);
     }
     
-    didShow() { }
-    didHide() { }
+    
+    didShow() {
+        // resume animation
+        UI.traverseSubviews(this, view => {
+            if (view.screenDidShow) { view.screenDidShow(this); }
+        });
+    }
+    
+    didHide() {
+        // pause animation
+        UI.traverseSubviews(this, view => {
+            if (view.screenDidHide) { view.screenDidHide(this); }
+        });
+    }
 }
 
 class KeyboardInputController {
@@ -211,6 +208,13 @@ class FirstRunView extends ScreenView {
             title: Strings.str("newGameButton"),
             clickScript: "showNewGameDialog"
         });
+        if (!Env.isProduction) {
+            new Gaming.ToolButton({
+                parent: container,
+                title: Strings.str("quickStartButton"),
+                clickScript: "quickStartNewGame"
+            });
+        }
         new Gaming.ToolButton({
             parent: container,
             title: Strings.str("loadGameButton"),
@@ -309,6 +313,21 @@ class NewGameDialog extends SingleModalDialog {
         inj().gse.registerCommand("showNewGameDialog", (subject, evt) => {
             NewGameDialog.show();
         });
+        inj().gse.registerCommand("quickStartNewGame", () => {
+            inj().gse.execute("beginNewGame", NewGameDialog.defaultModelValue(), null);
+        });
+    }
+    
+    static stepViewTypes() {
+        return [NewGameDialog.DifficultyStepView, NewGameDialog.WorldStepView, NewGameDialog.PlayerCivStepView, NewGameDialog.PlayerInfoStepView, NewGameDialog.OpponentsStepView, NewGameDialog.SummaryStepView];
+    }
+    
+    static defaultModelValue() {
+        let model = {};
+        NewGameDialog.stepViewTypes().forEach(type => {
+            model = Object.assign(model, type.defaultModelValue());
+        });
+        return model;
     }
     
     constructor() {
@@ -324,14 +343,7 @@ class NewGameDialog extends SingleModalDialog {
         });
         this.model = {};
         
-        let steps = [
-            new NewGameDialog.DifficultyStepView({ model: this.model }),
-            new NewGameDialog.WorldStepView({ model: this.model }),
-            new NewGameDialog.PlayerCivStepView({ model: this.model }),
-            new NewGameDialog.PlayerInfoStepView({ model: this.model }),
-            new NewGameDialog.OpponentsStepView({ model: this.model }),
-            new NewGameDialog.SummaryStepView({ model: this.model })
-        ];
+        let steps = NewGameDialog.stepViewTypes().map(ctor => new ctor(this.model));
         this.wizard = new WizardView({
             elem: this.contentElem,
             steps: steps,
@@ -358,9 +370,13 @@ class NewGameDialog extends SingleModalDialog {
 }
 
 NewGameDialog.DifficultyStepView = class DifficultyStepView extends WizardStepView {
-    constructor(a) {
+    static defaultModelValue() {
+        return { difficulty: DifficultyOption.getDefault() };
+    }
+    
+    constructor(model) {
         super();
-        this.model = a.model;
+        this.model = model;
         this.elem = Gaming.GameDialog.createFormElem();
 
         let initialDifficulty = DifficultyOption.indexOrDefault(inj().storage.lastDifficultyIndex);
@@ -392,9 +408,13 @@ NewGameDialog.DifficultyStepView = class DifficultyStepView extends WizardStepVi
 };
 
 NewGameDialog.WorldStepView = class WorldStepView extends WizardStepView {
-    constructor(a) {
+    static defaultModelValue() {
+        return { world: { planet: {mapSizeOption: MapSizeOption.getDefault()} } };
+    }
+    
+    constructor(model) {
         super();
-        this.model = a.model;
+        this.model = model;
         this.elem = Gaming.GameDialog.createFormElem();
         
         let initialSize = MapSizeOption.getDefault();
@@ -414,9 +434,7 @@ NewGameDialog.WorldStepView = class WorldStepView extends WizardStepView {
     
     get value() {
         return {
-            planet: {
-                mapSizeOption: this.mapSizeOption
-            }
+            planet: {mapSizeOption: this.mapSizeOption}
         };
     }
     
@@ -434,9 +452,13 @@ NewGameDialog.WorldStepView = class WorldStepView extends WizardStepView {
 };
 
 NewGameDialog.PlayerCivStepView = class PlayerCivStepView extends WizardStepView {
-    constructor(a) {
+    static defaultModelValue() {
+        return { playerInfo: { name: "Defacto" } };
+    }
+    
+    constructor(model) {
         super();
-        this.model = a.model;
+        this.model = model;
         this.elem = Gaming.GameDialog.createFormElem();
         this.elem.innerText = "pick a civ from a list";
         this.model.playerCiv = 7; // temp
@@ -444,9 +466,13 @@ NewGameDialog.PlayerCivStepView = class PlayerCivStepView extends WizardStepView
 };
 
 NewGameDialog.PlayerInfoStepView = class PlayerInfoStepView extends WizardStepView {
-    constructor(a) {
+    static defaultModelValue() {
+        return {};
+    }
+    
+    constructor(model) {
         super();
-        this.model = a.model;
+        this.model = model;
         this.elem = Gaming.GameDialog.createFormElem();
         this.elem.innerText = "enter player/leader info, with defaults based on the chosen civ";
         this.model.playerInfo = {
@@ -459,9 +485,13 @@ NewGameDialog.PlayerInfoStepView = class PlayerInfoStepView extends WizardStepVi
 };
 
 NewGameDialog.OpponentsStepView = class OpponentsStepView extends WizardStepView {
-    constructor(a) {
+    static defaultModelValue() {
+        return { opponents: 5 };
+    }
+    
+    constructor(model) {
         super();
-        this.model = a.model;
+        this.model = model;
         this.elem = Gaming.GameDialog.createFormElem();
         this.elem.innerText = "configure opponents";
         this.model.opponents = 5; // temp
@@ -469,15 +499,19 @@ NewGameDialog.OpponentsStepView = class OpponentsStepView extends WizardStepView
 };
 
 NewGameDialog.SummaryStepView = class SummaryStepView extends WizardStepView {
-    constructor(a) {
+    static defaultModelValue() {
+        return null;
+    }
+    
+    constructor(model) {
         super();
-        this.model = a.model;
+        this.model = model;
         this.elem = Gaming.GameDialog.createFormElem();
         let rows = [
-            { label: Strings.str("difficultyLabel"), value: () => this.model.difficulty.name },
-            { label: Strings.str("worldConfigLabel"), value: () => this.model.world.planet.mapSizeOption.name },
+            { label: Strings.str("difficultyLabel"), value: () => this.model.difficulty?.name },
+            { label: Strings.str("worldConfigLabel"), value: () => this.model.world?.planet.mapSizeOption?.name },
             { label: Strings.str("playerCivLabel"), value: () => "Egypt: aggressive, perfectionist" },
-            { label: Strings.str("playerNameLabel"), value: () => this.model.playerInfo.name },
+            { label: Strings.str("playerNameLabel"), value: () => this.model.playerInfo?.name },
             { label: Strings.str("opponentsConfigLabel"), value: () => this.model.opponents }
         ];
         
@@ -518,3 +552,7 @@ class DataTableView {
         });
     }
 }
+
+export const _unitTestSymbols = {
+    NewGameDialog: NewGameDialog
+};

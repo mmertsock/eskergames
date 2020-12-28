@@ -58,6 +58,26 @@ class AnimationDelegate {
     }
 }
 
+class CivApp {
+    static ready() {
+        let game = null;
+        try {
+            let data = inj().storage.autosaveData;
+            if (data) {
+                game = Game.fromSerializedSavegame(data);
+            }
+        } catch (e) {
+            Gaming.debugWarn(`Failed to load autosave: ${e.message}`);
+            Gaming.debugLog(e.stack);
+        }
+        if (game) {
+            inj().gse.execute("resumeSavedGame", game, null);
+        } else {
+            inj().gse.execute("showFirstRunView", null, null);
+        }
+    }
+}
+
 async function loadContent() {
     GameScriptEngine.shared = new GameScriptEngine();
     inj().gse = GameScriptEngine.shared;
@@ -78,4 +98,5 @@ export async function initialize() {
     Game.initialize(content);
     uiGameInitialize();
     uiReady();
+    CivApp.ready();
 }

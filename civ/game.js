@@ -2,7 +2,8 @@ import * as Gaming from '../g.js';
 import { Strings } from '../locale.js';
 import { GameContent } from '../game-content.js';
 
-const debugLog = Gaming.debugLog, Point = Gaming.Point, Rect = Gaming.Rect;
+const debugLog = Gaming.debugLog, directions = Gaming.directions, precondition = Gaming.precondition;
+const Point = Gaming.Point, Vector = Gaming.Vector, Rect = Gaming.Rect;
 
 export class Env {
     static initialize() {
@@ -31,7 +32,9 @@ Env.libURLPath = '../';
 export class Identifier {
     // 16 hex digits = 64 bits of entropy
     static random() { return inj().rng.nextHexString(16); }
+    static randomSeed() { return inj().rng.nextIntOpenRange(0, 256); }
 }
+Identifier.maxRandomSeed = 256;
 
 export class Injection {
 }
@@ -41,8 +44,9 @@ export function inj() { return Injection.shared; }
 export class Game {
     static initialize(content) {
         preprocessContent({
-            addIndexes: [content.difficulties, content.world.mapSizes, content.zoomLevels],
-            addIsDefault: [content.difficulties, content.world.mapSizes, content.zoomLevels],
+            addIndexes: [content.difficulties, content.world.mapSizes, content.zoomLevels, Terrain.baseTypes],
+            addIDs: [content.spritesheets],
+            addIsDefault: [content.difficulties, content.world.mapSizes, content.zoomLevels, Terrain.baseTypes],
             localizeNames: [content.difficulties, content.world.mapSizes]
         });
         inj().views = { };
@@ -81,7 +85,18 @@ export class Game {
             Sz.key("civ", Sz.reference("id", Civilization.name))
         ])
         .ruleset(Planet.name, Planet.fromSavegame, [
-            Sz.key("size")
+            Sz.key("map", RectMap.name)
+        ])
+        .ruleset(RectMap.name, RectMap.fromSavegame, [
+            Sz.key("size"),
+            Sz.key("flattenedSquares", [MapSquare.name])
+        ])
+        .ruleset(MapSquare.name, MapSquare.fromSavegame, [
+            Sz.key("terrain", Terrain.name)
+        ])
+        .ruleset(Terrain.name, Terrain.fromSavegame, [
+            Sz.key("baseTypeIndex"),
+            Sz.key("randomSeed")
         ])
         .ruleset(Civilization.name, Civilization.fromSavegame, [
             Sz.key("id"),
@@ -119,32 +134,24 @@ export class Game {
     }
 }
 
-// A discrete unit-rectangle tile located in a world. Immutable
+// Describes the integer coordinate bounds of a discrete unit-rectangle tile. Immutable
 export class Tile {
-    static gridPointForCoord(coord) {
-        return new Point(Math.floor(coord.x), Math.floor(coord.y));
+    constructor(coordOrX, y) {
+        this.coord = new Point(coordOrX, y).floor();
+        this.centerCoord = new Point(this.coord.x + 0.5, this.coord.y + 0.5);
+        this.rect = new Rect(this.coord, Tile.unitSize);
     }
-    static integralTileHaving(coord) {
-        return new Tile(Tile.gridPointForCoord(coord));
-    }
-    
-    constructor(xOrPoint, y) {
-        // Grid location and identity
-        this.gridPoint = new Point(xOrPoint, y);
-        // Precise center point, e.g. (1.5, -0.5)
-        this.centerCoord = new Point(this.gridPoint.x + 0.5, this.gridPoint.y + 0.5);
-        // Rect of unit size centered on centerCoord, e.g. (2,2,1,1)
-        // Rect's origin is == gridPoint
-        this.rect = new Rect(this.gridPoint, Tile.unitSize);
-    }
-    
     isEqual(other) {
-        if (!(other instanceof Tile)) { return false; }
-        return this.gridPoint.isEqual(other.gridPoint, 0.01);
+        return this.coord.x == other.coord?.x
+            && this.coord.y == other.coord?.y;
     }
     
     get debugDescription() {
-        return "T" + this.gridPoint.debugDescription;
+        return `T(${this.coord.x},${this.coord.y})`;
+    }
+    
+    adjacent(direction) {
+        return new Tile(this.coord.adding(Gaming.Vector.manhattanUnits[direction]));
     }
 }
 Tile.unitSize = { width: 1, height: 1};
@@ -156,10 +163,47 @@ Gaming.Serializer.prototype.pointRuleset = function() {
     ]);
 };
 Gaming.Serializer.prototype.tileRuleset = function() {
-    return this.ruleset(Tile.name, a => new Tile(a.gridPoint), [
-        Gaming.Serializer.key("gridPoint", Point.name)
+    return this.ruleset(Tile.name, a => new Tile(a.coord), [
+        Gaming.Serializer.key("coord", Point.name)
     ]);
 };
+
+export class TileEdge {
+    // type == TileEdge.H or .V
+    constructor(map, tile, type) {
+        this.map = map;
+        this.tile = tile;
+        this.type = type;
+        let metrics = TileEdge.types[this.type];
+        this.toTile = tile.adjacent(metrics.tileDirection);
+        this.unitRect = this.tile.rect.offsetBy(metrics.unitRectOffset);
+        this.isHorizontal = metrics.isHorizontal;
+    }
+    
+    get debugDescription() {
+        return `<TileEdge:${TileEdge.types[this.type].description} ${this.tile.debugDescription}-${this.toTile.debugDescription}>`;
+    }
+    get square() { return this.map.squareAtTile(this.tile); }
+    get toSquare() { return this.map.squareAtTile(this.toTile); }
+}
+TileEdge.H = 0; // Horizontal line between Tiles x,y and x,y-1
+TileEdge.V = 1; // Vertical line between Tiles x,y and x-1,y
+TileEdge.types = [
+    {
+        description: "H",
+        isHorizontal: true,
+        lineOffset: new Vector(1, 0),
+        tileDirection: directions.S,
+        unitRectOffset: new Vector(0, -0.5)
+    },
+    {
+        description: "V",
+        isHorizontal: false,
+        lineOffset: new Vector(0, 1),
+        tileDirection: directions.W,
+        unitRectOffset: new Vector(-0.5, 0)
+    }
+];
 
 // Projects a plane of Tile coordinates onto screen points. Origin and y-direction of both coordinate systems are identical, and both are unbounded. All screen points returned are rounded to integers, but non-integer screenPoint inputs are ok. Tile coordinate output can be non-integer.
 export class TileProjection {
@@ -207,44 +251,197 @@ export class TileProjection {
     }
 }
 
+// The geometry of a game world, and all objects located within the world.
 export class World {
     static fromSavegame(a) { return new World(a); }
     
     static createNew(model) {
-        let planet = Planet.createNew(model.planet);
+        let sizeOption = model.planet.mapSizeOption;
         return new World({
-            planet: planet,
+            planet: new Planet({ size: sizeOption.size }),
             civs: [new Civilization({ name: "Placelandia" })],
             units: [new CivUnit({
                 type: "Settler",
-                tile: new Tile(planet.centerTile.gridPoint.adding(2, 3))
+                tile: new Tile(new Point(sizeOption.size.width * 0.48, sizeOption.size.height * 0.7))
             })]
         });
     }
     
     constructor(a) {
         this.planet = a.planet;
-        this.civs = a.civs;
-        this.units = a.units;
+        this.civs = Array.isArray(a.civs) ? a.civs : [];
+        this.units = Array.isArray(a.units) ? a.units : [];
+        this.planet.world = this;
+        this.civs.forEach(item => item.world = this);
+        this.units.forEach(item => item.world = this);
     }
 }
 
-export class Planet {
-    static fromSavegame(a) { return new Planet(a); }
+// Data stored at a Tile within a specific RectMap
+// Abstract class.
+export class MapSquare {
+    constructor(map, tile) {
+        this.map = map;
+        this.tile = tile;
+        this.edges = new Array(4);
+    }
     
-    static createNew(model) {
-        return new Planet({ size: model.mapSizeOption.size });
+    neighbor(compassDirection) {
+        return this.map.adjacentSquare(this, compassDirection);
+    }
+    edge(edgeDirection) { return this.edges[edgeDirection]; }
+    
+    rehydrate(data) {
+        Object.assign(this, data);
+    }
+}
+MapSquare.edges = { N: 0, E: 1, S: 2, W: 3 };
+
+export class RectMap {
+    static fromSavegame(a) {
+        let map = new RectMap(a.size);
+        let i = 0;
+        map.forEachSquare(square => {
+            square.rehydrate(a.flattenedSquares[i]);
+            i += 1;
+        });
+        return map;
+    }
+    
+    constructor(size) {
+        precondition(size?.width > 0, "RectMap width > 0");
+        precondition(size?.height > 0, "RectMap height > 0");
+        this.size = size;
+        this.tileRect = new Rect(0, 0, size.width, size.height);
+        this._squares = Array.make2D(this.size, coord => {
+            return new MapSquare(this, new Tile(coord));
+        });
+        this._edges = [];
+        for (let y = 0; y <= this.size.height; y += 1) {
+            for (let x = 0; x <= this.size.width; x += 1) {
+                // Edges pointing N and W of square (x, y)
+                if (x < this.size.width) {
+                    let edge = new TileEdge(this, new Tile(x, y), TileEdge.H);
+                    this._edges.push(edge);
+                    if (y > 0) {
+                        this._squares[y-1][x].edges[MapSquare.edges.N] = edge;
+                    }
+                    if (y < this.size.height) {
+                        this._squares[y][x].edges[MapSquare.edges.S] = edge;
+                    }
+                }
+                if (y < this.size.height) {
+                    let edge = new TileEdge(this, new Tile(x, y), TileEdge.V);
+                    this._edges.push(edge);
+                    if (x > 0) {
+                        this._squares[y][x-1].edges[MapSquare.edges.E] = edge;
+                    }
+                    if (x < this.size.width) {
+                        this._squares[y][x].edges[MapSquare.edges.W] = edge;
+                    }
+                }
+            }
+        }
+    }
+    
+    // For serialization
+    get flattenedSquares() { return this.flatMapSquares(s => s); }
+    
+    isValidTile(tile) { return this.tileRect.containsTile(tile.coord); }
+    
+    // The MapSquare at a given coordinate. Null if invalid coordinate
+    squareAtTile(tile) {
+        if (!this.isValidTile(tile)) { return null; }
+        return this._squares[tile.coord.y][tile.coord.x];
+    }
+    
+    forEachSquare(block) {
+        this._squares.forEachFlat(block);
+    }
+    
+    // Loops over unique edges, sorted by y then x then H edge then V edge
+    forEachEdge(block) {
+        this._edges.forEach(block);
+    }
+    
+    // Returns a one-dimensional array sorted by y then x
+    flatMapSquares(block) {
+        let mapped = [];
+        this._squares.forEachFlat(s => mapped.push(block(s)));
+        return mapped;
+    }
+    
+    // One of eight adjacent squares, if in the map's bounds
+    adjacentSquare(square, compassDirection) {
+        return this.squareAtTile(square.tile.adjacent(compassDirection));
+    }
+}
+
+// Just the terrain description, and any global/wholistic terrain behavior.
+// "Planet as a character"
+export class Planet {
+    static fromSavegame(a) {
+        let planet = new Planet(a);
+        planet.map.forEachSquare(square => square.terrain.planet = planet);
+        return planet;
     }
     
     constructor(a) {
-        this.rect = new Rect(new Point(0, 0), a.size);
-        this._centerTile = Tile.integralTileHaving(this.rect.center);
+        this.world = null;
+        if (a.map) {
+            this.map = a.map;
+        } else {
+            this.map = new RectMap(a.size);
+            this.map.forEachSquare(square => {
+                square.terrain = new Terrain({ planet: this });
+            });
+            // Now make the edges between each piece of terrain
+        }
     }
     
-    get size() { return this.rect.size; }
-    get centerTile() { return this._centerTile; }
-    get centerCoord() { return this.rect.center; }
+    get rect() { return this.map.tileRect; }
 }
+
+// Describes a specific type of terrain.
+// A MapSquare is described by one Terrain; a Terrain doesn't know about a location.
+export class Terrain {
+    static baseTypeOrDefault(index) { return GameContent.itemOrDefaultFromArray(Terrain.baseTypes, index); }
+    
+    static fromSavegame(a) {
+        return new Terrain(a);
+    }
+    
+    constructor(a) {
+        this.planet = a.planet;
+        let index = Number.isInteger(a.baseTypeIndex) ? a.baseTypeIndex : inj().rng.nextIntOpenRange(0, Terrain.baseTypes.length);
+        this.type = Terrain.baseTypeOrDefault(index);
+        this.randomSeed = Number.isInteger(a.randomSeed) ? a.randomSeed : Identifier.randomSeed();
+    }
+    
+    get baseTypeIndex() { return this.type.index; }
+    
+    get debugDescription() {
+        return `<Terrain ${this.type}>`;
+    }
+}
+Terrain.baseTypes = [
+    {
+        id: "ocean"
+    },
+    {
+        id: "coast"
+    },
+    {
+        id: "grass",
+        isDefault: true
+    },
+    {
+        id: "plains"
+    },
+    {
+        id: "desert"
+    }
+];
 
 export class Civilization {
     static fromSavegame(a) { return new Civilization(a); }
@@ -293,14 +490,14 @@ class GameStorage {
         return this.getObject(this.preferencesCollection, "lastDifficultyIndex");
     }
     set lastDifficultyIndex(value) {
-        this.setObject(this.preferencesCollection, "lastDifficultyIndex", value);
+        this.setObject(this.preferencesCollection, "lastDifficultyIndex", value, false);
     }
     
     get autosaveData() {
         return this.getObject(this.autosaveCollection, "autosave");
     }
     set autosaveData(value) {
-        this.setObject(this.autosaveCollection, "autosave", value);
+        this.setObject(this.autosaveCollection, "autosave", value, true);
     }
     
     // Private
@@ -401,6 +598,7 @@ function preprocessContent(a) {
     }
     
     a.addIndexes.forEach(GameContent.addIndexToItemsInArray);
+    a.addIDs.forEach(GameContent.addIdToItemsInDictionary);
     a.addIsDefault.forEach(obj => {
         iterate(obj, item => { item.isDefault = !!item.isDefault; });
     });

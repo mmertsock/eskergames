@@ -26,9 +26,11 @@ zoomLevels:
   - tileWidth: 6
   - tileWidth: 12
   - tileWidth: 24
-    isDefault: true
   - tileWidth: 48
   - tileWidth: 96
+  - tileWidth: 208
+    isDefault: true
+  - tileWidth: 320
 
 ################## UI ################
 
@@ -100,6 +102,7 @@ strings:
   newGameDialogTitle: New Game
   nextButton: Next
   previousButton: Previous
+  quickStartButton: Quick Start
   readyToBegin: "Ready to begin?"
   showHelpButton: Help
   smallMapSize: Small

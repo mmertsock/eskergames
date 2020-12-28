@@ -47,6 +47,13 @@ export function once(id, block) {
     onceTokens.add(id);
 }
 
+export function precondition(condition, message) {
+    if (!!condition) { return; }
+    var error = message ? `Precondition error: ${message}` : "Precondition error";
+    debugWarn(error, true);
+    throw new Error(error);
+}
+
 export function deserializeAssert(condition, message) {
     if (!!condition) { return; }
     var error = message ? `Deserialization error: ${message}` : "Deserialization error";
@@ -167,6 +174,17 @@ Array.prototype.map2D = function(block) {
         return row.map((item, x) => block(item, y, x));
     });
 };
+Array.make2D = function(size, block) {
+    let rows = new Array(size.height);
+    for (let y = 0; y < size.height; y += 1) {
+        let row = new Array(size.width);
+        for (let x = 0; x < size.width; x += 1) {
+            row[x] = block(new Point(x, y));
+        }
+        rows[y] = row;
+    }
+    return rows;
+}
 Array.prototype.maxElement = function() {
     if (this.length == 0) { return undefined; }
     return this.reduce((x, y) => Math.max(x, y), this[0]);
@@ -333,11 +351,18 @@ CanvasRenderingContext2D.prototype.ellipseFill = function(rect) {
     this.fill();
 };
 
+CanvasRenderingContext2D.prototype.getTextSize = function(text) {
+    let metrics = this.measureText(text);
+    return {
+        width: metrics.width,
+        height: metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+    };
+};
+
 CanvasRenderingContext2D.prototype.fillTextCentered = function(text, rect) {
-    var metrics = this.measureText(text);
-    var x = rect.x + 0.5 * (rect.width - metrics.width);
-    var height = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
-    var y = rect.y + 0.5 * (rect.height + height);
+    let size = this.getTextSize(text);
+    var x = rect.x + 0.5 * (rect.width - size.width);
+    var y = rect.y + 0.5 * (rect.height + size.height);
     this.fillText(text, x, y);
 };
 
@@ -1601,6 +1626,10 @@ export class XYValue {
     integral() {
         return new this.constructor(Math.round(this.x), Math.round(this.y));
     }
+    
+    floor() {
+        return new this.constructor(Math.floor(this.x), Math.floor(this.y));
+    }
 }
 
 export class Point extends XYValue {
@@ -1655,6 +1684,10 @@ export class Rect {
             this.height = Math.abs(height);
         }
     }
+    
+    static sizeDebugDescription(size) {
+        return `${size.width}x${size.height}`;
+    }
 
     static withCenter(x, y, width, height) {
         if (typeof x === 'undefined') { // zero args: the unit rect
@@ -1690,7 +1723,7 @@ export class Rect {
         return `<rect @(${this.x.toFixed(2)}, ${this.y.toFixed(2)}) sz(${this.width.toFixed(2)}, ${this.height.toFixed(2)})>`;
     }
 
-    isEmpty(tol) { return Math.fequal(this.width, 0, tol) && Math.fequal(this.height, 0, tol); }
+    isEmpty(tol) { return Math.fequal(this.width, 0, tol) || Math.fequal(this.height, 0, tol); }
     isEqual(r2, tol) {
         tol = (tol === undefined) ? 0 : 0.01;
         return Math.fequal(this.x, r2.x, tol)

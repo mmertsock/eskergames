@@ -21,6 +21,18 @@ export class CanvasPrimitives {
 }
 
 export class MapBackgroundDrawable extends Drawable {
+    constructor() {
+        super();
+        this.canvasFillStyle = inj().content.worldView.canvasFillStyle;
+    }
+    
+    draw(c) {
+        debugLog(`MBD: fill ${c.viewModel.worldScreenRect.debugDescription}`);
+        c.ctx.fillStyle = this.canvasFillStyle;
+        c.ctx.rectFill(c.viewportScreenRect);
+        c.ctx.fillStyle = "hsla(0, 0%, 100%, 0.08)";
+        c.ctx.rectFill(c.viewModel.worldScreenRect);
+    }
     constructor(world) {
         super();
         this.world = world;

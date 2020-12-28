@@ -4,7 +4,7 @@ import { inj, Game, GameEngine, Tile, TileProjection, ZoomLevel } from './game.j
 import { CanvasInputController, DOMRootView, ScreenView, UI } from './ui-system.js';
 import * as Drawables from './ui-drawables.js';
 
-const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn;
+const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, precondition = Gaming.precondition;
 const Point = Gaming.Point, Rect = Gaming.Rect;
 
 export function initialize() {
@@ -42,6 +42,7 @@ class GameSession {
         inj().gse.execute("playCutscene", "loading");
         this.engine.setGame(game);
         GameSessionView.shared().show();
+        this.autosave();
     }
     
     autosave() {
@@ -73,20 +74,6 @@ class GameSessionView extends ScreenView {
             new GameFooterView({ elem: document.querySelector("#game > statusbar") })
         ];
     }
-    
-    didShow() {
-        // resume animation
-        UI.traverseSubviews(this, view => {
-            if (view.screenDidShow) { view.screenDidShow(this); }
-        });
-    }
-    
-    didHide() {
-        // pause animation
-        UI.traverseSubviews(this, view => {
-            if (view.screenDidHide) { view.screenDidHide(this); }
-        });
-    }
 }
 
 // world view, side panels, overlays
@@ -103,14 +90,29 @@ class GameContentView {
     }
 }
 
-class GameWorldView {
+const Interface_WorldViewModel = class {
+    get worldRect() {}
+    get zoomLevel() {}
+    set zoomLevel(o) {}
+    get projection() {}
+};
+const Interface_WorldViewModel_Projection = class {
+    sizeForScreenSize(o) {}
+    screenPointForCoord(o) {}
+    coordForScreenPoint(o) {}
+    screenRectForTile(o) {}
+    lengthForScreenLength(o) {}
+};
+
+export class WorldView {
     constructor(a) {
-        inj().views.world = this;
         this.elem = a.elem;
-        this.session = inj().session;
-        this.devicePixelRatio = window.devicePixelRatio;
-        this.viewModel = null; // WorldViewModel
-        this.objectsByLayer = [[], []];
+        this.canvasCount = a.canvasCount;
+        this.devicePixelRatio = a.devicePixelRatio;
+        this.clickBehavior = null;
+        this.panBehavior = null;
+        this._viewModel = null; // WorldViewModel-type
+        this.layers = [];
         this.canvasView = null; // WorldCanvasView
         this.inputController = null; // CanvasInputController
         
@@ -123,28 +125,19 @@ class GameWorldView {
                 this.canvasView.viewport.centerCoord);
             this.render();
         });
-        
-        inj().gse.registerCommand("gameWorldZoomIn", () => this.zoomIn());
-        inj().gse.registerCommand("gameWorldZoomOut", () => this.zoomOut());
-        inj().gse.registerCommand("gameWorldCenterMapUnderCursor", () => this.centerMapUnderCursor());
-        inj().gse.registerCommand("gameWorldPan", (direction) => this.pan(direction));
-        inj().gse.registerCommand("gameWorldPanLarge", (direction) => this.panLarge(direction));
     }
     
-    screenDidShow() {
+    get viewModel() { return this._viewModel; }
+    set viewModel(value) {
+        this._viewModel = value;
         this.configureView();
     }
     
     configureView() {
-        if (this.isReady || !this.world) { return; }
-        
-        this.viewModel = new WorldViewModel({
-            world: this.world
-        });
         this.canvasView = new WorldCanvasView({
-            model: this.viewModel,
+            model: this._viewModel,
             elem: this.elem,
-            canvasCount: this.objectsByLayer.length,
+            canvasCount: this.canvasCount,
             devicePixelRatio: this.devicePixelRatio
         });
         this.inputController = new CanvasInputController({
@@ -153,23 +146,21 @@ class GameWorldView {
             devicePixelRatio: this.devicePixelRatio
         });
         this.inputController.addDelegate(this);
-        
-        this.objectsByLayer[GameWorldView.planetLayer] = [
-            new Drawables.MapBackgroundDrawable(this.world)
-        ];
-        
-        this.objectsByLayer[GameWorldView.unitsLayer] = this.world.units.map(unit => {
-            return new Drawables.UnitDrawable(unit)
-        });
-        
-        this.canvasView.viewportController.centerOnTile(
-            this.world.planet.centerTile,
-            ZoomLevel.getDefault());
-        
         this.render();
     }
     
-    get world() { return this.session.engine.game?.world; }
+    addLayer(layer) {
+        precondition(layer.canvasIndex >= 0 && layer.canvasIndex < this.canvasCount, "Invalid layer canvas index");
+        this.layers.push(layer);
+        this.layers.sort((a, b) => {
+            if (a.canvasIndex == b.canvasIndex) {
+                return a.zIndex - b.zIndex;
+            } else {
+                return a.canvasIndex - b.canvasIndex;
+            }
+        });
+    }
+    
     get isReady() { return !!this.viewModel; }
     
     zoomIn() {
@@ -187,24 +178,142 @@ class GameWorldView {
         let canvasPoint = this.inputController.pointerCavasPoint;
         if (!canvasPoint) { return; }
         let coord = this.canvasView.viewport.coordForCanvasPoint(canvasPoint);
-        this._centerMapOnTileAtCoord(coord);
+        this.centerOnCoord(coord);
     }
     
     pan(direction) {
-        if (!this.isReady) { return; }
-        let points = UI.deviceLengthForDOMLength(inj().content.worldView.smallPanPoints, this.devicePixelRatio);
-        this._pan(points, direction);
+        if (!this.isReady || !this.panBehavior) { return; }
+        this._pan(this.panBehavior.smallPanScreenPoints(this, direction), direction);
     }
     
     panLarge(direction) {
-        if (!this.isReady) { return; }
-        let smallPoints = UI.deviceLengthForDOMLength(inj().content.worldView.smallPanPoints, this.devicePixelRatio);
-        let largePoints = this._viewportSizeInDirection(direction) * inj().content.worldView.largePanScreenFraction;
-        this._pan(Math.max(smallPoints, largePoints), direction);
+        if (!this.isReady || !this.panBehavior) { return; }
+        this._pan(this.panBehavior.largePanScreenPoints(this, direction), direction);
     }
     
-    _viewportSizeInDirection(direction) {
-        let size = this.canvasView.viewport.viewportScreenRect.size;
+    _pan(screenPoints, direction) {
+        let tileDistance = this.viewModel.projection.lengthForScreenLength(screenPoints);
+        let offset = WorldViewport.worldUnitVectorForScreenDirection(direction)
+            .scaled(tileDistance);
+        this.centerOnCoord(this.canvasView.viewport.centerCoord.adding(offset));
+    }
+    
+    canvasClicked(eventModel) {
+        if (!this.clickBehavior) { return; }
+        let coord = this.canvasView.viewport.coordForCanvasPoint(eventModel.canvasPoint);
+        this.clickBehavior.canvasClicked(this, coord, eventModel);
+    }
+    
+    centerOnCoord(coord) {
+        this.canvasView.viewportController.centerOnCoord(coord);
+        this.render();
+    }
+    
+    render() {
+        if (!this.isReady) { return; }
+        let clearedViewports = [];
+        this.layers.forEach(layer => {
+            this.canvasView.withRenderContext(layer.canvasIndex, c => {
+                if (!clearedViewports[layer.canvasIndex]) {
+                    clearedViewports[layer.canvasIndex] = true;
+                    c.ctx.rectClear(c.viewportScreenRect);
+                }
+                layer.render(c);
+            });
+        });
+    }
+}
+
+export class WorldViewLayer {
+    constructor(canvasIndex, zIndex) {
+        this.canvasIndex = canvasIndex;
+        this.zIndex = zIndex;
+        this.drawables = [];
+        this.logTiming = false;
+    }
+    
+    push(drawable) {
+        this.drawables.push(drawable);
+    }
+    
+    concat(drawables) {
+        this.drawables = this.drawables.concat(drawables);
+        return this;
+    }
+    
+    get debugDescription() {
+        return `<${this.constructor.name}#${this.canvasIndex},${this.zIndex}>`
+    }
+    
+    render(c) {
+        let timer = this.logTiming ? new Gaming.PerfTimer(this.debugDescription).start() : null;
+        this.drawables.forEach(drawable => drawable.draw(c));
+        if (timer) {
+            debugLog(timer.end().summary);
+        }
+    }
+}
+
+class GameWorldView {
+    constructor(a) {
+        this.session = inj().session;
+        this.worldView = new WorldView({
+            elem: a.elem,
+            canvasCount: 2,
+            devicePixelRatio: window.devicePixelRatio
+        });
+        this.worldView.clickBehavior = new CenterMapClickBehavior();
+        this.worldView.panBehavior = new PanBehavior(inj().content.worldView);
+        
+        inj().gse.registerCommand("gameWorldZoomIn", () => this.worldView.zoomIn());
+        inj().gse.registerCommand("gameWorldZoomOut", () => this.worldView.zoomOut());
+        inj().gse.registerCommand("gameWorldCenterMapUnderCursor", () => this.worldView.centerMapUnderCursor());
+        inj().gse.registerCommand("gameWorldPan", (direction) => this.worldView.pan(direction));
+        inj().gse.registerCommand("gameWorldPanLarge", (direction) => this.worldView.panLarge(direction));
+    }
+    
+    get world() { return this.session.engine.game?.world; }
+    
+    screenDidShow() {
+        this.worldView.addLayer(new WorldViewLayer(GameWorldView.planetCanvasIndex, 0)
+            .concat([new Drawables.MapBackgroundDrawable()]));
+        this.worldView.addLayer(new WorldViewLayer(GameWorldView.unitsCanvasIndex, 0)
+            .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))));
+        this.worldView.viewModel = new GameWorldViewModel({ world: this.world });
+        
+        let focus = this.world.units[0];
+        if (focus) {
+            this.worldView.centerOnCoord(focus.tile.centerCoord);
+        }
+    }
+}
+GameWorldView.planetCanvasIndex = 0;
+GameWorldView.unitsCanvasIndex = 1;
+
+export class CenterMapClickBehavior {
+    canvasClicked(worldView, coord, eventModel) {
+        worldView.centerOnCoord(coord);
+    }
+}
+
+export class PanBehavior {
+    constructor(a) {
+        this.smallPanPoints = a.smallPanPoints;
+        this.largePanScreenFraction = a.largePanScreenFraction;
+    }
+    
+    smallPanScreenPoints(worldView, direction) {
+        return UI.deviceLengthForDOMLength(this.smallPanPoints, worldView.devicePixelRatio);
+    }
+    
+    largePanScreenPoints(worldView, direction) {
+        let smallPoints = this.smallPanScreenPoints(worldView, direction);
+        let largePoints = this._viewportSizeInDirection(direction) * this.largePanScreenFraction;
+        return Math.max(smallPoints, largePoints);
+    }
+    
+    _viewportSizeInDirection(worldView, direction) {
+        let size = worldView.canvasView.viewport.viewportScreenRect.size;
         switch (direction) {
             case Gaming.directions.N:
             case Gaming.directions.S:
@@ -213,40 +322,10 @@ class GameWorldView {
             case Gaming.directions.W:
                 return size.width;
             default:
-                return Math.max(size.width, size.height);
-        }
-    }
-    
-    _pan(screenPoints, direction) {
-        let tileDistance = this.viewModel.projection.lengthForScreenLength(screenPoints);
-        let offset = WorldViewport.worldUnitVectorForScreenDirection(direction)
-            .scaled(tileDistance);
-        this._centerMapOnTileAtCoord(this.canvasView.viewport.centerCoord.adding(offset));
-    }
-    
-    canvasClicked(eventModel) {
-        let coord = this.canvasView.viewport.coordForCanvasPoint(eventModel.canvasPoint);
-        this._centerMapOnTileAtCoord(coord);
-    }
-    
-    _centerMapOnTileAtCoord(coord) {
-        let clickedTile = Tile.integralTileHaving(coord);
-        this.canvasView.viewportController.centerOnTile(clickedTile);
-        this.render();
-    }
-    
-    render() {
-        if (!this.isReady) { return; }
-        for (let i = 0; i < this.objectsByLayer.length; i += 1) {
-            this.canvasView.withRenderContext(i, c => {
-                c.ctx.rectClear(c.viewportScreenRect);
-                this.objectsByLayer[i].forEach(drawable => drawable.draw(c));
-            });
+                return Math.min(size.width, size.height);
         }
     }
 }
-GameWorldView.planetLayer = 0;
-GameWorldView.unitsLayer = 1;
 
 class GameFooterView {
     constructor(a) {
@@ -267,7 +346,7 @@ class GameFooterView {
     }
 }
 
-class WorldCanvasView {
+export class WorldCanvasView {
     constructor(a) {
         this.elem = a.elem;
         this.devicePixelRatio = a.devicePixelRatio;
@@ -316,7 +395,7 @@ class WorldCanvasView {
 }
 
 // Represents a virtual screen of device pixels for a game World. Maps zoom levels onto TileProjections, and determines pixel sizes and positions of rendered objects relative to the world model's origin. Does not deal with viewport details: WorldViewModel treats the virtual screen's (0,0) origin as mapping always to the tile world's (0,0) origin.
-export class WorldViewModel {
+export class GameWorldViewModel {
     constructor(a) {
         this.world = a.world;
         this.projection = null; // set in zoomLevel setter
@@ -329,31 +408,28 @@ export class WorldViewModel {
         this.projection = new TileProjection(this._zoomLevel.tileWidth);
     }
     
+    get worldRect() { return this.world.planet.rect; }
+    
     get worldScreenRect() {
         return this.projection.screenRectForRect(this.world.planet.rect);
     }
 }
 
 export class EdgeOverscroll {
-    static clampedCoord(coord, planet, canvasTileSize, overscroll) {
-        return EdgeOverscroll._validCoordRect(planet, canvasTileSize, overscroll).clampedPoint(coord);
+    static clampedCoord(coord, viewModel, canvasTileSize, overscroll) {
+        return EdgeOverscroll._validCoordRect(viewModel, canvasTileSize, overscroll).clampedPoint(coord);
     }
     
-    static clampedTile(tile, planet, canvasTileSize, overscroll) {
-        let validTileRect = EdgeOverscroll._validCoordRect(planet, canvasTileSize, overscroll).inset(-1, -1);
-        return Tile.integralTileHaving(validTileRect.clampedPoint(tile.gridPoint));
-    }
-    
-    static _validCoordRect(planet, canvasTileSize, overscroll) {
+    static _validCoordRect(viewModel, canvasTileSize, overscroll) {
         let validCoordSize = {
-            width: Math.max(0, planet.rect.width + (2 * overscroll) - canvasTileSize.width),
-            height: Math.max(0, planet.rect.height + (2 * overscroll) - canvasTileSize.height)
+            width: Math.max(0, viewModel.worldRect.width + (2 * overscroll) - canvasTileSize.width),
+            height: Math.max(0, viewModel.worldRect.height + (2 * overscroll) - canvasTileSize.height)
         };
-        return Rect.withCenter(planet.centerCoord, validCoordSize);
+        return Rect.withCenter(viewModel.worldRect.center, validCoordSize);
     }
 }
 
-// Displays a WorldViewModel at a particular panning offset within an HTML canvas. Assign the centerCoord property or call setCenterTile to pan the view. Adjust the zoom level using the WorldViewModel.
+// Displays a WorldViewModel at a particular panning offset within an HTML canvas. Assign the centerCoord property to pan the view. Adjust the zoom level using the WorldViewModel.
 export class WorldViewport {
     // Up on screen = negative Y offset. "South is up"
     static worldUnitVectorForScreenDirection(direction) {
@@ -365,8 +441,7 @@ export class WorldViewport {
         this.metrics = inj().content.worldView;
         this.canvas = a.canvas;
         this._centerCoord = null;
-        // Setting centerTile sets _centerCoord
-        this.setCenterTile(this.model.world.planet.centerTile);
+        this.centerCoord = this.model.worldRect.center;
     }
     
     get zoomLevel() { return this.model.zoomLevel; }
@@ -380,18 +455,7 @@ export class WorldViewport {
     get centerCoord() { return this._centerCoord; }
     set centerCoord(value) {
         let canvasTileSize = this.model.projection.sizeForScreenSize(this.canvas);
-        this._centerCoord = EdgeOverscroll.clampedCoord(value, this.model.world.planet, canvasTileSize, this.metrics.edgeOverscroll);
-    }
-    
-    // Use this instead of setting centerCoord directly, if you want to always "snap" the centerCoord to the center of a tile. e.g. so it doesn't drift around by a couple pixels if you repeatedly click the center tile on the screen.
-    setCenterTile(tileOrCoord) {
-        // And you center on the tile's center rather than the gridPoint, so the tile is nicely centered under your mouse. If you set to gridPoint, then a corner is under your mouse and if you drift 1 px left the next click will be on the adjacent tile.
-        if (!(tileOrCoord instanceof Tile)) {
-            tileOrCoord = Tile.integralTileHaving(tileOrCoord);
-        }
-        let canvasTileSize = this.model.projection.sizeForScreenSize(this.canvas);
-        let clamped = EdgeOverscroll.clampedTile(tileOrCoord, this.model.world.planet, canvasTileSize, this.metrics.edgeOverscroll);
-        this._centerCoord = clamped.centerCoord;
+        this._centerCoord = EdgeOverscroll.clampedCoord(value, this.model, canvasTileSize, this.metrics.edgeOverscroll);
     }
     
     // Returns a CanvasRenderingContext2D, with a translation applied
@@ -473,14 +537,6 @@ export class ViewportController {
         if (previous) {
             this.viewport.zoomLevel = previous;
         }
-    }
-    
-    // Immediately jumps. Zoom level optional
-    centerOnTile(tile, zoomLevel) {
-        if (typeof(zoomLevel) != 'undefined') {
-            this.viewport.zoomLevel = zoomLevel;
-        }
-        this.viewport.setCenterTile(tile);
     }
     
     // Immediately jumps. Zoom level optional
