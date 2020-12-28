@@ -5,10 +5,10 @@
     <title>Tests</title>
     <link rel="icon" href="city-icon-192.png">
     <link rel="apple-touch-icon" href="city-icon-180.png">
-    <script defer src="js-yaml.min.js"></script>
+    <script defer src="//cdnjs.cloudflare.com/ajax/libs/js-yaml/3.14.1/js-yaml.min.js"></script>
     <script type="module">
-        import { TestSession } from './tests.js';
-        TestSession.current.run(document.querySelector("#testOutput"));
+        import { uiReady } from './tests.js';
+        uiReady();
     </script>
     <style>
     body {
