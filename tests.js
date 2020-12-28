@@ -585,9 +585,9 @@ function hexStringTest() {
         let obj = [0, 2, 99, 84, 127, 250, 200, 0, 73, 64, 28];
         this.assertElementsEqual(Array.fromHexString(obj.toHexString()), obj, "round trip");
     }).buildAndRun();
-};
+}
 
-var boolArrayTest = function() {
+function boolArrayTest() {
     new UnitTest("BoolArray", function() {
         var sut = new BoolArray(0);
         this.assertEqual(sut.length, 0, "length");
@@ -648,6 +648,33 @@ var boolArrayTest = function() {
         this.assertEqual(sut.length, 27);
         for (let i = 0; i < 27; i += 1) {
             this.assertEqual(other.getValue(i), sut.getValue(i), i);
+        }
+        
+        sut = new BoolArray(293);
+        for (let i = 0; i < 180; i += 1) {
+            sut.setValue(Rng.shared.nextIntOpenRange(0, sut.length), true);
+        }
+        bytes = sut.objectForSerialization;
+        let sz = sut.base64Serialization;
+        let dz = BoolArray.fromBase64Serialization(sz);
+        // logTestMsg(`len=${sut.length}, bytes=${bytes.length} sz=${sz.length}, ${sz}`);
+        if (this.assertEqual(dz.length, sut.length)) {
+            this.assertTrue(sut.array.every((elem, i) => (elem == dz.array[i])));
+        }
+    }).buildAndRun();
+}
+
+function base64Test() {
+    new UnitTest("Uint8Array.Base64", function() {
+        let sut = new Uint8Array(85);
+        for (let i = 0; i < sut.length; i += 1) {
+            sut[i] = Rng.shared.nextIntOpenRange(0, 256);
+        }
+        let b64 = sut.toBase64String();
+        let dz = Uint8Array.fromBase64String(b64);
+        this.assertEqual(sut?.constructor.name, dz?.constructor.name);
+        if (this.assertEqual(sut?.length, dz?.length)) {
+            this.assertTrue(sut.every((elem, i) => (elem == dz[i])));
         }
     }).buildAndRun();
 }
@@ -1180,7 +1207,7 @@ function saveStateTest() {
         this.assertEqual(item1.data, data1);
 
         window.sessionStorage.clear();
-        var sut = new SaveStateCollection(window.sessionStorage, "_unitTests_");
+        var sut = new SaveStateCollection(window.sessionStorage, "_unitTests_" + this.name);
         this.assertEqual(sut.itemsSortedByLastSaveTime.length, 0);
         this.assertEqual(sut.getItem(item1.id), null);
         this.assertTrue(sut.deleteItem(item1.id));
@@ -1261,6 +1288,30 @@ function saveStateTest() {
         this.assertEqual(sut.getItem(item1.id), null);
         this.assertEqual(sut.itemsSortedByLastSaveTime.length, 1);
         this.assertTrue(sut.getItem(item2.id) != null);
+    }).buildAndRun();
+    
+    new UnitTest("SaveState.compressed", function() {
+        window.sessionStorage.clear();
+        let sut = new SaveStateCollection(window.sessionStorage, "_unitTests_" + this.name);
+        
+        let data1 = { "a": 1, "b": 2, "c": { "d": [1, 2, 3], "b": true } };
+        let now = Date.now();
+        let item1 = new SaveStateItem(SaveStateItem.newID(), "item1", now, data1, false);
+        this.assertFalse(item1.compress);
+        let item1z = new SaveStateItem(SaveStateItem.newID(), "item1", now, data1, true);
+        this.assertTrue(item1z.compress);
+        this.assertEqual(JSON.stringify(item1.data), JSON.stringify(item1z.data), "data stored uncompressed in-memory");
+        let sz1 = item1.serializationWrapper;
+        let sz1z = item1z.serializationWrapper;
+        this.assertFalse(sz1.compressed);
+        this.assertTrue(sz1z.compressed);
+        this.assertFalse(JSON.stringify(sz1.data) == JSON.stringify(sz1z.data), "serializationWrapper compresses");
+        let dz1 = SaveStateItem.fromDeserializedWrapper(sz1);
+        let dz1z = SaveStateItem.fromDeserializedWrapper(sz1z);
+        this.assertFalse(dz1.compress);
+        this.assertTrue(dz1z.compress);
+        this.assertEqual(JSON.stringify(dz1.data), JSON.stringify(item1.data));
+        this.assertEqual(JSON.stringify(dz1z.data), JSON.stringify(item1.data));
     }).buildAndRun();
 }
 
@@ -2970,6 +3021,7 @@ let standardSuite = new TestSession([
     manhattanDistanceFromTest,
     hexStringTest,
     boolArrayTest,
+    base64Test,
     changeTokenBindingTest,
     circularArrayTest,
     randomTest,

@@ -310,11 +310,11 @@ class GameStorage {
         return item ? item.data[key] : undefined;
     }
     
-    setObject(collection, key, value) {
+    setObject(collection, key, value, compress) {
         let item = collection.getItem(collection.namespace);
         let data = item ? item.data : { };
         data[key] = value;
-        collection.saveItem(new Gaming.SaveStateItem(collection.namespace, collection.namespace, Date.now(), data), {});
+        collection.saveItem(new Gaming.SaveStateItem(collection.namespace, collection.namespace, Date.now(), data, compress), {});
     }
 }
 

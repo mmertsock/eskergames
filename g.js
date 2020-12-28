@@ -1,6 +1,7 @@
 "use-strict";
 
 import { Strings } from './locale.js';
+import * as Pako from 'https://cdnjs.cloudflare.com/ajax/libs/pako/2.0.2/pako.esm.mjs';
 
 function setWorkerScope(name) {
     self.workerScope = name;
@@ -1172,15 +1173,135 @@ class RandomLineGeneratorOLD {
     }
 }
 
+const _base64abc = [
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
+    "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"
+];
+const _base64codes = [
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+    255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63,
+    52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255,
+    255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+    15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255,
+    255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51
+];
+function _getBase64Code(charCode) {
+    if (charCode >= _base64codes.length) {
+        throw new Error("Unable to parse base64 string.");
+    }
+    const code = _base64codes[charCode];
+    if (code === 255) {
+        throw new Error("Unable to parse base64 string.");
+    }
+    return code;
+}
+function _bytesToBase64(bytes) {
+    let result = '', i, l = bytes.length;
+    for (i = 2; i < l; i += 3) {
+        result += _base64abc[bytes[i - 2] >> 2];
+        result += _base64abc[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
+        result += _base64abc[((bytes[i - 1] & 0x0F) << 2) | (bytes[i] >> 6)];
+        result += _base64abc[bytes[i] & 0x3F];
+    }
+    if (i === l + 1) { // 1 octet yet to write
+        result += _base64abc[bytes[i - 2] >> 2];
+        result += _base64abc[(bytes[i - 2] & 0x03) << 4];
+        result += "==";
+    }
+    if (i === l) { // 2 octets yet to write
+        result += _base64abc[bytes[i - 2] >> 2];
+        result += _base64abc[((bytes[i - 2] & 0x03) << 4) | (bytes[i - 1] >> 4)];
+        result += _base64abc[(bytes[i - 1] & 0x0F) << 2];
+        result += "=";
+    }
+    return result;
+}
+function _base64ToBytes(str, ctor) {
+    if (str.length % 4 !== 0) {
+        throw new Error("Unable to parse base64 string.");
+    }
+    const index = str.indexOf("=");
+    if (index !== -1 && index < str.length - 2) {
+        throw new Error("Unable to parse base64 string.");
+    }
+    let missingOctets = str.endsWith("==") ? 2 : str.endsWith("=") ? 1 : 0;
+    let n = str.length;
+    let length = 3 * (n / 4) - missingOctets;
+    let result = new ctor(length);
+    let buffer = undefined;
+    for (let i = 0, j = 0; i < n; i += 4, j += 3) {
+        buffer =
+            _getBase64Code(str.charCodeAt(i)) << 18 |
+            _getBase64Code(str.charCodeAt(i + 1)) << 12 |
+            _getBase64Code(str.charCodeAt(i + 2)) << 6 |
+            _getBase64Code(str.charCodeAt(i + 3));
+        result[j] = buffer >> 16;
+        if (j + 1 < result.length) {
+            result[j + 1] = (buffer >> 8) & 0xFF;
+        }
+        if (j + 2 < result.length) {
+            result[j + 2] = buffer & 0xFF;
+        }
+    }
+    return result; //.subarray(0, result.length - missingOctets);
+}
+
+function _base64ToBytes2(str) {
+    if (str.length % 4 !== 0) {
+        throw new Error("Unable to parse base64 string.");
+    }
+    const index = str.indexOf("=");
+    if (index !== -1 && index < str.length - 2) {
+        throw new Error("Unable to parse base64 string.");
+    }
+    let missingOctets = str.endsWith("==") ? 2 : str.endsWith("=") ? 1 : 0,
+        n = str.length,
+        result = new Uint8Array(3 * (n / 4)),
+        buffer;
+    for (let i = 0, j = 0; i < n; i += 4, j += 3) {
+        buffer =
+            getBase64Code(str.charCodeAt(i)) << 18 |
+            getBase64Code(str.charCodeAt(i + 1)) << 12 |
+            getBase64Code(str.charCodeAt(i + 2)) << 6 |
+            getBase64Code(str.charCodeAt(i + 3));
+        result[j] = buffer >> 16;
+        result[j + 1] = (buffer >> 8) & 0xFF;
+        result[j + 2] = buffer & 0xFF;
+    }
+    return result.subarray(0, result.length - missingOctets);
+}
+
+Uint8Array.prototype.toBase64String = function() {
+    return _bytesToBase64(this);
+};
+Uint8Array.fromBase64String = function(b64) {
+    return _base64ToBytes(b64, Uint8Array);
+};
+Int8Array.prototype.toBase64String = function() {
+    return _bytesToBase64(this);
+};
+Int8Array.fromBase64String = function(b64) {
+    return _base64ToBytes(b64, Int8Array);
+};
+
 export class BoolArray {
     constructor(obj) {
-        if (Array.isArray(obj)) {
+        if (obj.hasOwnProperty("b64")) {
+            this.length = obj.b64.length;
+            this.array = obj.b64.array;
+        } else if (Array.isArray(obj)) {
             let deadBits = obj.shift() || 0;
             this.length = (obj.length * 8) - deadBits;
+            this.array = new Uint8Array(Math.ceil(this.length / 8));
         } else {
             this.length = obj;
+            this.array = new Uint8Array(Math.ceil(this.length / 8));
         }
-        this.array = new Int8Array(Math.ceil(this.length / 8));
         this.view = new DataView(this.array.buffer, 0, this.array.length);
         if (Array.isArray(obj)) {
             if (obj.length != this.array.length) {
@@ -1214,6 +1335,16 @@ export class BoolArray {
             data.push(this.getByte(i));
         }
         return data;
+    }
+    
+    get base64Serialization() {
+        return this.length + "|" + this.array.toBase64String();
+    }
+    static fromBase64Serialization(b64) {
+        let sep = b64.indexOf("|");
+        let length = Number.parseInt(b64.substring(0, sep));
+        let array = Uint8Array.fromBase64String(b64.substring(sep + 1, b64.length));
+        return new BoolArray({ b64: {length: length, array: array} });
     }
 
     get debugDescription() {
@@ -2050,21 +2181,36 @@ export class SaveStateItem {
     static newID() { return Rng.shared.nextHexString(16); }
 
     static fromDeserializedWrapper(wrapper) {
-        return wrapper ? new SaveStateItem(wrapper.id, wrapper.title, wrapper.timestamp, wrapper.data) : null;
+        let compressed = !!wrapper.compressed;
+        let data = wrapper.data;
+        if (compressed) {
+            data = JSON.parse(Pako.inflate(Uint8Array.fromBase64String(data), { to: 'string' }));
+        }
+        return wrapper ? new SaveStateItem(wrapper.id, wrapper.title, wrapper.timestamp, data, compressed) : null;
     }
 
     // load from collection or prepare to save to collection
     // Timestamp required when loading. When saving, timestamp will be overwritten.
-    // data is a JSON-stringify-able object.
-    constructor(id, title, timestamp, data) {
+    // data: a JSON-stringify-able object.
+    // compress: true or false
+    constructor(id, title, timestamp, data, compress) {
         this.id = id;
         this.title = title;
         this.timestamp = timestamp;
         this.data = data;
+        this.compress = !!compress;
+    }
+    
+    _serializedData() {
+        if (this.compress) {
+            return Pako.deflate(JSON.stringify(this.data)).toBase64String();
+        } else {
+            return this.data;
+        }
     }
 
     get serializationWrapper() {
-        return { id: this.id, title: this.title, timestamp: this.timestamp, data: this.data };
+        return { id: this.id, title: this.title, timestamp: this.timestamp, data: this._serializedData(), compressed: this.compress };
     }
 }
 
