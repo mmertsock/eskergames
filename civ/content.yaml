@@ -32,6 +32,15 @@ zoomLevels:
     isDefault: true
   - tileWidth: 320
 
+################# CIVS ###############
+
+# .name is not a Strings key, it's already localized
+civs:
+  australia:
+    name: Australia
+  poland:
+    name: Poland
+
 ################## UI ################
 
 spritesheets:
@@ -122,6 +131,8 @@ strings:
   newGameButton: New Game
   newGameDialogTitle: New Game
   nextButton: Next
+  playerCivChoiceLabel: Your civilization
+  playerCivLabel: Your civilization
   previousButton: Previous
   quickStartButton: Quick Start
   readyToBegin: "Ready to begin?"
@@ -130,5 +141,6 @@ strings:
   startGameButton: Start Game
   zoomInControlButton: "+"
   zoomOutControlButton: "-"
+  worldConfigLabel: World
 pluralStrings:
   o: [o, oo, ooo]

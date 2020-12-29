@@ -2189,6 +2189,7 @@ export class SaveStateCollection {
             return block();
         } catch(e) {
             debugLog(`SaveStateCollection.${label} error: ${e.message}`);
+            debugLog(e.stack);
             return errorResult;
         }
     }
@@ -2219,12 +2220,13 @@ export class SaveStateItem {
     static newID() { return Rng.shared.nextHexString(16); }
 
     static fromDeserializedWrapper(wrapper) {
+        if (!wrapper) { return null; }
         let compressed = !!wrapper.compressed;
         let data = wrapper.data;
         if (compressed) {
             data = JSON.parse(Pako.inflate(Uint8Array.fromBase64String(data), { to: 'string' }));
         }
-        return wrapper ? new SaveStateItem(wrapper.id, wrapper.title, wrapper.timestamp, data, compressed) : null;
+        return new SaveStateItem(wrapper.id, wrapper.title, wrapper.timestamp, data, compressed);
     }
 
     // load from collection or prepare to save to collection
@@ -3234,12 +3236,12 @@ class SingleChoiceInputCollection extends FormValueView {
     }
 
     get value() {
-        var choice = this.choices.find(item => item.selected);
+        let choice = this.choices.find(item => item.selected);
         return choice ? choice.value : null;
     }
     set value(newValue) {
-        var choice = this.choices.find(item => item.value == newValue);
-        choice.selected = true;
+        let choice = this.choices.find(item => item.value == newValue);
+        if (choice) { choice.selected = true; }
         this.kvo.value.notifyChanged();
     }
 }

@@ -1,6 +1,6 @@
 import * as Gaming from '../g.js';
 import { Strings } from '../locale.js';
-import { inj, DifficultyOption, Env, Game, MapSizeOption } from './game.js';
+import { inj, Civilization, DifficultyOption, Env, Game, MapSizeOption } from './game.js';
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, ToolButton = Gaming.ToolButton;
 
@@ -239,6 +239,10 @@ class WizardDelegate {
 
 class WizardStepView {
     // required: this.elem
+    constructor(elem) {
+        this.elem = elem;
+    }
+    
     get canAdvance() { return true; }
     didShow(wizard) {}
     didHide(wizard) {}
@@ -311,6 +315,18 @@ class SingleModalDialog extends CivDialog {
     get isModal() { return true; }
 }
 
+class NewGameModel {
+    // static Kvo() { return {"playerCiv": "_playerCiv"}; }
+    
+    constructor() {
+        this.kvo = new Gaming.Kvo(this);
+    }
+    
+    get playerCiv() { return this._playerCiv; }
+    set playerCiv(value) { this._playerCiv = value; this.kvo.notifyChanged(); }
+    // set playerCiv(value) { this.kvo.playerCiv.setValue(value, true); }
+}
+
 class NewGameDialog extends SingleModalDialog {
     static initialize() {
         inj().gse.registerCommand("showNewGameDialog", (subject, evt) => {
@@ -326,9 +342,9 @@ class NewGameDialog extends SingleModalDialog {
     }
     
     static defaultModelValue() {
-        let model = {};
+        let model = new NewGameModel();
         NewGameDialog.stepViewTypes().forEach(type => {
-            model = Object.assign(model, type.defaultModelValue());
+            Object.assign(model, type.defaultModelValue());
         });
         return model;
     }
@@ -344,14 +360,14 @@ class NewGameDialog extends SingleModalDialog {
             title: Strings.str("nextButton"),
             click: () => this.wizard.showNextStep()
         });
-        this.model = {};
-        
+        this.model = new NewGameModel();
         let steps = NewGameDialog.stepViewTypes().map(ctor => new ctor(this.model));
         this.wizard = new WizardView({
             elem: this.contentElem,
             steps: steps,
             delegate: this
         });
+        this.model.kvo.addObserver(this, () => this.updateControls(this.wizard));
     }
     
     get title() { return Strings.str("newGameDialogTitle"); }
@@ -361,14 +377,21 @@ class NewGameDialog extends SingleModalDialog {
     }
     
     wizardDidComplete() {
+        Gaming.Kvo.stopAllObservations(this);
         this.dismiss();
         inj().gse.execute("beginNewGame", this.model, null);
+        this.wizard.delegate = null;
+        this.wizard = null;
     }
     
     wizardDidShowStep(wizard) {
         this.previousButton.elem.addRemClass("hidden", wizard.isFirstStep);
-        this.nextButton.isEnabled = wizard.currentStep.canAdvance;
         this.nextButton.title = wizard.currentStep.nextButtonTitle || Strings.str("nextButton");
+        this.updateControls(wizard);
+    }
+    
+    updateControls(wizard) {
+        this.nextButton.isEnabled = !!wizard.currentStep?.canAdvance;
     }
 }
 
@@ -378,9 +401,8 @@ NewGameDialog.DifficultyStepView = class DifficultyStepView extends WizardStepVi
     }
     
     constructor(model) {
-        super();
+        super(Gaming.GameDialog.createFormElem());
         this.model = model;
-        this.elem = Gaming.GameDialog.createFormElem();
 
         let initialDifficulty = DifficultyOption.indexOrDefault(inj().storage.lastDifficultyIndex);
         this.difficulties = new Gaming.FormValueView.SingleChoiceInputCollection({
@@ -416,9 +438,8 @@ NewGameDialog.WorldStepView = class WorldStepView extends WizardStepView {
     }
     
     constructor(model) {
-        super();
+        super(Gaming.GameDialog.createFormElem());
         this.model = model;
-        this.elem = Gaming.GameDialog.createFormElem();
         
         let initialSize = MapSizeOption.getDefault();
         this.mapSizes = new Gaming.FormValueView.SingleChoiceInputCollection({
@@ -456,27 +477,52 @@ NewGameDialog.WorldStepView = class WorldStepView extends WizardStepView {
 
 NewGameDialog.PlayerCivStepView = class PlayerCivStepView extends WizardStepView {
     static defaultModelValue() {
-        return { playerInfo: { name: "Defacto" } };
+        return { playerCiv: Civilization.allMetaByName().randomItem() };
     }
     
     constructor(model) {
-        super();
+        super(Gaming.GameDialog.createFormElem());
         this.model = model;
-        this.elem = Gaming.GameDialog.createFormElem();
-        this.elem.innerText = "pick a civ from a list";
-        this.model.playerCiv = 7; // temp
+        this.model.playerCiv = null;
+        
+        this.civs = new Gaming.FormValueView.SingleChoiceInputCollection({
+            id: "playerCiv",
+            parent: this.elem,
+            title: Strings.str("playerCivChoiceLabel"),
+            validationRules: [Gaming.FormValueView.SingleChoiceInputCollection.selectionRequiredRule],
+            choices: Civilization.allMetaByName().map(item => { return {
+                title: item.name,
+                value: item.id,
+                selected: false
+            }; })
+        });
+    }
+    
+    get canAdvance() { return this.civs.isValid; }
+    get value() {
+        return this.civs.value ? Civilization.metaByID(this.civs.value) : null;
+    }
+    
+    didShow() {
+        // TODO Bindings would simplify all this
+        this.civs.value = this.model.playerCiv?.id;
+        this.civs.kvo.value.addObserver(this, () => this.model.playerCiv = this.value);
+    }
+    
+    didHide() {
+        this.model.playerCiv = this.value;
+        Gaming.Kvo.stopAllObservations(this);
     }
 };
 
 NewGameDialog.PlayerInfoStepView = class PlayerInfoStepView extends WizardStepView {
     static defaultModelValue() {
-        return {};
+        return { playerInfo: { name: "Defacto" } };
     }
     
     constructor(model) {
-        super();
+        super(Gaming.GameDialog.createFormElem());
         this.model = model;
-        this.elem = Gaming.GameDialog.createFormElem();
         this.elem.innerText = "enter player/leader info, with defaults based on the chosen civ";
         this.model.playerInfo = {
             name: "Abraham Lincoln"
@@ -493,9 +539,8 @@ NewGameDialog.OpponentsStepView = class OpponentsStepView extends WizardStepView
     }
     
     constructor(model) {
-        super();
+        super(Gaming.GameDialog.createFormElem());
         this.model = model;
-        this.elem = Gaming.GameDialog.createFormElem();
         this.elem.innerText = "configure opponents";
         this.model.opponents = 5; // temp
     }
@@ -507,13 +552,15 @@ NewGameDialog.SummaryStepView = class SummaryStepView extends WizardStepView {
     }
     
     constructor(model) {
-        super();
+        super(Gaming.GameDialog.createFormElem());
         this.model = model;
-        this.elem = Gaming.GameDialog.createFormElem();
+        // TODO once the model is a full class, can use KVO bindings 
+        // here instead of raw () => blocks.
         let rows = [
             { label: Strings.str("difficultyLabel"), value: () => this.model.difficulty?.name },
             { label: Strings.str("worldConfigLabel"), value: () => this.model.world?.planet.mapSizeOption?.name },
-            { label: Strings.str("playerCivLabel"), value: () => "Egypt: aggressive, perfectionist" },
+            { label: Strings.str("playerCivLabel"), value: () => this.model.playerCiv?.name },
+            // { label: Strings.str("playerCivDescriptionLabel"), value: () => "aggressive, perfectionist" },
             { label: Strings.str("playerNameLabel"), value: () => this.model.playerInfo?.name },
             { label: Strings.str("opponentsConfigLabel"), value: () => this.model.opponents }
         ];

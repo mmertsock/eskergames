@@ -45,7 +45,7 @@ export class Game {
     static initialize(content) {
         preprocessContent({
             addIndexes: [content.difficulties, content.world.mapSizes, content.zoomLevels, Terrain.baseTypes],
-            addIDs: [content.spritesheets],
+            addIDs: [content.spritesheets, content.civs],
             addIsDefault: [content.difficulties, content.world.mapSizes, content.zoomLevels, Terrain.baseTypes],
             localizeNames: [content.difficulties, content.world.mapSizes]
         });
@@ -99,17 +99,17 @@ export class Game {
             Sz.key("randomSeed")
         ])
         .ruleset(Civilization.name, Civilization.fromSavegame, [
-            Sz.key("id"),
-            Sz.key("name")
+            Sz.key("id")
         ])
         .ruleset(CivUnit.name, CivUnit.fromSavegame, [
             Sz.key("type"),
+            Sz.key("civ", Sz.reference("id", Civilization.name)),
             Sz.key("tile", Tile.name)
         ]);
     }
     
     static createNewGame(model) {
-        let world = World.createNew(model.world);
+        let world = World.createNew(model);
         return new Game({
             world: world,
             players: [new Player({
@@ -256,12 +256,14 @@ export class World {
     static fromSavegame(a) { return new World(a); }
     
     static createNew(model) {
-        let sizeOption = model.planet.mapSizeOption;
+        let sizeOption = model.world.planet.mapSizeOption;
+        let civ = new Civilization(model.playerCiv);
         return new World({
             planet: new Planet({ size: sizeOption.size }),
-            civs: [new Civilization({ name: "Placelandia" })],
+            civs: [civ],
             units: [new CivUnit({
-                type: "Settler",
+                type: "settler",
+                civ: civ,
                 tile: new Tile(new Point(sizeOption.size.width * 0.48, sizeOption.size.height * 0.7))
             })]
         });
@@ -444,11 +446,20 @@ Terrain.baseTypes = [
 ];
 
 export class Civilization {
+    static allMetaByName() {
+        return Object.values(inj().content.civs)
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }
+    static metaByID(id) {
+        return inj().content.civs[id];
+    }
+    
     static fromSavegame(a) { return new Civilization(a); }
     
     constructor(a) {
-        this.id = a.id || Identifier.random();
-        this.name = a.name;
+        this.id = a.id;
+        this.meta = inj().content.civs[this.id];
+        precondition(!!this.meta, "Unknown Civilization ID");
     }
 }
 
@@ -466,6 +477,7 @@ export class CivUnit {
     
     constructor(a) {
         this.type = a.type;
+        this.civ = a.civ;
         this.tile = a.tile;
     }
 }
