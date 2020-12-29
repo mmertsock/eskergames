@@ -38,32 +38,13 @@ zoomLevels:
 civs:
   australia:
     name: Australia
+    hue: 60
   poland:
     name: Poland
+    hue: 0
 
 ################## UI ################
 
-spritesheets:
-  terrainBase:
-    type: SolidContinuousSpritesheet
-    fileName: "terrain-base-640.jpg"
-    sourceRectSize: { width: 640, height: 640 }
-  terrainEdge:
-    type: RectSpritesheet
-    fileName: "terrain-edge-640.png"
-    sourceRectSize: { width: 640, height: 640 }
-    # instead of here, put the metrics in drawable-specific areas?
-    # so one spritesheet can have sprites for a variety of purposes
-    # (e.g. feature centers + edges, base edges, corners, rivers, shores)
-    metrics:
-      h:
-        grass: 2
-        plains: 3
-        river: 5
-      v:
-        grass: 0
-        plains: 1
-        river: 4
 worldView:
   canvasFillStyle: "hsl(34, 5%, 15%)"
   edgeOverscroll: 1 # tile units
@@ -90,6 +71,32 @@ worldView:
       allowGrid: true
       allowUnitAnimation: true
       allowAmbientAnimation: true
+spritesheets:
+  terrainBase:
+    type: SolidContinuousSpritesheet
+    fileName: "terrain-base-640.jpg"
+    sourceRectSize: { width: 640, height: 640 }
+  terrainEdge:
+    type: RectSpritesheet
+    fileName: "terrain-edge-640.png"
+    sourceRectSize: { width: 640, height: 640 }
+    metrics:
+      h:
+        grass: 2
+        plains: 3
+        river: 5
+      v:
+        grass: 0
+        plains: 1
+        river: 4
+drawables:
+  unit:
+    zoomRange: y to z
+    badge:
+      centerAnchor: { x: 0.4, y: 0.25 }
+      screenSize: { width: 30, height: 30 }
+      lineWidth: 1
+      opacity: 0.5
 
 keyboard:
   keyPressShortcuts:

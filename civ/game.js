@@ -461,6 +461,14 @@ export class Civilization {
         this.meta = inj().content.civs[this.id];
         precondition(!!this.meta, "Unknown Civilization ID");
     }
+    
+    color(opacity) {
+        if (opacity < 1) {
+            return `hsla(${this.meta.hue}, 50%, 50%, ${opacity})`;
+        } else {
+            return `hsl(${this.meta.hue}, 50%, 50%)`;
+        }
+    }
 }
 
 export class Player {

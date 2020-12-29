@@ -4,6 +4,11 @@ import { inj, Env, Identifier, Tile } from './game.js';
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn;
 const Point = Gaming.Point, Rect = Gaming.Rect;
 
+export function initialize() {
+    inj().spritesheets = new SpritesheetStore();
+    UnitDrawable.initialize();
+}
+
 export class Drawable {
     draw(c) { }
 }
@@ -110,18 +115,54 @@ export class TerrainEdgeDrawable {
 }
 
 export class UnitDrawable extends Drawable {
+    static initialize() {
+        UnitDrawable.metrics = inj().content.drawables.unit;
+        UnitDrawable.metrics.badge.centerAnchor = new Point(UnitDrawable.metrics.badge.centerAnchor);
+    }
+    
     constructor(unit) {
         super();
         this.unit = unit;
     }
     
     draw(c) {
+        this.character(c);
+        this.badgeCircle(c);
+        this.badgeIcon(c);
+    }
+    
+    characterScreenRect(c) {
+        return c.viewModel.projection.screenRectForRect(this.unit.tile.rect);
+    }
+    
+    badgeScreenRect(c) {
+        let metrics = UnitDrawable.metrics;
+        let center = c.viewModel.projection.screenPointForCoord(
+            this.unit.tile.coord.adding(metrics.badge.centerAnchor));
+        return Rect.withCenter(center, c.deviceSizeForDOMSize(metrics.badge.screenSize));
+    }
+    
+    character(c) {
         let rect = c.viewModel.projection.screenRectForRect(this.unit.tile.rect.inset(0.25, 0.25));
         c.ctx.fillStyle = "hsla(150, 72%, 50%, 0.6)";
         c.ctx.rectFill(rect);
         c.ctx.strokeStyle = "hsl(150, 72%, 50%)";
         c.ctx.lineWidth = 4;
         c.ctx.rectStroke(rect);
+    }
+    
+    badgeCircle(c) {
+        let metrics = UnitDrawable.metrics;
+        let rect = this.badgeScreenRect(c);
+        c.ctx.fillStyle = this.unit.civ.color(metrics.badge.opacity);
+        c.ctx.strokeStyle = this.unit.civ.color(1);
+        c.ctx.lineWidth = c.deviceLengthForDOMLength(metrics.badge.lineWidth);
+        c.ctx.ellipsePath(rect);
+        c.ctx.fill();
+        c.ctx.stroke();
+    }
+    
+    badgeIcon(c) {
     }
 }
 

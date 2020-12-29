@@ -8,7 +8,7 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, precondition = G
 const Point = Gaming.Point, Rect = Gaming.Rect;
 
 export function initialize() {
-    inj().spritesheets = new Drawables.SpritesheetStore();
+    Drawables.initialize();
     inj().session = new GameSession();
     CutsceneView.initialize();
 }
@@ -597,6 +597,10 @@ export class CanvasRenderContext {
     
     deviceLengthForDOMLength(px) {
         return px * this.devicePixelRatio;
+    }
+    
+    deviceSizeForDOMSize(size) {
+        return { width: size.width * this.devicePixelRatio, height: size.height * this.devicePixelRatio };
     }
 }
 

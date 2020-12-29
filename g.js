@@ -349,10 +349,14 @@ CanvasRenderingContext2D.prototype.rectStroke = function(rect) {
     this.strokeRect(rect.x, rect.y, rect.width, rect.height);
 };
 
-CanvasRenderingContext2D.prototype.ellipseFill = function(rect) {
-    var center = rect.center;
+CanvasRenderingContext2D.prototype.ellipsePath = function(rect) {
+    let center = rect.center;
     this.beginPath();
     this.ellipse(center.x, center.y, rect.width * 0.5, rect.height * 0.5, 0, 0, 2 * Math.PI);
+}
+
+CanvasRenderingContext2D.prototype.ellipseFill = function(rect) {
+    this.ellipsePath(rect);
     this.fill();
 };
 
