@@ -126,9 +126,11 @@ export class UnitDrawable extends Drawable {
     }
     
     draw(c) {
-        this.character(c);
+        let sheet = inj().spritesheets.sheet("objects");
+        if (!sheet) { return; }
+        this.character(c, sheet);
         this.badgeCircle(c);
-        this.badgeIcon(c);
+        this.badgeIcon(c, sheet);
     }
     
     characterScreenRect(c) {
@@ -142,13 +144,9 @@ export class UnitDrawable extends Drawable {
         return Rect.withCenter(center, c.deviceSizeForDOMSize(metrics.badge.screenSize));
     }
     
-    character(c) {
-        let rect = c.viewModel.projection.screenRectForRect(this.unit.tile.rect.inset(0.25, 0.25));
-        c.ctx.fillStyle = "hsla(150, 72%, 50%, 0.6)";
-        c.ctx.rectFill(rect);
-        c.ctx.strokeStyle = "hsl(150, 72%, 50%)";
-        c.ctx.lineWidth = 4;
-        c.ctx.rectStroke(rect);
+    character(c, sheet) {
+        let spriteIndex = 1;
+        sheet.draw(c, this.characterScreenRect(c), spriteIndex, 0);
     }
     
     badgeCircle(c) {
@@ -162,7 +160,9 @@ export class UnitDrawable extends Drawable {
         c.ctx.stroke();
     }
     
-    badgeIcon(c) {
+    badgeIcon(c, sheet) {
+        let spriteIndex = 0;
+        sheet.draw(c, this.badgeScreenRect(c), spriteIndex, 0);
     }
 }
 

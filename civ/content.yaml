@@ -89,6 +89,10 @@ spritesheets:
         grass: 0
         plains: 1
         river: 4
+  objects:
+    type: RectSpritesheet
+    fileName: "objects-640.png"
+    sourceRectSize: { width: 640, height: 640 }
 drawables:
   unit:
     zoomRange: y to z

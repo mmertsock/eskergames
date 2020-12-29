@@ -62,6 +62,7 @@ cd civ
 cp index.html "$CIV_ROOT/index.html"
 cp ../g.css ../g.js ../game-content.js ../locale.js "$CIV_LIB_PATH"
 cp civ.js content.yaml game.js ui-drawables.js ui-game.js ui-system.js "$CIV_APP_PATH"
+cp objects-640.png terrain-base-640.jpg terrain-edge-640.png "$CIV_APP_PATH"
 cd -
 
 sed -i -e "s|./civ.js|./$CIV_V_APP_URL/civ.js|g" -e "s|./civ.css|./$CIV_V_APP_URL/civ.css|g" -e "s|./g.css|./$CIV_V_LIB_URL/g.css|g" "$CIV_ROOT/index.html"
