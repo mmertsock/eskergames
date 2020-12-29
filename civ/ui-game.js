@@ -8,6 +8,7 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, precondition = G
 const Point = Gaming.Point, Rect = Gaming.Rect;
 
 export function initialize() {
+    inj().spritesheets = new Drawables.SpritesheetStore();
     inj().session = new GameSession();
     CutsceneView.initialize();
 }
@@ -254,6 +255,22 @@ export class WorldViewLayer {
     }
 }
 
+class WorldViewTerrainLayer extends WorldViewLayer {
+    constructor(view, canvasIndex, zIndex) {
+        super(canvasIndex, zIndex);
+        this.logTiming = false;
+        this.push(new Drawables.MapBackgroundDrawable());
+        view.world.planet.map.forEachSquare(s => {
+            this.push(new Drawables.TerrainBaseLayerDrawable(s));
+        });
+        view.world.planet.map.forEachEdge(edge => {
+            if (edge.square && edge.toSquare) {
+                this.push(new Drawables.TerrainEdgeDrawable(edge));
+            }
+        });
+    }
+}
+
 class GameWorldView {
     constructor(a) {
         this.session = inj().session;
@@ -275,8 +292,7 @@ class GameWorldView {
     get world() { return this.session.engine.game?.world; }
     
     screenDidShow() {
-        this.worldView.addLayer(new WorldViewLayer(GameWorldView.planetCanvasIndex, 0)
-            .concat([new Drawables.MapBackgroundDrawable()]));
+        this.worldView.addLayer(new WorldViewTerrainLayer(this, GameWorldView.planetCanvasIndex, 0));
         this.worldView.addLayer(new WorldViewLayer(GameWorldView.unitsCanvasIndex, 0)
             .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))));
         this.worldView.viewModel = new GameWorldViewModel({ world: this.world });
@@ -285,6 +301,8 @@ class GameWorldView {
         if (focus) {
             this.worldView.centerOnCoord(focus.tile.centerCoord);
         }
+        // Fails to load first image (?) if you don't setTimeout
+        setTimeout(() => inj().spritesheets.loadAll(() => this.worldView.render()), 0);
     }
 }
 GameWorldView.planetCanvasIndex = 0;

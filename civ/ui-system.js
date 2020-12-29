@@ -134,6 +134,9 @@ class KeyboardInputController {
         this.keyController = new Gaming.KeyInputController();
         this.keyController.addShortcutsFromSettings(inj().content.keyboard);
         // this.keyController.debug = true;
+    }
+}
+
 export class CanvasInputController {
     constructor(a) {
         this.canvas = a.canvas;

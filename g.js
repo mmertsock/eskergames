@@ -83,6 +83,11 @@ export function hashArrayOfInts(values) {
 }
 
 if (!Object.isPrimitive) {
+    
+URL.prototype.bustCache = function() {
+    this.searchParams.append("bustCache", new Date().getTime());
+    return this;
+};
 
 Object.isPrimitive = function(o) {
     var type = typeof(o);

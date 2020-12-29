@@ -45,6 +45,10 @@ export class GameScriptEngine {
         once("GameScriptEngine.unknownCommand." + id, () => debugLog("Unknown command ID " + id));
         return undefined;
     }
+    
+    executeAsync(id, subject, evt, interval) {
+        setTimeout(() => this.execute(id, subject, evt), interval);
+    }
 }
 
 if (!EventTarget.prototype.addGameCommandEventListener) {
@@ -74,7 +78,7 @@ export class GameContent {
                 break;
         }
         if (bustCache) {
-            url.searchParams.append("bustCache", new Date().getTime());
+            url.bustCache();
         }
 
         return new Promise(resolve => {

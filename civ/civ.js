@@ -70,10 +70,11 @@ class CivApp {
             Gaming.debugWarn(`Failed to load autosave: ${e.message}`);
             Gaming.debugLog(e.stack);
         }
+        
         if (game) {
-            inj().gse.execute("resumeSavedGame", game, null);
+            inj().gse.executeAsync("resumeSavedGame", game, null, 0);
         } else {
-            inj().gse.execute("showFirstRunView", null, null);
+            inj().gse.executeAsync("showFirstRunView", null, null, 0);
         }
     }
 }
