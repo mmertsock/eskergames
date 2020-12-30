@@ -28,6 +28,7 @@ export class UI {
     }
     
     static prepareStaticContent() {
+        document.title = Strings.str("gameTitle");
         Strings.localizeDOM(
             document,
             (token, elem) => inj().gse.execute(token, elem, null)
