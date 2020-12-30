@@ -22,15 +22,6 @@ world:
       nameKey: largeMapSize
       size: { width: 128, height: 80 }
     # huge: 160x100
-zoomLevels:
-  - tileWidth: 6
-  - tileWidth: 12
-  - tileWidth: 24
-  - tileWidth: 48
-  - tileWidth: 96
-  - tileWidth: 208
-    isDefault: true
-  - tileWidth: 320
 
 ################# CIVS ###############
 
@@ -48,29 +39,19 @@ civs:
 worldView:
   canvasFillStyle: "hsl(34, 5%, 15%)"
   edgeOverscroll: 1 # tile units
+  zoomBehavior:
+    # DOM screen points per tile
+    range: { min: 20, defaultValue: 160, max: 320 }
+    stepMultiplier: 1.4142135624
+  panBehavior:
+    smallPanPoints: 50 # DOM screen points
+    largePanScreenFraction: 0.4
   tileGrid:
     strokeStyle: "hsla(0, 0%, 100%, 0.1)"
     lineWidth: 1
-  smallPanPoints: 50
-  largePanScreenFraction: 0.4
-  zoomLevels:
-    - tileWidth: 1 # points per tile (see deviceMapping>zoomRatios for raw pixel sizes)
-      allowGrid: false # showGrid = allowGrid && userPreference.enableGrid
-      allowUnitAnimation: false
-      allowAmbientAnimation: false
-    - tileWidth: 3
-      allowGrid: false
-      allowUnitAnimation: true
-      allowAmbientAnimation: false
-    - tileWidth: 6
-      isDefault: true
-      allowGrid: true
-      allowUnitAnimation: true
-      allowAmbientAnimation: true
-    - tileWidth: 12
-      allowGrid: true
-      allowUnitAnimation: true
-      allowAmbientAnimation: true
+    zoomRange: { min: 96, max: &MAXZOOMUNBOUNDED 10000 }
+  animatedMovementZoomRange: { min: 48, max: *MAXZOOMUNBOUNDED }
+  ambientAnimationZoomRange: { min: 96, max: *MAXZOOMUNBOUNDED }
 spritesheets:
   terrainBase:
     type: SolidContinuousSpritesheet

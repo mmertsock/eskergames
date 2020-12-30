@@ -2901,7 +2901,7 @@ class civved {
             let planet = new Planet({ size: { width: 4, height: 3 }});
             let sut = new World({
                 planet: planet,
-                civs: [new CivGame.Civilization({name: "civA"}), new CivGame.Civilization({name: "civB"})],
+                civs: [new CivGame.Civilization("australia"), new CivGame.Civilization("poland")],
                 units: [u1, u2]
             });
             this.assertEqual(sut.civs?.length, 2);
@@ -2910,8 +2910,8 @@ class civved {
             if (sut.civs) {
                 this.assertEqual(sut.civs[0]?.world, sut);
                 this.assertEqual(sut.civs[1]?.world, sut);
-                this.assertEqual(sut.civs[0]?.name, "civA");
-                this.assertEqual(sut.civs[1]?.name, "civB");
+                this.assertEqual(sut.civs[0]?.id, "australia");
+                this.assertEqual(sut.civs[1]?.id, "poland");
             }
             this.assertEqual(sut.units?.length, 2);
             if (sut.units) {
@@ -2961,35 +2961,77 @@ static tileProjectionTests() {
 }
 
 static worldViewTests() {
-    const Tile = CivGame.Tile;
     let world = { planet: new CivGame.Planet({size: {width: 15, height: 10}}) };
-    let zoomLevels = [10, 20, 30, 40, 50].map((z, i) => {
-        return new CivGame.ZoomLevel({tileWidth: z, index: i, isDefault: i == 3});
-    });
+    let zoomBehaviorConfig = {
+        range: { min: 10, defaultValue: 40, max: 50 },
+        stepMultiplier: 1.4142135624
+    };
     let setInj = function(edgeOverscroll) {
         CivGame.inj().content = {
-            zoomLevels: zoomLevels,
-            worldView: { edgeOverscroll: edgeOverscroll }
+            worldView: {
+                edgeOverscroll: edgeOverscroll,
+                zoomBehavior: zoomBehaviorConfig
+            }
         };
     };
     
     new UnitTest("Civ.GameWorldViewModel", function() {
-        let sut = new CivGameUI.GameWorldViewModel({
-            world: world, zoomLevels: zoomLevels
-        });
-        this.assertEqual(CivGame.ZoomLevel.getDefault()?.index, 3);
-        this.assertEqual(sut.zoomLevel?.index, 3);
+        let sut = new CivGameUI.GameWorldViewModel(world, 40);
+        this.assertEqual(sut.worldRect, new Rect(0, 0, 15, 10));
+        this.assertEqual(sut.zoomFactor, 40);
+        this.assertEqual(sut.projection.factor, 40);
         this.assertEqual(sut.worldScreenRect, new Rect(0, 0, 600, 400));
         
-        sut.zoomLevel = zoomLevels[1];
-        this.assertEqual(sut.zoomLevel?.index, 1);
-        this.assertEqual(sut.worldScreenRect, new Rect(0, 0, 300, 200));
-    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing the basics
+        sut.zoomFactor = 28;
+        this.assertEqual(sut.worldRect, new Rect(0, 0, 15, 10));
+        this.assertEqual(sut.zoomFactor, 28);
+        this.assertEqual(sut.worldScreenRect, new Rect(0, 0, 420, 280));
+    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
+    
+    new UnitTest("Civ.ZoomBehavior", function() {
+        let sut = new CivGameUI.ZoomBehavior({
+            range: { min: 10, defaultValue: 40, max: 50 },
+            stepMultiplier: 1.4142135624
+        });
+        let worldView1 = { devicePixelRatio: 1 };
+        let worldView2 = { devicePixelRatio: 2 };
+        this.assertEqual(sut.defaultZoomFactor(worldView1), 40);
+        this.assertEqual(sut.defaultZoomFactor(worldView2), 80);
+        
+        this.assertEqual(sut.steppingIn(worldView1, 30), 42);
+        this.assertEqual(sut.steppingIn(worldView1, 40), 50);
+        this.assertEqual(sut.steppingIn(worldView1, 55), 50);
+        this.assertEqual(sut.steppingOut(worldView1, 30), 21);
+        this.assertEqual(sut.steppingOut(worldView1, 12), 10);
+        this.assertEqual(sut.steppingOut(worldView1, 5), 10);
+        
+        this.assertEqual(sut.steppingIn(worldView2, 30), 42);
+        this.assertEqual(sut.steppingIn(worldView2, 40), 57);
+        this.assertEqual(sut.steppingIn(worldView2, 80), 100);
+        this.assertEqual(sut.steppingIn(worldView2, 120), 100);
+        this.assertEqual(sut.steppingOut(worldView2, 30), 21);
+        this.assertEqual(sut.steppingOut(worldView2, 24), 20);
+        this.assertEqual(sut.steppingOut(worldView2, 5), 20);
+    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
+    
+    new UnitTest("Civ.PanBehavior", function() {
+        let sut = new CivGameUI.PanBehavior({
+            smallPanPoints: 50,
+            largePanScreenFraction: 0.4
+        });
+        let worldView = {
+            devicePixelRatio: 2,
+            viewportScreenRect: new Rect(-10, 20, 800, 400)
+        };
+        this.assertEqual(sut.smallPanScreenPoints(worldView, directions.N), 100);
+        this.assertEqual(sut.smallPanScreenPoints(worldView, directions.E), 100);
+        this.assertEqual(sut.largePanScreenPoints(worldView, directions.S), 160);
+        this.assertEqual(sut.largePanScreenPoints(worldView, directions.W), 320);
+        this.assertEqual(sut.largePanScreenPoints(worldView, directions.NE), 160);
+    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
     
     new UnitTest("Civ.WorldViewport", function() {
-        let viewModel = new CivGameUI.GameWorldViewModel({
-            world: world, zoomLevels: zoomLevels
-        });
+        let viewModel = new CivGameUI.GameWorldViewModel(world, 40);
         let canvas = document.createElement("canvas");
         
         canvas.width = 640;
@@ -2999,7 +3041,8 @@ static worldViewTests() {
         });
         
         // 600x400 world
-        this.assertEqual(sut.zoomLevel?.tileWidth, 40, "defaults to viewModel zoom");
+        this.assertEqual(sut.model.zoomFactor, 40, "respects default viewModel zoom");
+        this.assertEqual(sut.zoomFactor, 40);
         this.assertEqual(sut.centerCoord, new Point(7.5, 5), "defaults to viewModel exact center coord");
         // canvas is wider/shorter than the world
         this.assertEqual(sut.viewportScreenRect, new Rect(-20, 51, canvas.width, canvas.height));
@@ -3011,18 +3054,19 @@ static worldViewTests() {
         this.assertEqual(sut.centerCoord, new Point(7.5, 5), "retains center after canvas change");
         this.assertEqual(sut.viewportScreenRect, new Rect(100, 0, canvas.width, canvas.height));
         
-        sut.zoomLevel = zoomLevels[0];
-        this.assertEqual(sut.zoomLevel?.tileWidth, 10); //150x100 world
+        sut.zoomFactor = 10;
+        this.assertEqual(sut.model.zoomFactor, 10); //150x100 world
+        this.assertEqual(sut.zoomFactor, 10);
         this.assertEqual(sut.centerCoord, new Point(7.5, 5), "retains center after jumping");
         this.assertEqual(sut.viewportScreenRect, new Rect(-125, -150, canvas.width, canvas.height));
         
         sut.centerCoord = new Point(-1.5, 2);
-        this.assertEqual(sut.zoomLevel?.tileWidth, 10, "retains zoom after jumping");
+        this.assertEqual(sut.zoomFactor, 10, "retains zoom after jumping");
         this.assertEqual(sut.centerCoord, new Point(-1.5, 2));
         this.assertEqual(sut.viewportScreenRect, new Rect(-215, -180, canvas.width, canvas.height));
         
         logTestMsg("With overscroll=1...")
-        sut.zoomLevel = zoomLevels[3];
+        sut.zoomFactor = 40;
         // Viewport 10x7.5 tiles. With over=1, valid rect is:
         // x:4...11, y:2.75....7.25
         canvas.width = 400; canvas.height = 300;
@@ -3044,13 +3088,13 @@ static worldViewTests() {
         
         canvas.width = 10; canvas.height = 10;
         sut.centerCoord = new Point(1, 1);
-        this.assertEqual(sut.zoomLevel?.tileWidth, 40);
+        this.assertEqual(sut.zoomFactor, 40);
         this.assertEqualTol(sut.centerCoord, new Point(1, 1), 0.01, "reset to tiny canvas");
         canvas.width = 450; canvas.height = 180;
-        sut.zoomLevel = zoomLevels[2]; // 450x300
-        this.assertEqual(sut.zoomLevel?.tileWidth, 30);
+        sut.zoomFactor = 30; // 450x300
+        this.assertEqual(sut.model.zoomFactor, 30);
         this.assertEqualTol(sut.centerCoord, new Point(6.5, 2), 0.01, "center reset after zooming out");
-    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing the basics
+    }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
     
     new UnitTest("Civ.EdgeOverscroll", function() {
         const p = new CivGame.Planet({size: {width: 15, height: 10}});
@@ -3089,11 +3133,11 @@ static worldViewTests() {
         this.assertEqualTol(sut.clampedCoord(new Point(-3.5, 14.5), vm, c, o), new Point(-2.4, 12.45), 0.01, "tiny canvas, shift to overscrolled edge");
         
         c = { width: 18, height: 10 };
-        logTestMsg(sut._validCoordRect(vm, c, o).debugDescription);
+        // logTestMsg(sut._validCoordRect(vm, c, o).debugDescription);
         this.assertEqualTol(sut.clampedCoord(new Point(8, 4), vm, c, o), new Point(8, 4), 0.01, "similar canvas, middle ok");
         this.assertEqualTol(sut.clampedCoord(new Point(0, 0), vm, c, o), new Point(6.5, 2.5), 0.01, "tiny canvas, 0,0 shifted by half canvas size minus overscroll");
     }).buildAndRun();
-} // end worldViewTests
+}
 
 static savegameTests() {
     new UnitTest("Civ.savegame", function() {
@@ -3213,9 +3257,6 @@ let standardSuite = new TestSession([
 ]);
 
 let taskSuite = new TestSession([
-    saveStateTest,
-    boolArrayTest,
-    base64Test,
     civved.baseGeometryTests,
     civved.mapTests,
     civved.worldModelTests,

@@ -44,16 +44,15 @@ export function inj() { return Injection.shared; }
 export class Game {
     static initialize(content) {
         preprocessContent({
-            addIndexes: [content.difficulties, content.world.mapSizes, content.zoomLevels, Terrain.baseTypes],
+            addIndexes: [content.difficulties, content.world.mapSizes, Terrain.baseTypes],
             addIDs: [content.spritesheets, content.civs],
-            addIsDefault: [content.difficulties, content.world.mapSizes, content.zoomLevels, Terrain.baseTypes],
+            addIsDefault: [content.difficulties, content.world.mapSizes, Terrain.baseTypes],
             localizeNames: [content.difficulties, content.world.mapSizes]
         });
         inj().views = { };
         inj().content = content;
         DifficultyOption.initialize();
         MapSizeOption.initialize();
-        ZoomLevel.initialize();
         inj().rng = Gaming.Rng.shared;
         inj().storage = new GameStorage(window.localStorage);
         
@@ -212,10 +211,6 @@ export class TileProjection {
         this.factor = factor;
     }
     
-    supportingOffset_screenPointForTileCoord(coord) {
-        this.centerCoord = new Point(7.5, 3.24);
-    }
-    
     lengthForScreenLength(screenLength) {
         return screenLength / this.factor;
     }
@@ -257,7 +252,7 @@ export class World {
     
     static createNew(model) {
         let sizeOption = model.world.planet.mapSizeOption;
-        let civ = new Civilization(model.playerCiv);
+        let civ = new Civilization(model.playerCiv?.id);
         return new World({
             planet: new Planet({ size: sizeOption.size }),
             civs: [civ],
@@ -454,10 +449,10 @@ export class Civilization {
         return inj().content.civs[id];
     }
     
-    static fromSavegame(a) { return new Civilization(a); }
+    static fromSavegame(a) { return new Civilization(a?.id); }
     
-    constructor(a) {
-        this.id = a.id;
+    constructor(id) {
+        this.id = id;
         this.meta = inj().content.civs[this.id];
         precondition(!!this.meta, "Unknown Civilization ID");
     }
@@ -577,33 +572,6 @@ export class MapSizeOption {
         if (!other) { return false; }
         return this.id == other.id;
     }
-}
-
-export class ZoomLevel {
-    static initialize() {
-        inj().content.zoomLevels = inj().content.zoomLevels.map(item => new ZoomLevel(item));
-    }
-    
-    static all() { return inj().content.zoomLevels; }
-    static indexOrDefault(value) {
-        if (value instanceof ZoomLevel) { return value; }
-        return GameContent.itemOrDefaultFromArray(inj().content.zoomLevels, value);
-    }
-    static getDefault() { return GameContent.defaultItemFromArray(inj().content.zoomLevels); }
-    
-    constructor(a) {
-        Object.assign(this, a);
-    }
-    
-    get next() {
-        return ZoomLevel.all()[this.index + 1];
-    }
-    
-    get previous() {
-        return ZoomLevel.all()[this.index - 1];
-    }
-    
-    get debugDescription() { return `<ZoomLevel#${this.index} ${this.tileWidth}w>`; }
 }
 
 function preprocessContent(a) {

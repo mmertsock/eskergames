@@ -1,6 +1,6 @@
 import * as Gaming from '../g.js';
 import { Strings } from '../locale.js';
-import { inj, Game, GameEngine, Tile, TileProjection, ZoomLevel } from './game.js';
+import { inj, Game, GameEngine, Tile, TileProjection } from './game.js';
 import { CanvasInputController, DOMRootView, ScreenView, UI } from './ui-system.js';
 import * as Drawables from './ui-drawables.js';
 
@@ -91,12 +91,21 @@ class GameContentView {
     }
 }
 
+// Interfaces for objects passed to the WorldView and owned by the WorldView's owner.
+
+// Abstracts the world map itself, and owns a projection of a world's units to a 2D plane of device pixels. Updates projection via the zoomFactor property. Exposes basic size info for the world map, for use by viewports to determine zoom/panning constraints. Works with an unbounded world plane with origin at world's origin; knows nothing about viewports or offsets within a viewport. No knowledge of animation or time.
 const Interface_WorldViewModel = class {
-    get worldRect() {}
-    get zoomLevel() {}
-    set zoomLevel(o) {}
+    // Object or primitive describing device pixels relative to world units
+    get zoomFactor() {}
+    set zoomFactor(o) {}
     get projection() {}
+    // 2D rect of the world's bounds in tile coordinates
+    get worldRect() {}
+    // Device pixel units based on the projection. Origin == worldRect origin
+    get worldScreenRect() {}
 };
+
+// Maps a world's units to a 2D plane of device pixels at some instant in time. Screen plane is unbounded with no viewport or offset; just scales x/y values from the origin based on zoom factor (managed by the WorldViewModel or other owner)
 const Interface_WorldViewModel_Projection = class {
     sizeForScreenSize(o) {}
     screenPointForCoord(o) {}
@@ -105,7 +114,9 @@ const Interface_WorldViewModel_Projection = class {
     lengthForScreenLength(o) {}
 };
 
+// Implements each use case for panning/zooming user inputs. Sends exact device-pixel target centerCoord/zoom values to ViewportController to animate (subject to clamping in viewport, etc.).
 export class WorldView {
+    // Set viewModel after init, when ready to activate all functionality.
     constructor(a) {
         this.elem = a.elem;
         this.canvasCount = a.canvasCount;
@@ -131,10 +142,14 @@ export class WorldView {
     get viewModel() { return this._viewModel; }
     set viewModel(value) {
         this._viewModel = value;
-        this.configureView();
+        this._configureView();
     }
     
-    configureView() {
+    get viewportScreenRect() {
+        return this.canvasView.viewport.viewportScreenRect;
+    }
+    
+    _configureView() {
         this.canvasView = new WorldCanvasView({
             model: this._viewModel,
             elem: this.elem,
@@ -165,12 +180,16 @@ export class WorldView {
     get isReady() { return !!this.viewModel; }
     
     zoomIn() {
-        this.canvasView?.viewportController.zoomIn();
+        if (!this.isReady || !this.zoomBehavior) { return; }
+        let zoomFactor = this.zoomBehavior.steppingIn(this, this.viewModel.zoomFactor);
+        this.canvasView.viewportController.setZoomFactor(zoomFactor, true);
         this.render();
     }
     
     zoomOut() {
-        this.canvasView?.viewportController.zoomOut();
+        if (!this.isReady || !this.zoomBehavior) { return; }
+        let zoomFactor = this.zoomBehavior.steppingOut(this, this.viewModel.zoomFactor);
+        this.canvasView.viewportController.setZoomFactor(zoomFactor, true);
         this.render();
     }
     
@@ -280,7 +299,8 @@ class GameWorldView {
             devicePixelRatio: window.devicePixelRatio
         });
         this.worldView.clickBehavior = new CenterMapClickBehavior();
-        this.worldView.panBehavior = new PanBehavior(inj().content.worldView);
+        this.worldView.zoomBehavior = new ZoomBehavior(inj().content.worldView.zoomBehavior);
+        this.worldView.panBehavior = new PanBehavior(inj().content.worldView.panBehavior);
         
         inj().gse.registerCommand("gameWorldZoomIn", () => this.worldView.zoomIn());
         inj().gse.registerCommand("gameWorldZoomOut", () => this.worldView.zoomOut());
@@ -295,7 +315,8 @@ class GameWorldView {
         this.worldView.addLayer(new WorldViewTerrainLayer(this, GameWorldView.planetCanvasIndex, 0));
         this.worldView.addLayer(new WorldViewLayer(GameWorldView.unitsCanvasIndex, 0)
             .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))));
-        this.worldView.viewModel = new GameWorldViewModel({ world: this.world });
+        let zoomFactor = this.worldView.zoomBehavior.defaultZoomFactor(this.worldView);
+        this.worldView.viewModel = new GameWorldViewModel(this.world, zoomFactor);
         
         let focus = this.world.units[0];
         if (focus) {
@@ -314,6 +335,35 @@ export class CenterMapClickBehavior {
     }
 }
 
+// Calculations and constraints for specific zooming use cases. All inputs and outputs are in device pixel units for use in TileProjection; outputs are always rounded to integer pixels. Entirely stateless, just represents a set of rules/algorithms.
+export class ZoomBehavior {
+    // Parameters all in DOM units
+    constructor(a) {
+        this.range = { min: a.range.min, defaultValue: a.range.defaultValue, max: a.range.max };
+        this.stepMultiplier = a.stepMultiplier;
+    }
+    
+    defaultZoomFactor(worldView) {
+        return this.range.defaultValue * worldView.devicePixelRatio;
+    }
+    
+    // Target zoom factor single-step use cases, e.g a plus-button/key
+    steppingIn(worldView, fromZoomFactor) {
+        return this._clamp(worldView, fromZoomFactor * this.stepMultiplier);
+    }
+    
+    // Target zoom factor single-step use cases, e.g a minus-button/key
+    steppingOut(worldView, fromZoomFactor) {
+        return this._clamp(worldView, fromZoomFactor / this.stepMultiplier);
+    }
+    
+    _clamp(worldView, zoomFactor) {
+        let range = { min: this.range.min * worldView.devicePixelRatio, max: this.range.max * worldView.devicePixelRatio };
+        return Math.clamp(Math.round(zoomFactor), range);
+    }
+}
+
+// Calculations and constraints for specific panning use cases. Produces device pixel unit results. Entirely stateless, just represents a set of rules/algorithms.
 export class PanBehavior {
     constructor(a) {
         this.smallPanPoints = a.smallPanPoints;
@@ -326,12 +376,12 @@ export class PanBehavior {
     
     largePanScreenPoints(worldView, direction) {
         let smallPoints = this.smallPanScreenPoints(worldView, direction);
-        let largePoints = this._viewportSizeInDirection(direction) * this.largePanScreenFraction;
+        let largePoints = this._viewportSizeInDirection(worldView, direction) * this.largePanScreenFraction;
         return Math.max(smallPoints, largePoints);
     }
     
     _viewportSizeInDirection(worldView, direction) {
-        let size = worldView.canvasView.viewport.viewportScreenRect.size;
+        let size = worldView.viewportScreenRect.size;
         switch (direction) {
             case Gaming.directions.N:
             case Gaming.directions.S:
@@ -414,17 +464,15 @@ export class WorldCanvasView {
 
 // Represents a virtual screen of device pixels for a game World. Maps zoom levels onto TileProjections, and determines pixel sizes and positions of rendered objects relative to the world model's origin. Does not deal with viewport details: WorldViewModel treats the virtual screen's (0,0) origin as mapping always to the tile world's (0,0) origin.
 export class GameWorldViewModel {
-    constructor(a) {
-        this.world = a.world;
-        this.projection = null; // set in zoomLevel setter
-        this.zoomLevel = ZoomLevel.getDefault();
+    constructor(world, zoomFactor) {
+        this.world = world;
+        this.projection = null; // set in .zoomFactor setter
+        this.zoomFactor = zoomFactor;
     }
     
-    get zoomLevel() { return this._zoomLevel; }
-    set zoomLevel(value) {
-        this._zoomLevel = ZoomLevel.indexOrDefault(value);
-        this.projection = new TileProjection(this._zoomLevel.tileWidth);
-    }
+    // Zoom factor in device pixel units
+    get zoomFactor() { return this.projection.factor; }
+    set zoomFactor(value) { this.projection = new TileProjection(value); }
     
     get worldRect() { return this.world.planet.rect; }
     
@@ -447,7 +495,7 @@ export class EdgeOverscroll {
     }
 }
 
-// Displays a WorldViewModel at a particular panning offset within an HTML canvas. Assign the centerCoord property to pan the view. Adjust the zoom level using the WorldViewModel.
+// Displays a WorldViewModel at a particular zoom factor and panning offset (device pixel units) within an HTML canvas at some instant in time. Callers manage any animation, etc.
 export class WorldViewport {
     // Up on screen = negative Y offset. "South is up"
     static worldUnitVectorForScreenDirection(direction) {
@@ -462,9 +510,10 @@ export class WorldViewport {
         this.centerCoord = this.model.worldRect.center;
     }
     
-    get zoomLevel() { return this.model.zoomLevel; }
-    set zoomLevel(value) {
-        this.model.zoomLevel = value;
+    // Assumes supplied zoomFactor is valid
+    get zoomFactor() { return this.model.zoomFactor; }
+    set zoomFactor(value) {
+        this.model.zoomFactor = value;
         // Adjust center for edge overscroll as needed
         this.centerCoord = this._centerCoord;
     }
@@ -528,7 +577,7 @@ export class WorldViewport {
     }
 }
 
-// Updates a WorldViewport and tracks state for changes to it over time
+// Manages animated updates to a WorldViewport's zoom level/center coord over time
 export class ViewportController {
     constructor(a) {
         this.viewport = a.viewport;
@@ -536,36 +585,21 @@ export class ViewportController {
     
     // WorldViewModel
     get model() { return this.viewport.model; }
-    get zoomLevel() { return this.model.zoomLevel; }
     
-    // Immediately jumps. Retains center
-    setZoomLevel(zoomLevel) {
-        this.viewport.zoomLevel = zoomLevel;
+    // Retains center
+    setZoomFactor(zoomFactor, animated) {
+        this.viewport.zoomFactor = zoomFactor;
     }
     
-    zoomIn() {
-        let next = this.viewport.zoomLevel.next;
-        if (next) {
-            this.viewport.zoomLevel = next;
-        }
-    }
-    
-    zoomOut() {
-        let previous = this.viewport.zoomLevel.previous;
-        if (previous) {
-            this.viewport.zoomLevel = previous;
-        }
-    }
-    
-    // Immediately jumps. Zoom level optional
-    centerOnCoord(coord, zoomLevel) {
-        if (typeof(zoomLevel) != 'undefined') {
-            this.viewport.zoomLevel = zoomLevel;
+    // Immediately jumps. Zoom factor optional
+    centerOnCoord(coord, zoomFactor, animated) {
+        if (typeof(zoomFactor) != 'undefined') {
+            this.viewport.zoomFactor = zoomFactor;
         }
         this.viewport.centerCoord = coord;
     }
     
-    // setVisibleRect(tileRect, padding) to calculate zoomLevel
+    // setVisibleRect(tileRect, padding) to calculate zoomFactor
     // appropriate to display all coordinates relevant to some event.
 }
 
