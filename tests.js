@@ -2998,6 +2998,12 @@ static worldViewTests() {
         this.assertEqual(sut.defaultZoomFactor(worldView1), 40);
         this.assertEqual(sut.defaultZoomFactor(worldView2), 80);
         
+        this.assertEqual(sut.deserializedZoomFactor(worldView1, undefined), 40, "default zoomFactor if camera data missing");
+        this.assertEqual(sut.deserializedZoomFactor(worldView2, 27), 54, "gets scaled zoomFactor from camera data");
+        this.assertEqual(sut.deserializedZoomFactor(worldView1, 27), 27, "gets scaled zoomFactor from camera data");
+        this.assertEqual(sut.serializedZoomFactor(worldView1, 54), 54);
+        this.assertEqual(sut.serializedZoomFactor(worldView2, 54), 27);
+        
         this.assertEqual(sut.steppingIn(worldView1, 30), 42);
         this.assertEqual(sut.steppingIn(worldView1, 40), 50);
         this.assertEqual(sut.steppingIn(worldView1, 55), 50);
@@ -3140,9 +3146,10 @@ static worldViewTests() {
 }
 
 static savegameTests() {
-    new UnitTest("Civ.savegame", function() {
+    new UnitTest("Civ.Game.savegame", function() {
         let newGameModel = CivSystemUI._unitTestSymbols.NewGameDialog.defaultModelValue();
         let newGame = CivGame.Game.createNewGame(newGameModel);
+        newGame.ui.camera = {zoomFactor: 37, centerCoord: {x: 3, y: 7}};
         this.assertDefined(newGame.world);
         this.assertDefined(newGame.world?.planet?.map);
         let terrain = newGame.world?.planet?.map?.squareAtTile(new CivGame.Tile(1, 3))?.terrain;
@@ -3154,7 +3161,10 @@ static savegameTests() {
         this.assertDefined(newGame.players[0]?.civ);
         let sz = newGame.serializedSavegameData;
         let fromSz = CivGame.Game.fromSerializedSavegame(sz);
-        let sz2 = fromSz.serializedSavegameData;
+        this.assertEqual(fromSz?.ui?.camera?.zoomFactor, 37);
+        this.assertEqual(fromSz?.ui?.camera?.centerCoord?.x, 3);
+        this.assertEqual(fromSz?.ui?.camera?.centerCoord?.y, 7);
+        let sz2 = fromSz?.serializedSavegameData;
         let szs = JSON.stringify(sz);
         let szs2 = JSON.stringify(sz2);
         this.assertEqual(szs, szs2);

@@ -69,7 +69,8 @@ export class Game {
             Game.fromSavegame,
             [
                 Sz.key("world", World.name),
-                Sz.key("players", [Player.name])
+                Sz.key("players", [Player.name]),
+                Sz.key("ui")
             ]
         )
         .pointRuleset()
@@ -121,11 +122,16 @@ export class Game {
     static fromSerializedSavegame(data) {
         return Game.savegameSerializer.deserialize(data);
     }
+    
     static fromSavegame(a) { return new Game(a); }
     
     constructor(a) {
+        precondition(a?.world instanceof World);
+        precondition(Array.isArray(a?.players));
         this.world = a.world;
         this.players = a.players;
+        // Raw opaque object for direct serialization
+        this.ui = a.ui || {};
     }
     
     get serializedSavegameData() {

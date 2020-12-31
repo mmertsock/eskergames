@@ -145,6 +145,7 @@ export class WorldView {
         this._configureView();
     }
     
+    get viewport() { return this.canvasView?.viewport; }
     get viewportScreenRect() {
         return this.canvasView.viewport.viewportScreenRect;
     }
@@ -309,21 +310,39 @@ class GameWorldView {
         inj().gse.registerCommand("gameWorldPanLarge", (direction) => this.worldView.panLarge(direction));
     }
     
+    get game() { return this.session.engine.game; }
     get world() { return this.session.engine.game?.world; }
     
     screenDidShow() {
+        Gaming.Kvo.stopAllObservations(this);
+        
         this.worldView.addLayer(new WorldViewTerrainLayer(this, GameWorldView.planetCanvasIndex, 0));
         this.worldView.addLayer(new WorldViewLayer(GameWorldView.unitsCanvasIndex, 0)
             .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))));
-        let zoomFactor = this.worldView.zoomBehavior.defaultZoomFactor(this.worldView);
-        this.worldView.viewModel = new GameWorldViewModel(this.world, zoomFactor);
+        let zoomFactor = this.worldView.zoomBehavior.deserializedZoomFactor(this.worldView, this.game.ui.camera?.zoomFactor);
+        let focus = this.game.ui.camera?.centerCoord ? new Point(this.game.ui.camera.centerCoord) : this.world.units[0]?.tile.centerCoord;
         
-        let focus = this.world.units[0];
+        this.worldView.viewModel = new GameWorldViewModel(this.world, zoomFactor);
+        this.worldView.viewport.kvo.addObserver(this, () => this.saveCamera());
+        
         if (focus) {
-            this.worldView.centerOnCoord(focus.tile.centerCoord);
+            this.worldView.centerOnCoord(focus);
         }
+        
         // Fails to load first image (?) if you don't setTimeout
+        // TODO do this as part of the initial startup sequence
         setTimeout(() => inj().spritesheets.loadAll(() => this.worldView.render()), 0);
+    }
+    
+    saveCamera() {
+        if (this.game && this.worldView.viewport) {
+            let camera = {
+                zoomFactor: this.worldView.zoomBehavior.serializedZoomFactor(this.worldView, this.worldView.viewport.zoomFactor),
+                centerCoord: this.worldView.viewport.centerCoord.objectForSerialization
+            };
+            this.game.ui.camera = camera;
+            inj().session.autosave(); // TODO temporary
+        }
     }
 }
 GameWorldView.planetCanvasIndex = 0;
@@ -345,6 +364,16 @@ export class ZoomBehavior {
     
     defaultZoomFactor(worldView) {
         return this.range.defaultValue * worldView.devicePixelRatio;
+    }
+    
+    deserializedZoomFactor(worldView, serialized) {
+        let DOMvalue = serialized;
+        if (isNaN(DOMvalue)) { return this.defaultZoomFactor(worldView); }
+        return this._clamp(worldView, UI.deviceLengthForDOMLength(DOMvalue, worldView.devicePixelRatio));
+    }
+    
+    serializedZoomFactor(worldView, zoomFactor) {
+        return zoomFactor / worldView.devicePixelRatio;
     }
     
     // Target zoom factor single-step use cases, e.g a plus-button/key
@@ -507,7 +536,9 @@ export class WorldViewport {
         this.metrics = inj().content.worldView;
         this.canvas = a.canvas;
         this._centerCoord = null;
+        // To trigger edge clamping as needed
         this.centerCoord = this.model.worldRect.center;
+        this.kvo = new Gaming.Kvo(this);
     }
     
     // Assumes supplied zoomFactor is valid
@@ -523,6 +554,7 @@ export class WorldViewport {
     set centerCoord(value) {
         let canvasTileSize = this.model.projection.sizeForScreenSize(this.canvas);
         this._centerCoord = EdgeOverscroll.clampedCoord(value, this.model, canvasTileSize, this.metrics.edgeOverscroll);
+        this.kvo?.notifyChanged();
     }
     
     // Returns a CanvasRenderingContext2D, with a translation applied
@@ -537,7 +569,7 @@ export class WorldViewport {
         // so world 0,0 displays at 248, 63
         // and world -1.5,2.73 displays at canvas center
         let canvasCenter = new Point(this.canvas.width * 0.5, this.canvas.height * 0.5).integral();
-        let originOffset = this.model.projection.screenPointForCoord(this.centerCoord.inverted);
+        let originOffset = this.model.projection.screenPointForCoord(this._centerCoord.inverted);
         let ctx = this.canvas.getContext("2d");
         ctx.setTransform(
             1, 0, 0, 1,
@@ -564,7 +596,7 @@ export class WorldViewport {
             canvasPoint.y - (0.5 * this.canvas.height)
         );
         return this.model.projection.coordForScreenPoint(relativeToCanvasCenter)
-            .adding(this.centerCoord);
+            .adding(this._centerCoord);
     }
     
     // Pixel coordinates of canvas viewport bounds, relative to world origin
@@ -572,7 +604,7 @@ export class WorldViewport {
         // centerScreenPoint = 50, 100
         // in world coords, canvas left edge is 50 - half the canvas width.
         // transform: move canvas drawing x0 to 50 - half the canvas width.
-        let centerScreenPoint = this.model.projection.screenPointForCoord(this.centerCoord);
+        let centerScreenPoint = this.model.projection.screenPointForCoord(this._centerCoord);
         return Rect.withCenter(centerScreenPoint, {width: this.canvas.width, height: this.canvas.height}).integral();
     }
 }

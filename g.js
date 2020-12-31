@@ -1610,6 +1610,8 @@ export class XYValue {
     get debugDescription() {
         return `(${this.x?.toFixed(2)}, ${this.y?.toFixed(2)})`;
     }
+    
+    get objectForSerialization() { return { x: this.x, y: this.y }; }
 
     adding(x, y) {
         if (typeof y === 'undefined') {
