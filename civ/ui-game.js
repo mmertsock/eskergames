@@ -95,10 +95,14 @@ class GameContentView {
 
 // Abstracts the world map itself, and owns a projection of a world's units to a 2D plane of device pixels. Updates projection via the zoomFactor property. Exposes basic size info for the world map, for use by viewports to determine zoom/panning constraints. Works with an unbounded world plane with origin at world's origin; knows nothing about viewports or offsets within a viewport. No knowledge of animation or time.
 const Interface_WorldViewModel = class {
+    get kvo() {}
+    get projection() {}
     // Object or primitive describing device pixels relative to world units
     get zoomFactor() {}
     set zoomFactor(o) {}
-    get projection() {}
+    // Just storing and observing, though the view model itself shouldn't care about it (the WorldViewport does)
+    get viewportCenterCoord() {}
+    set viewportCenterCoord(o) {}
     // 2D rect of the world's bounds in tile coordinates
     get worldRect() {}
     // Device pixel units based on the projection. Origin == worldRect origin
@@ -123,6 +127,7 @@ export class WorldView {
         this.devicePixelRatio = a.devicePixelRatio;
         this.clickBehavior = null;
         this.panBehavior = null;
+        this.zoomBehavior = null;
         this._viewModel = null; // WorldViewModel-type
         this.layers = [];
         this.canvasView = null; // WorldCanvasView
@@ -130,13 +135,7 @@ export class WorldView {
         
         this.target = new Gaming.DispatchTarget();
         // TODO pause animation on willResizeEvent, resume on didResize -- probably put that logic into the animation controller class not here.
-        this.target.register(DOMRootView.didResizeEvent, () => {
-            this.canvasView.resetCanvases();
-            // Reset center if too close to the edges
-            this.canvasView.viewportController.centerOnCoord(
-                this.canvasView.viewport.centerCoord);
-            this.render();
-        });
+        this.target.register(DOMRootView.didResizeEvent, () => this._canvasDidResize());
     }
     
     get viewModel() { return this._viewModel; }
@@ -163,6 +162,24 @@ export class WorldView {
             devicePixelRatio: this.devicePixelRatio
         });
         this.inputController.addDelegate(this);
+        let zoomFactor = this.viewModel.zoomFactor;
+        if (this.zoomBehavior) {
+            zoomFactor = this.zoomBehavior.validatedZoomFactor(this, zoomFactor);
+        }
+        this.canvasView.viewportController.centerOnCoord(
+            this.viewModel.viewportCenterCoord, zoomFactor, false);
+        this.render();
+    }
+    
+    _canvasDidResize() {
+        if (!this.isReady) { return; }
+        this.canvasView.resetCanvases();
+        // Reset viewport to respect edge/zoom constraints
+        let zoomFactor = this.viewModel.zoomFactor;
+        if (this.zoomBehavior) {
+            zoomFactor = this.zoomBehavior.validatedZoomFactor(this, zoomFactor);
+        }
+        this.canvasView.viewportController.setZoomFactor(zoomFactor, true);
         this.render();
     }
     
@@ -216,7 +233,7 @@ export class WorldView {
         let tileDistance = this.viewModel.projection.lengthForScreenLength(screenPoints);
         let offset = WorldViewport.worldUnitVectorForScreenDirection(direction)
             .scaled(tileDistance);
-        this.centerOnCoord(this.canvasView.viewport.centerCoord.adding(offset), undefined, true);
+        this.centerOnCoord(this.viewModel.viewportCenterCoord.adding(offset), undefined, true);
     }
     
     canvasClicked(eventModel) {
@@ -312,6 +329,7 @@ class GameWorldView {
     
     get game() { return this.session.engine.game; }
     get world() { return this.session.engine.game?.world; }
+    get viewModel() { return this.worldView.viewModel; }
     
     screenDidShow() {
         Gaming.Kvo.stopAllObservations(this);
@@ -319,20 +337,15 @@ class GameWorldView {
         this.worldView.addLayer(new WorldViewTerrainLayer(this, GameWorldView.planetCanvasIndex, 0));
         this.worldView.addLayer(new WorldViewLayer(GameWorldView.unitsCanvasIndex, 0)
             .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))));
-        // TODO still not good enough to constrain min zoom level when restoring a game at a larger viewport size. And resizing viewport during gameplay does not adjust min zoom.
-        let camera = {
-            zoomFactor: this.worldView.zoomBehavior.deserializedZoomFactor(this.worldView, this.game.ui.camera?.zoomFactor),
-            centerCoord: this.game.ui.camera?.centerCoord ? new Point(this.game.ui.camera.centerCoord) : this.world.units[0]?.tile.centerCoord
-        };
-        if (!camera.centerCoord) {
-            camera.centerCoord = this.world.planet.rect.center;
+            
+        let zoomFactor = this.worldView.zoomBehavior.deserializedZoomFactor(this.worldView, this.game.ui.camera?.zoomFactor);
+        let centerCoord = this.game.ui.camera?.centerCoord ? new Point(this.game.ui.camera.centerCoord) : this.world.units[0]?.tile.centerCoord;
+        if (!centerCoord) {
+            centerCoord = this.world.planet.rect.center;
         }
         
-        // Replace with setViewModel(viewModel, initialZoomFactor, initialCenterCoord)?
-        this.worldView.viewModel = new GameWorldViewModel(this.world, camera.zoomFactor);
-
-        this.worldView.viewport.kvo.addObserver(this, () => this.saveCamera());
-        this.worldView.centerOnCoord(camera.centerCoord, camera.zoomFactor, false);
+        this.worldView.viewModel = new GameWorldViewModel(this.world, zoomFactor, centerCoord);
+        this.viewModel.kvo.addObserver(this, () => this.saveCamera());
         
         // Fails to load first image (?) if you don't setTimeout
         // TODO do this as part of the initial startup sequence
@@ -340,10 +353,10 @@ class GameWorldView {
     }
     
     saveCamera() {
-        if (this.game && this.worldView.viewport) {
+        if (this.game && this.viewModel) {
             let camera = {
-                zoomFactor: this.worldView.zoomBehavior.serializedZoomFactor(this.worldView, this.worldView.viewport.zoomFactor),
-                centerCoord: this.worldView.viewport.centerCoord.objectForSerialization
+                zoomFactor: this.worldView.zoomBehavior.serializedZoomFactor(this.worldView, this.viewModel.zoomFactor),
+                centerCoord: this.viewModel.viewportCenterCoord.objectForSerialization
             };
             this.game.ui.camera = camera;
             inj().session.autosave(); // TODO temporary
@@ -390,6 +403,11 @@ export class ZoomBehavior {
     
     serializedZoomFactor(worldView, zoomFactor) {
         return zoomFactor / worldView.devicePixelRatio;
+    }
+    
+    // Adjusts given zoomFactor to fit constraints of current viewport/config
+    validatedZoomFactor(worldView, zoomFactor) {
+        return this._clamp(worldView, zoomFactor);
     }
     
     // Target zoom factor single-step use cases, e.g a plus-button/key
@@ -511,20 +529,36 @@ export class WorldCanvasView {
     }
 }
 
-// Represents a virtual screen of device pixels for a game World. Maps zoom levels onto TileProjections, and determines pixel sizes and positions of rendered objects relative to the world model's origin. Does not deal with viewport details: WorldViewModel treats the virtual screen's (0,0) origin as mapping always to the tile world's (0,0) origin.
+// Represents a virtual screen of device pixels for a game World. Maps zoom levels onto TileProjections, and determines pixel sizes and positions of rendered objects relative to the world model's origin. Stores viewportCenterCoord but doesn't use it: WorldViewModel treats the virtual screen's (0,0) origin as mapping always to the tile world's (0,0) origin.
 export class GameWorldViewModel {
-    constructor(world, zoomFactor) {
+    static Kvo() { return {"zoomFactor": "zoomFactor", "viewportCenterCoord": "_viewportCenterCoord" }; }
+    
+    constructor(world, zoomFactor, viewportCenterCoord) {
         this.world = world;
         this.projection = null; // set in .zoomFactor setter
+        this.kvo = new Gaming.Kvo(this);
         this.zoomFactor = zoomFactor;
+        this._viewportCenterCoord = viewportCenterCoord || this.world.planet.rect.center;
     }
     
     // Zoom factor in device pixel units
     get zoomFactor() { return this.projection.factor; }
-    set zoomFactor(value) { this.projection = new TileProjection(value); }
+    set zoomFactor(value) {
+        this.projection = new TileProjection(value);
+        this.kvo.zoomFactor.notifyChanged(true);
+    }
     
+    // In world tile coordinates
+    get viewportCenterCoord() { return this._viewportCenterCoord; }
+    set viewportCenterCoord(value) {
+        this._viewportCenterCoord = value;
+        this.kvo.viewportCenterCoord.notifyChanged(true);
+    }
+    
+    // viewportCenterCoord does not affect origin
     get worldRect() { return this.world.planet.rect; }
     
+    // viewportCenterCoord does not affect origin
     get worldScreenRect() {
         return this.projection.screenRectForRect(this.world.planet.rect);
     }
@@ -552,13 +586,9 @@ export class WorldViewport {
     }
     
     constructor(a) {
-        this.model = a.model; // WorldViewModel
         this.metrics = inj().content.worldView;
+        this.model = a.model; // WorldViewModel
         this.canvas = a.canvas;
-        this._centerCoord = null;
-        // To trigger edge clamping as needed
-        this.centerCoord = this.model.worldRect.center;
-        this.kvo = new Gaming.Kvo(this);
     }
     
     // Assumes supplied zoomFactor is valid
@@ -566,15 +596,14 @@ export class WorldViewport {
     set zoomFactor(value) {
         this.model.zoomFactor = value;
         // Adjust center for edge overscroll as needed
-        this.centerCoord = this._centerCoord;
+        this.centerCoord = this.centerCoord;
     }
     
     // The world coordinate to draw at the center of the HTML canvas
-    get centerCoord() { return this._centerCoord; }
+    get centerCoord() { return this.model.viewportCenterCoord; }
     set centerCoord(value) {
         let canvasTileSize = this.model.projection.sizeForScreenSize(this.canvas);
-        this._centerCoord = EdgeOverscroll.clampedCoord(value, this.model, canvasTileSize, this.metrics.edgeOverscroll);
-        this.kvo?.notifyChanged();
+        this.model.viewportCenterCoord = EdgeOverscroll.clampedCoord(value, this.model, canvasTileSize, this.metrics.edgeOverscroll);
     }
     
     // Returns a CanvasRenderingContext2D, with a translation applied
@@ -589,7 +618,7 @@ export class WorldViewport {
         // so world 0,0 displays at 248, 63
         // and world -1.5,2.73 displays at canvas center
         let canvasCenter = new Point(this.canvas.width * 0.5, this.canvas.height * 0.5).integral();
-        let originOffset = this.model.projection.screenPointForCoord(this._centerCoord.inverted);
+        let originOffset = this.model.projection.screenPointForCoord(this.centerCoord.inverted);
         let ctx = this.canvas.getContext("2d");
         ctx.setTransform(
             1, 0, 0, 1,
@@ -616,7 +645,7 @@ export class WorldViewport {
             canvasPoint.y - (0.5 * this.canvas.height)
         );
         return this.model.projection.coordForScreenPoint(relativeToCanvasCenter)
-            .adding(this._centerCoord);
+            .adding(this.centerCoord);
     }
     
     // Pixel coordinates of canvas viewport bounds, relative to world origin
@@ -624,7 +653,7 @@ export class WorldViewport {
         // centerScreenPoint = 50, 100
         // in world coords, canvas left edge is 50 - half the canvas width.
         // transform: move canvas drawing x0 to 50 - half the canvas width.
-        let centerScreenPoint = this.model.projection.screenPointForCoord(this._centerCoord);
+        let centerScreenPoint = this.model.projection.screenPointForCoord(this.centerCoord);
         return Rect.withCenter(centerScreenPoint, {width: this.canvas.width, height: this.canvas.height}).integral();
     }
 }

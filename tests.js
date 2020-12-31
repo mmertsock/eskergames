@@ -2977,6 +2977,9 @@ static worldViewTests() {
     
     new UnitTest("Civ.GameWorldViewModel", function() {
         let sut = new CivGameUI.GameWorldViewModel(world, 40);
+        let kvoHistory = [];
+        sut.kvo.addObserver(this, source => kvoHistory.push({source: source, zoomFactor: source.zoomFactor, viewportCenterCoord: source.viewportCenterCoord}));
+        
         this.assertEqual(sut.worldRect, new Rect(0, 0, 15, 10));
         this.assertEqual(sut.zoomFactor, 40);
         this.assertEqual(sut.projection.factor, 40);
@@ -2986,6 +2989,16 @@ static worldViewTests() {
         this.assertEqual(sut.worldRect, new Rect(0, 0, 15, 10));
         this.assertEqual(sut.zoomFactor, 28);
         this.assertEqual(sut.worldScreenRect, new Rect(0, 0, 420, 280));
+        
+        sut.viewportCenterCoord = new Point(3, 7);
+        sut.zoomFactor = 8;
+        sut.viewportCenterCoord = new Point(3, 7);
+        
+        this.assertEqual(kvoHistory.length, 4);
+        this.assertElementsEqual(kvoHistory.map(i => i.zoomFactor), [28, 28, 8, 8]);
+        this.assertElementsEqual(kvoHistory.map(i => i.viewportCenterCoord?.x), [7.5, 3, 3, 3]);
+        this.assertElementsEqual(kvoHistory.map(i => i.viewportCenterCoord?.y), [5, 7, 7, 7]);
+        Kvo.stopAllObservations(this);
     }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
     
     new UnitTest("Civ.ZoomBehavior", function() {
@@ -3026,6 +3039,11 @@ static worldViewTests() {
         logTestMsg("Test height fitting...");
         this.assertEqual(sut.heightFittingZoomFactor(worldView1), 2, "tiny viewport@1x");
         this.assertEqual(sut.heightFittingZoomFactor(worldView2), 2, "tiny viewport@2x");
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 1), 10);
+        this.assertEqual(sut.validatedZoomFactor(worldView2, 1), 20);
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 15), 15);
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 37.2), 37);
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 55), 50);
         
         viewportScreenRect.height = 180;
         this.assertEqual(sut.heightFittingZoomFactor(worldView1), 15, "180=15*(1+10+1)");
@@ -3034,6 +3052,11 @@ static worldViewTests() {
         this.assertEqual(sut.defaultZoomFactor(worldView2), 80, "default ok for h180@2x");
         this.assertEqual(sut.steppingOut(worldView1, 18), 15, "limit stepping out for h180@1x");
         this.assertEqual(sut.steppingOut(worldView2, 18), 20, "default min for h180@2x");
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 1), 15);
+        this.assertEqual(sut.validatedZoomFactor(worldView2, 1), 20);
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 25), 25);
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 37.2), 37);
+        this.assertEqual(sut.validatedZoomFactor(worldView1, 55), 50);
         
         viewportScreenRect.height = 542;
         this.assertEqual(sut.heightFittingZoomFactor(worldView1), 45, "540=45*(1+10+1)");
@@ -3065,7 +3088,7 @@ static worldViewTests() {
     }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
     
     new UnitTest("Civ.WorldViewport", function() {
-        let viewModel = new CivGameUI.GameWorldViewModel(world, 40);
+        let viewModel = new CivGameUI.GameWorldViewModel(world, 40, new Point(6, 4));
         let canvas = document.createElement("canvas");
         
         canvas.width = 640;
@@ -3073,11 +3096,16 @@ static worldViewTests() {
         let sut = new CivGameUI.WorldViewport({
             model: viewModel, canvas: canvas, devicePixelRatio: 1
         });
+        this.assertEqual(sut.centerCoord, new Point(6, 4), "respects initial viewModel centerCoord");
+        this.assertEqual(sut.model.viewportCenterCoord, new Point(6, 4));
+        
+        sut.centerCoord = new Point(7.5, 5);
+        this.assertEqual(sut.centerCoord, new Point(7.5, 5));
+        this.assertEqual(sut.model.viewportCenterCoord, new Point(7.5, 5));
         
         // 600x400 world
-        this.assertEqual(sut.model.zoomFactor, 40, "respects default viewModel zoom");
+        this.assertEqual(sut.model.zoomFactor, 40, "respects initial viewModel zoom");
         this.assertEqual(sut.zoomFactor, 40);
-        this.assertEqual(sut.centerCoord, new Point(7.5, 5), "defaults to viewModel exact center coord");
         // canvas is wider/shorter than the world
         this.assertEqual(sut.viewportScreenRect, new Rect(-20, 51, canvas.width, canvas.height));
         this.assertEqual(sut.coordForCanvasPoint(new Point(320, 149)), new Point(7.5, 5.0));
@@ -3086,17 +3114,20 @@ static worldViewTests() {
         canvas.width = 400;
         canvas.height = 400;
         this.assertEqual(sut.centerCoord, new Point(7.5, 5), "retains center after canvas change");
+        this.assertEqual(sut.model.viewportCenterCoord, new Point(7.5, 5));
         this.assertEqual(sut.viewportScreenRect, new Rect(100, 0, canvas.width, canvas.height));
         
         sut.zoomFactor = 10;
         this.assertEqual(sut.model.zoomFactor, 10); //150x100 world
         this.assertEqual(sut.zoomFactor, 10);
         this.assertEqual(sut.centerCoord, new Point(7.5, 5), "retains center after jumping");
+        this.assertEqual(sut.model.viewportCenterCoord, new Point(7.5, 5));
         this.assertEqual(sut.viewportScreenRect, new Rect(-125, -150, canvas.width, canvas.height));
         
         sut.centerCoord = new Point(-1.5, 2);
         this.assertEqual(sut.zoomFactor, 10, "retains zoom after jumping");
         this.assertEqual(sut.centerCoord, new Point(-1.5, 2));
+        this.assertEqual(sut.model.viewportCenterCoord, new Point(-1.5, 2));
         this.assertEqual(sut.viewportScreenRect, new Rect(-215, -180, canvas.width, canvas.height));
         
         logTestMsg("With overscroll=1...")
@@ -3115,6 +3146,7 @@ static worldViewTests() {
         this.assertEqualTol(sut.centerCoord, new Point(4, 2.75), 0.01, "med canvas, overscroll, 0,0 -> inward");
         sut.centerCoord = new Point(15, 10);
         this.assertEqualTol(sut.centerCoord, new Point(11, 7.25), 0.01, "med canvas, overscroll, max -> inward");
+        this.assertEqualTol(sut.model.viewportCenterCoord, new Point(11, 7.25), 0.01);
         
         canvas.width = 2000; canvas.height = 1000;
         sut.centerCoord = sut.centerCoord;
