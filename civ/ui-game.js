@@ -199,7 +199,7 @@ export class WorldView {
         let canvasPoint = this.inputController.pointerCavasPoint;
         if (!canvasPoint) { return; }
         let coord = this.canvasView.viewport.coordForCanvasPoint(canvasPoint);
-        this.centerOnCoord(coord);
+        this.centerOnCoord(coord, undefined, true);
     }
     
     pan(direction) {
@@ -216,7 +216,7 @@ export class WorldView {
         let tileDistance = this.viewModel.projection.lengthForScreenLength(screenPoints);
         let offset = WorldViewport.worldUnitVectorForScreenDirection(direction)
             .scaled(tileDistance);
-        this.centerOnCoord(this.canvasView.viewport.centerCoord.adding(offset));
+        this.centerOnCoord(this.canvasView.viewport.centerCoord.adding(offset), undefined, true);
     }
     
     canvasClicked(eventModel) {
@@ -225,8 +225,8 @@ export class WorldView {
         this.clickBehavior.canvasClicked(this, coord, eventModel);
     }
     
-    centerOnCoord(coord) {
-        this.canvasView.viewportController.centerOnCoord(coord);
+    centerOnCoord(coord, zoomFactor, animated) {
+        this.canvasView.viewportController.centerOnCoord(coord, zoomFactor, animated);
         this.render();
     }
     
@@ -319,15 +319,20 @@ class GameWorldView {
         this.worldView.addLayer(new WorldViewTerrainLayer(this, GameWorldView.planetCanvasIndex, 0));
         this.worldView.addLayer(new WorldViewLayer(GameWorldView.unitsCanvasIndex, 0)
             .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))));
-        let zoomFactor = this.worldView.zoomBehavior.deserializedZoomFactor(this.worldView, this.game.ui.camera?.zoomFactor);
-        let focus = this.game.ui.camera?.centerCoord ? new Point(this.game.ui.camera.centerCoord) : this.world.units[0]?.tile.centerCoord;
-        
-        this.worldView.viewModel = new GameWorldViewModel(this.world, zoomFactor);
-        this.worldView.viewport.kvo.addObserver(this, () => this.saveCamera());
-        
-        if (focus) {
-            this.worldView.centerOnCoord(focus);
+        // TODO still not good enough to constrain min zoom level when restoring a game at a larger viewport size. And resizing viewport during gameplay does not adjust min zoom.
+        let camera = {
+            zoomFactor: this.worldView.zoomBehavior.deserializedZoomFactor(this.worldView, this.game.ui.camera?.zoomFactor),
+            centerCoord: this.game.ui.camera?.centerCoord ? new Point(this.game.ui.camera.centerCoord) : this.world.units[0]?.tile.centerCoord
+        };
+        if (!camera.centerCoord) {
+            camera.centerCoord = this.world.planet.rect.center;
         }
+        
+        // Replace with setViewModel(viewModel, initialZoomFactor, initialCenterCoord)?
+        this.worldView.viewModel = new GameWorldViewModel(this.world, camera.zoomFactor);
+
+        this.worldView.viewport.kvo.addObserver(this, () => this.saveCamera());
+        this.worldView.centerOnCoord(camera.centerCoord, camera.zoomFactor, false);
         
         // Fails to load first image (?) if you don't setTimeout
         // TODO do this as part of the initial startup sequence
@@ -350,7 +355,7 @@ GameWorldView.unitsCanvasIndex = 1;
 
 export class CenterMapClickBehavior {
     canvasClicked(worldView, coord, eventModel) {
-        worldView.centerOnCoord(coord);
+        worldView.centerOnCoord(coord, undefined, true);
     }
 }
 
@@ -360,16 +365,27 @@ export class ZoomBehavior {
     constructor(a) {
         this.range = { min: a.range.min, defaultValue: a.range.defaultValue, max: a.range.max };
         this.stepMultiplier = a.stepMultiplier;
+        this.edgeOverscroll = a.edgeOverscroll; // tile units
+    }
+    
+    // Smallest zoom factor that fits world into viewport height
+    heightFittingZoomFactor(worldView) {
+        if (!worldView.viewModel) { return 1; }
+        let tileHeight = worldView.viewModel.worldRect.height + (2 * this.edgeOverscroll);
+        let viewportHeight = worldView.viewportScreenRect.height;
+        return Math.round(viewportHeight / tileHeight);
     }
     
     defaultZoomFactor(worldView) {
-        return this.range.defaultValue * worldView.devicePixelRatio;
+        return this._clamp(worldView, this.range.defaultValue * worldView.devicePixelRatio);
     }
     
     deserializedZoomFactor(worldView, serialized) {
-        let DOMvalue = serialized;
-        if (isNaN(DOMvalue)) { return this.defaultZoomFactor(worldView); }
-        return this._clamp(worldView, UI.deviceLengthForDOMLength(DOMvalue, worldView.devicePixelRatio));
+        if (isNaN(serialized)) {
+            return this.defaultZoomFactor(worldView);
+        } else {
+            return this._clamp(worldView, UI.deviceLengthForDOMLength(serialized, worldView.devicePixelRatio));
+        }
     }
     
     serializedZoomFactor(worldView, zoomFactor) {
@@ -387,8 +403,12 @@ export class ZoomBehavior {
     }
     
     _clamp(worldView, zoomFactor) {
-        let range = { min: this.range.min * worldView.devicePixelRatio, max: this.range.max * worldView.devicePixelRatio };
-        return Math.clamp(Math.round(zoomFactor), range);
+        let min = Math.max(
+            this.range.min * worldView.devicePixelRatio,
+            this.heightFittingZoomFactor(worldView)
+        );
+        let max = Math.max(min, this.range.max * worldView.devicePixelRatio);
+        return Math.clamp(Math.round(zoomFactor), { min: min, max: max });
     }
 }
 

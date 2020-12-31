@@ -38,11 +38,12 @@ civs:
 
 worldView:
   canvasFillStyle: "hsl(34, 5%, 15%)"
-  edgeOverscroll: 1 # tile units
+  edgeOverscroll: &EDGEOVERSCROLL 1 # tile units
   zoomBehavior:
     # DOM screen points per tile
     range: { min: 20, defaultValue: 160, max: 320 }
     stepMultiplier: 1.4142135624
+    edgeOverscroll: *EDGEOVERSCROLL
   panBehavior:
     smallPanPoints: 50 # DOM screen points
     largePanScreenFraction: 0.4

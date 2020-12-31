@@ -2991,10 +2991,14 @@ static worldViewTests() {
     new UnitTest("Civ.ZoomBehavior", function() {
         let sut = new CivGameUI.ZoomBehavior({
             range: { min: 10, defaultValue: 40, max: 50 },
-            stepMultiplier: 1.4142135624
+            stepMultiplier: 1.4142135624,
+            edgeOverscroll: 1
         });
-        let worldView1 = { devicePixelRatio: 1 };
-        let worldView2 = { devicePixelRatio: 2 };
+        let viewModel = {worldRect: new Rect(0, 0, 15, 10)};
+        // Extra small for basic testing. Height-fit tests below, with a larger rect
+        let viewportScreenRect = new Rect(0, 0, 20, 20);
+        let worldView1 = {devicePixelRatio: 1, viewModel: viewModel, viewportScreenRect: viewportScreenRect};
+        let worldView2 = {devicePixelRatio: 2, viewModel: viewModel, viewportScreenRect, viewportScreenRect};
         this.assertEqual(sut.defaultZoomFactor(worldView1), 40);
         this.assertEqual(sut.defaultZoomFactor(worldView2), 80);
         
@@ -3018,6 +3022,30 @@ static worldViewTests() {
         this.assertEqual(sut.steppingOut(worldView2, 30), 21);
         this.assertEqual(sut.steppingOut(worldView2, 24), 20);
         this.assertEqual(sut.steppingOut(worldView2, 5), 20);
+        
+        logTestMsg("Test height fitting...");
+        this.assertEqual(sut.heightFittingZoomFactor(worldView1), 2, "tiny viewport@1x");
+        this.assertEqual(sut.heightFittingZoomFactor(worldView2), 2, "tiny viewport@2x");
+        
+        viewportScreenRect.height = 180;
+        this.assertEqual(sut.heightFittingZoomFactor(worldView1), 15, "180=15*(1+10+1)");
+        this.assertEqual(sut.heightFittingZoomFactor(worldView2), 15, "180=15*(1+10+1)");
+        this.assertEqual(sut.defaultZoomFactor(worldView1), 40, "default ok for h180@1x");
+        this.assertEqual(sut.defaultZoomFactor(worldView2), 80, "default ok for h180@2x");
+        this.assertEqual(sut.steppingOut(worldView1, 18), 15, "limit stepping out for h180@1x");
+        this.assertEqual(sut.steppingOut(worldView2, 18), 20, "default min for h180@2x");
+        
+        viewportScreenRect.height = 542;
+        this.assertEqual(sut.heightFittingZoomFactor(worldView1), 45, "540=45*(1+10+1)");
+        this.assertEqual(sut.heightFittingZoomFactor(worldView2), 45, "540=45*(1+10+1)");
+        this.assertEqual(sut.defaultZoomFactor(worldView1), 45, "default too small for h540@1x");
+        this.assertEqual(sut.defaultZoomFactor(worldView2), 80, "default ok for h540@2x");
+        this.assertEqual(sut.steppingOut(worldView1, 50), 45, "limit stepping out for h540@1x");
+        this.assertEqual(sut.steppingOut(worldView2, 50), 45, "stepping out ok for h180@2x");
+        
+        viewportScreenRect.height = 1078;
+        this.assertEqual(sut.defaultZoomFactor(worldView2), 90, "default too small for h1080@2x");
+        this.assertEqual(sut.steppingOut(worldView2, 100), 90, "limit stepping for h180@2x");
     }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
     
     new UnitTest("Civ.PanBehavior", function() {
