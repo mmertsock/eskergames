@@ -3,7 +3,7 @@
 import { Strings } from './locale.js';
 import {
     directions,
-    Binding, BoolArray,
+    AnimationLoop, Binding, BoolArray,
     CanvasStack, ChangeTokenBinding, CircularArray,
     Dispatch, DispatchTarget,
     FlexCanvasGrid,
@@ -1305,6 +1305,82 @@ function saveStateTest() {
         this.assertTrue(dz1z.compress);
         this.assertEqual(JSON.stringify(dz1.data), JSON.stringify(item1.data));
         this.assertEqual(JSON.stringify(dz1z.data), JSON.stringify(item1.data));
+    }).buildAndRun();
+}
+
+class AnimationLoopDelegate {
+    constructor(id) { this.id = id; this.log = []; this.lastState = undefined; }
+    clear() { this.log = []; }
+
+    processFrame(frame) {
+        this.lastState = frame.loop.state;
+        let lf = frame.loop.lastFrame?.timestamp || "none";
+        this.log.push(`processFrame:${frame.timestamp},lf:${lf}#${this.id}`);
+        if (!!this.shouldPause) { frame.loop.pause(); }
+    }
+}
+
+function animationLoopTest() {
+    new UnitTest("AnimationLoop", function() {
+        let frameCounter = 0;
+        let log = [];
+        let windowStub = {
+            requestAnimationFrame: function(block) {
+                frameCounter += 1;
+                log.push(`requestAnimationFrame:${frameCounter}`);
+                return frameCounter;
+            },
+            cancelAnimationFrame: function(id) {
+                log.push(`cancelAnimationFrame:${id}`);
+            }
+        };
+        let sut = new AnimationLoop(windowStub);
+        this.assertEqual(sut.state, AnimationLoop.State.paused);
+        sut.pause();
+        this.assertEqual(sut.state, AnimationLoop.State.paused);
+        this.assertEqual(log.length, 0, "No animationFrame API calls yet");
+        
+        sut.resume();
+        this.assertEqual(sut.state, AnimationLoop.State.requestedFrame);
+        this.assertElementsEqual(log, ["requestAnimationFrame:1"], "first resume");
+        sut.resume();
+        this.assertElementsEqual(log, ["requestAnimationFrame:1"], "ignore resume with pending frame");
+        log.splice(0, log.length); // Remove all elements in-place
+        
+        sut._frame(1234000);
+        this.assertEqual(sut.state, AnimationLoop.State.requestedFrame);
+        this.assertElementsEqual(log, ["requestAnimationFrame:2"], "scheduled next frame");
+        
+        log.splice(0, log.length); // Remove all elements in-place
+        sut.pause();
+        this.assertElementsEqual(log, ["cancelAnimationFrame:2"], "canceled a frame");
+        sut._frame(1234000);
+        this.assertEqual(sut.state, AnimationLoop.State.paused, "_frame is noop if paused");
+        
+        log.splice(0, log.length); // Remove all elements in-place
+        let d1 = new AnimationLoopDelegate("d1");
+        sut.addDelegate(d1);
+        sut.resume();
+        sut._frame(1234500);
+        this.assertElementsEqual(log, ["requestAnimationFrame:3", "requestAnimationFrame:4"], "process a frame with one delegate");
+        this.assertElementsEqual(d1.log, ["processFrame:1234500,lf:1234000#d1"]);
+        this.assertEqual(d1.lastState, AnimationLoop.State.receivedFrame);
+        this.assertEqual(sut.state, AnimationLoop.State.requestedFrame);
+        
+        log.splice(0, log.length); // Remove all elements in-place
+        d1.clear();
+        d1.shouldPause = true;
+        sut._frame(1234600);
+        this.assertEqual(sut.state, AnimationLoop.State.paused);
+        this.assertEqual(log.length, 0, "Pause during frame processing, no window API calls");
+        this.assertElementsEqual(d1.log, ["processFrame:1234600,lf:1234500#d1"]);
+        
+        log.splice(0, log.length); // Remove all elements in-place
+        d1.clear();
+        sut._frame(1234700);
+        this.assertEqual(sut.state, AnimationLoop.State.paused);
+        this.assertEqual(log.length, 0, "_frame no-op when paused");
+        this.assertEqual(d1.log.length, 0, "No delegates called when paused");
     }).buildAndRun();
 }
 
@@ -3305,6 +3381,7 @@ let standardSuite = new TestSession([
     selectableListTest,
     serializerTests,
     saveStateTest,
+    animationLoopTest,
     dispatchTest,
     kvoTest,
     bindingTest,

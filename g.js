@@ -449,6 +449,9 @@ Mixins.Gaming.DelegateSet = function(cls) {
         sorting.sort(function (a, b) { return a.pri - b.pri });
         this._sortedDelegates = sorting.map(function (s) { return s.d });
     });
+    Mixins.mix(cls.prototype, "delegateCount", function() {
+        return this._delegates ? this._delegates.size : 0;
+    });
 };
 
 export class WorkerMessage {
@@ -2102,6 +2105,94 @@ RunLoop.prototype.processFrame = function() {
     }.bind(this));
     this.recentFrameProcessingTimes.push(new Date() - start);
     this.scheduleNextFrame();
+};
+
+const AnimationLoop_Delegate = class {
+    processFrame(frame) {} // Required
+};
+
+// There should be at most one AnimationLoop active on a page.
+// All methods are idempotent and reentrant.
+// Add delegates to the loop to get notifications of each AnimationFrame.
+export class AnimationLoop {
+    constructor(window) {
+        this.window = window;
+        this._state = AnimationLoop.State.paused;
+        this._frameID = undefined;
+    }
+    
+    get state() { return this._state; }
+    
+    resume() {
+        switch (this._state) {
+            case AnimationLoop.State.requestedFrame:
+                break;
+            case AnimationLoop.State.paused:
+            case AnimationLoop.State.receivedFrame:
+                this._state = AnimationLoop.State.requestedFrame;
+                this._frameID = this.window.requestAnimationFrame(timestamp => this._frame(timestamp));
+                break;
+            default:
+                throw new Error("Unknown AnimationLoop.State");
+        }
+    }
+    
+    pause() {
+        switch (this._state) {
+            case AnimationLoop.State.paused:
+                break;
+            case AnimationLoop.State.requestedFrame:
+                this._state = AnimationLoop.State.paused;
+                if (typeof(this._frameID) != 'undefined') {
+                    this.window.cancelAnimationFrame(this._frameID);
+                    this._frameID = undefined;
+                }
+                break;
+            case AnimationLoop.State.receivedFrame:
+                this._state = AnimationLoop.State.paused;
+                break;
+            default:
+                throw new Error("Unknown AnimationLoop.State");
+        }
+    }
+    
+    _frame(timestamp) {
+        this._frameID = undefined;
+        switch (this._state) {
+            case AnimationLoop.State.paused:
+            case AnimationLoop.State.receivedFrame:
+                return;
+            case AnimationLoop.State.requestedFrame:
+                this._state = AnimationLoop.State.receivedFrame;
+                break;
+            default:
+                throw new Error("Unknown AnimationLoop.State");
+        }
+        let frame = new AnimationFrame(timestamp, this);
+        this.forEachDelegate(d => d.processFrame(frame));
+        this.lastFrame = frame;
+        if (this._state == AnimationLoop.State.receivedFrame) {
+            this.resume();
+        }
+    }
+}
+Mixins.Gaming.DelegateSet(AnimationLoop);
+AnimationLoop.State = {
+    paused: 0,
+    requestedFrame: 1,
+    receivedFrame: 2
+};
+
+export class AnimationFrame {
+    constructor(timestamp, loop) {
+        // Milliseconds value. Should be ~= performance.now()
+        this.timestamp = timestamp;
+        this.loop = loop;
+    }
+    
+    get interval() {
+        return this.loop.lastFrame ? (this.timestamp - this.loop.lastFrame.timestamp) : NaN;
+    }
 };
 
 function mark__Storage() { }

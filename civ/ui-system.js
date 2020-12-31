@@ -11,6 +11,7 @@ export function uiReady() {
     NewGameDialog.initialize();
     inj().keyboardInputController = new KeyboardInputController();
     inj().views.root = new DOMRootView();
+    inj().animationController = new AnimationController();
 }
 
 export class UI {
@@ -64,6 +65,29 @@ export class DOMRootView {
 }
 DOMRootView.willResizeEvent = "DOMRootView.willResizeEvent";
 DOMRootView.didResizeEvent = "DOMRootView.didResizeEvent";
+
+// Pass all AnimationLoop add/remove delegate calls through this class.
+export class AnimationController {
+    constructor() {
+        this.loop = new Gaming.AnimationLoop(window);
+    }
+    
+    addDelegate(delegate) {
+        this.loop.addDelegate(delegate);
+        if (this.loop.delegateCount() > 0 && this.loop.state == Gaming.AnimationLoop.State.paused) {
+            debugLog("AnimationController.addDelegate: resume AnimationLoop");
+            this.loop.resume();
+        }
+    }
+    
+    removeDelegate(delegate) {
+        this.loop.removeDelegate(delegate);
+        if (this.loop.delegateCount() == 0 && this.loop.state != Gaming.AnimationLoop.State.paused) {
+            debugLog("AnimationController.removeDelegate: pause AnimationLoop");
+            this.loop.pause();
+        }
+    }
+}
 
 // manages visibility of a set of ScreenViews
 export class ScreenManager {

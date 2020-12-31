@@ -168,7 +168,7 @@ export class WorldView {
         }
         this.canvasView.viewportController.centerOnCoord(
             this.viewModel.viewportCenterCoord, zoomFactor, false);
-        this.render();
+        this.rerender();
     }
     
     _canvasDidResize() {
@@ -180,7 +180,7 @@ export class WorldView {
             zoomFactor = this.zoomBehavior.validatedZoomFactor(this, zoomFactor);
         }
         this.canvasView.viewportController.setZoomFactor(zoomFactor, true);
-        this.render();
+        this.rerender();
     }
     
     addLayer(layer) {
@@ -201,14 +201,14 @@ export class WorldView {
         if (!this.isReady || !this.zoomBehavior) { return; }
         let zoomFactor = this.zoomBehavior.steppingIn(this, this.viewModel.zoomFactor);
         this.canvasView.viewportController.setZoomFactor(zoomFactor, true);
-        this.render();
+        this.rerender();
     }
     
     zoomOut() {
         if (!this.isReady || !this.zoomBehavior) { return; }
         let zoomFactor = this.zoomBehavior.steppingOut(this, this.viewModel.zoomFactor);
         this.canvasView.viewportController.setZoomFactor(zoomFactor, true);
-        this.render();
+        this.rerender();
     }
     
     centerMapUnderCursor() {
@@ -244,11 +244,19 @@ export class WorldView {
     
     centerOnCoord(coord, zoomFactor, animated) {
         this.canvasView.viewportController.centerOnCoord(coord, zoomFactor, animated);
-        this.render();
+        this.rerender();
     }
     
-    render() {
+    rerender() {
+        debugLog("rerender");
+        this.TODO_TEMP_dirty = true;
+    }
+    
+    processFrame(frame) {
         if (!this.isReady) { return; }
+        if (!this.TODO_TEMP_dirty) { return; }
+        this.TODO_TEMP_dirty = false;
+        debugLog(frame.timestamp);
         let clearedViewports = [];
         this.layers.forEach(layer => {
             this.canvasView.withRenderContext(layer.canvasIndex, c => {
@@ -349,7 +357,17 @@ class GameWorldView {
         
         // Fails to load first image (?) if you don't setTimeout
         // TODO do this as part of the initial startup sequence
-        setTimeout(() => inj().spritesheets.loadAll(() => this.worldView.render()), 0);
+        setTimeout(() => inj().spritesheets.loadAll(() => this.worldView.rerender()), 0);
+        
+        inj().animationController.addDelegate(this);
+    }
+    
+    screenDidHide() {
+        inj().animationController.removeDelegate(this);
+    }
+    
+    processFrame(frame) {
+        this.worldView.processFrame(frame);
     }
     
     saveCamera() {
