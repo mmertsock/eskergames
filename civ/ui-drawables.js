@@ -10,7 +10,33 @@ export function initialize() {
 }
 
 export class Drawable {
-    draw(c) { }
+    drawFrame(c) {
+        if (this.shouldDraw(c)) {
+            this.draw(c);
+            c.frame.stats.drawablesRendered += 1;
+        } else {
+            c.frame.stats.drawablesSkipped += 1;
+        }
+    }
+    
+    // Full extent of screen area touched by the drawable, for dirtyRect checks, etc.
+    screenRect(c) { return undefined; }
+    
+    // Override to customize
+    shouldDraw(c) {
+        let rect = this.screenRect(c);
+        if (rect) {
+            let should = c.dirtyRect.intersects(rect);
+            if (should) {
+                c.frame.stats.rectsDrawn.push(rect);
+            }
+            return should;
+        }
+        return true;
+    }
+    
+    // Override with actual rendering commands
+    draw(c, layer) {}
 }
 
 export class CanvasPrimitives {
@@ -58,6 +84,9 @@ export class MapGridDrawable extends Drawable {
         ]);
     }
     
+    // TODO only if enabled
+    shouldDraw(c) { return true; }
+    
     draw(c) {
         this.longitudes.forEach(l => this.drawGridLine(c, l));
         this.latitudes.forEach(l => this.drawGridLine(c, l));
@@ -68,22 +97,31 @@ export class MapGridDrawable extends Drawable {
     }
 }
 
-export class TerrainBaseLayerDrawable {
+export class TerrainBaseLayerDrawable extends Drawable {
     constructor(square) {
+        super();
         this.square = square;
+    }
+    
+    screenRect(c) {
+        return c.viewModel.projection.screenRectForTile(this.square.tile);
     }
     
     draw(c) {
         let sheet = inj().spritesheets.sheet("terrainBase");
         if (!sheet) { return; }
-        let rect = c.viewModel.projection.screenRectForTile(this.square.tile);
-        sheet.draw(c, rect, this.square.terrain.type.index, this.square.terrain.randomSeed);
+        sheet.draw(c, this.screenRect(c), this.square.terrain.type.index, this.square.terrain.randomSeed);
     }
 }
 
-export class TerrainEdgeDrawable {
+export class TerrainEdgeDrawable extends Drawable {
     constructor(edge) {
+        super();
         this.edge = edge;
+    }
+    
+    screenRect(c) {
+        return c.viewModel.projection.screenRectForRect(this.edge.unitRect);
     }
     
     draw(c) {
@@ -99,8 +137,7 @@ export class TerrainEdgeDrawable {
         let spriteIndex = this.spriteIndexForTerrainType(sheet, square.terrain.type.index);
         if (spriteIndex < 0) { return; }
         // Flip horizontally/vertically as needed
-        let rect = c.viewModel.projection.screenRectForRect(this.edge.unitRect);
-        sheet.draw(c, rect, spriteIndex, square.terrain.randomSeed);
+        sheet.draw(c, this.screenRect(c), spriteIndex, square.terrain.randomSeed);
     }
     
     spriteIndexForTerrainType(sheet, terrainType) {
@@ -133,6 +170,10 @@ export class UnitDrawable extends Drawable {
         this.badgeIcon(c, sheet);
     }
     
+    screenRect(c) {
+        return this.characterScreenRect(c).union(this.badgeScreenRect(c));
+    }
+    
     characterScreenRect(c) {
         return c.viewModel.projection.screenRectForRect(this.unit.tile.rect);
     }
@@ -163,6 +204,25 @@ export class UnitDrawable extends Drawable {
     badgeIcon(c, sheet) {
         let spriteIndex = 0;
         sheet.draw(c, this.badgeScreenRect(c), spriteIndex, 0);
+    }
+}
+
+export class GraphicsDebugDrawable extends Drawable {
+    constructor(enabled) {
+        super();
+        this.isEnabled = enabled;
+    }
+    
+    shouldDraw(c) { return this.isEnabled; }
+    
+    draw(c) {
+        let hue = 0;
+        c.ctx.lineWidth = 1;
+        c.frame.stats.rectsDrawn.forEach(rect => {
+            hue = (hue + 10) % 360;
+            c.ctx.strokeStyle = `hsl(${hue}, 75%, 70%)`;
+            c.ctx.rectStroke(rect);
+        });
     }
 }
 

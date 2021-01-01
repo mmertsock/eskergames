@@ -256,10 +256,14 @@ export class WorldView {
         if (!this.isReady) { return; }
         if (!this.TODO_TEMP_dirty) { return; }
         this.TODO_TEMP_dirty = false;
-        debugLog(frame.timestamp);
         let clearedViewports = [];
+        frame.stats = {
+            drawablesRendered: 0,
+            drawablesSkipped: 0,
+            rectsDrawn: []
+        };
         this.layers.forEach(layer => {
-            this.canvasView.withRenderContext(layer.canvasIndex, c => {
+            this.canvasView.withRenderContext(layer.canvasIndex, frame, c => {
                 if (!clearedViewports[layer.canvasIndex]) {
                     clearedViewports[layer.canvasIndex] = true;
                     c.ctx.rectClear(c.viewportScreenRect);
@@ -267,6 +271,7 @@ export class WorldView {
                 layer.render(c);
             });
         });
+        debugLog(`${frame.timestamp}: d${frame.stats.drawablesRendered}/s${frame.stats.drawablesSkipped}`);
     }
 }
 
@@ -293,7 +298,7 @@ export class WorldViewLayer {
     
     render(c) {
         let timer = this.logTiming ? new Gaming.PerfTimer(this.debugDescription).start() : null;
-        this.drawables.forEach(drawable => drawable.draw(c));
+        this.drawables.forEach(drawable => drawable.drawFrame(c, this));
         if (timer) {
             debugLog(timer.end().summary);
         }
@@ -344,7 +349,9 @@ class GameWorldView {
         
         this.worldView.addLayer(new WorldViewTerrainLayer(this, GameWorldView.planetCanvasIndex, 0));
         this.worldView.addLayer(new WorldViewLayer(GameWorldView.unitsCanvasIndex, 0)
-            .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))));
+            .concat(this.world.units.map(unit => new Drawables.UnitDrawable(unit))
+            .concat([new Drawables.GraphicsDebugDrawable(false)])
+        ));
             
         let zoomFactor = this.worldView.zoomBehavior.deserializedZoomFactor(this.worldView, this.game.ui.camera?.zoomFactor);
         let centerCoord = this.game.ui.camera?.centerCoord ? new Point(this.game.ui.camera.centerCoord) : this.world.units[0]?.tile.centerCoord;
@@ -527,7 +534,7 @@ export class WorldCanvasView {
         return this.canvases[this.canvases.length - 1];
     }
     
-    withRenderContext(index, block) {
+    withRenderContext(index, frame, block) {
         let isOpaque = (index == 0);
         let ctx = this.canvases[index].getContext("2d", {alpha: !isOpaque});
         ctx.imageSmoothingEnabled = false;
@@ -536,6 +543,7 @@ export class WorldCanvasView {
             isOpaque: isOpaque,
             devicePixelRatio: this.devicePixelRatio,
             viewModel: this.model,
+            frame: frame,
             viewport: this.viewport
         }).withWorldOrigin(block);
     }
@@ -707,24 +715,18 @@ export class CanvasRenderContext {
         this.ctx = a.ctx;
         this.isOpaque = a.isOpaque;
         this.viewModel = a.viewModel;
+        this.frame = a.frame;
         this.devicePixelRatio = a.devicePixelRatio;
         this.unitTileScreenRect = this.viewModel.projection.screenRectForTile(new Tile(0, 0));
         // This is only valid in withWorldOrigin mode
         this.viewportScreenRect = a.viewport.viewportScreenRect;
+        this.dirtyRect = this.viewportScreenRect;
     }
     
     withWorldOrigin(block) {
         this.ctx.save();
         this.ctx.setTransform(1, 0, 0, 1, -this.viewportScreenRect.x, -this.viewportScreenRect.y);
         block(this);
-        this.ctx.restore();
-    }
-    
-    withOrigin(tile, block) {
-        this.ctx.save();
-        let origin = this.viewModel.projection.screenRectForTile(tile).origin;
-        this.ctx.translate(origin.x, origin.y);
-        block(this, tile);
         this.ctx.restore();
     }
     
