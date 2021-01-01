@@ -3058,6 +3058,7 @@ static worldViewTests() {
         
         this.assertEqual(sut.worldRect, new Rect(0, 0, 15, 10));
         this.assertEqual(sut.zoomFactor, 40);
+        this.assertEqual(sut.dirtyRect, new Rect(0, 0, 15, 10));
         this.assertEqual(sut.projection.factor, 40);
         this.assertEqual(sut.worldScreenRect, new Rect(0, 0, 600, 400));
         
@@ -3070,10 +3071,27 @@ static worldViewTests() {
         sut.zoomFactor = 8;
         sut.viewportCenterCoord = new Point(3, 7);
         
-        this.assertEqual(kvoHistory.length, 4);
+        sut.dirtyRect = null;
+        this.assertEqual(sut.dirtyRect, null);
+        sut.addDirtyRect(new Rect(1, 2, 3, 4));
+        this.assertEqual(sut.dirtyRect, new Rect(1, 2, 3, 4));
+        sut.addDirtyRect(new Rect(2, 1, 4, 2));
+        this.assertEqual(sut.dirtyRect, new Rect(1, 1, 5, 5));
+        sut.addDirtyRect(new Rect(3, 3, 1, 1));
+        this.assertEqual(sut.dirtyRect, new Rect(1, 1, 5, 5));
+        sut.addDirtyRect(null);
+        this.assertEqual(sut.dirtyRect, new Rect(1, 1, 5, 5));
+        sut.dirtyRect = null;
+        this.assertEqual(sut.dirtyRect, null);
+        sut.addDirtyRect(new Rect(0, 1, 1, 1));
+        sut.addDirtyRect(new Rect(-1.5, 0.75, 1, 1));
+        this.assertEqual(sut.dirtyRect, new Rect(-1.5, 0.75, 2.5, 1.25));
+        
+        this.assertEqual(kvoHistory.length, 4, "dirtyRect doesn't trigger root level KVO events");
         this.assertElementsEqual(kvoHistory.map(i => i.zoomFactor), [28, 28, 8, 8]);
         this.assertElementsEqual(kvoHistory.map(i => i.viewportCenterCoord?.x), [7.5, 3, 3, 3]);
         this.assertElementsEqual(kvoHistory.map(i => i.viewportCenterCoord?.y), [5, 7, 7, 7]);
+        
         Kvo.stopAllObservations(this);
     }).civRun(() => setInj(10000)); // Disable clamp-to-edge for testing basics
     

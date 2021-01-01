@@ -26,7 +26,7 @@ export class Drawable {
     shouldDraw(c) {
         let rect = this.screenRect(c);
         if (rect) {
-            let should = c.dirtyRect.intersects(rect);
+            let should = c.dirtyScreenRect?.intersects(rect);
             if (should) {
                 c.frame.stats.rectsDrawn.push(rect);
             }
@@ -58,8 +58,9 @@ export class MapBackgroundDrawable extends Drawable {
     }
     
     draw(c) {
+        if (!c.dirtyScreenRect) { return; }
         c.ctx.fillStyle = this.canvasFillStyle;
-        c.ctx.rectFill(c.viewportScreenRect);
+        c.ctx.rectFill(c.dirtyScreenRect);
         c.ctx.fillStyle = "hsla(0, 0%, 100%, 0.08)";
         c.ctx.rectFill(c.viewModel.worldScreenRect);
     }
