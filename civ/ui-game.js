@@ -1,7 +1,7 @@
 import * as Gaming from '../g.js';
 import { Strings } from '../locale.js';
 import { inj, Game, GameEngine, Tile, TileProjection } from './game.js';
-import { CanvasInputController, DOMRootView, ScreenView, UI } from './ui-system.js';
+import { CanvasInputController, DOMRootView, PerfLabel, ScreenView, UI } from './ui-system.js';
 import * as Drawables from './ui-drawables.js';
 
 const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, precondition = Gaming.precondition;
@@ -70,9 +70,8 @@ class GameSessionView extends ScreenView {
         super(id);
         this.session = inj().session;
         this.views = [
-            // menubar view
-            new GameContentView({ elem: document.querySelector("#game > content") }),
-            new GameFooterView({ elem: document.querySelector("#game > statusbar") })
+            new GameMenubarView({ elem: document.querySelector("#game > menubar")}),
+            new GameContentView({ elem: document.querySelector("#game > content") })
         ];
     }
 }
@@ -88,6 +87,25 @@ class GameContentView {
     }
     
     screenDidShow() {
+    }
+}
+
+class GameMenubarView {
+    constructor(a) {
+        this.elem = a.elem;
+        this.views = [
+            new Gaming.ToolButton({
+                parent: this.elem,
+                title: Strings.str("zoomOutControlButton"),
+                clickScript: "gameWorldZoomOut"
+            }),
+            new Gaming.ToolButton({
+                parent: this.elem,
+                title: Strings.str("zoomInControlButton"),
+                clickScript: "gameWorldZoomIn"
+            }),
+            new PerfLabel(this.elem)
+        ];
     }
 }
 
@@ -260,14 +278,18 @@ export class WorldView {
     }
     
     processFrame(frame) {
+        frame.stats.drawablesRendered = 0;
+        frame.stats.drawablesSkipped = 0;
+        frame.state.rectsDrawn = [];
+        let start = performance.now();
+        this.drawFrame(frame);
+        frame.stats.totalRenderTime = performance.now() - start;
+    }
+    
+    drawFrame(frame) {
         if (!this.isReady) { return; }
         if (!this.viewModel.dirtyRect || this.viewModel.dirtyRect.isEmpty()) { return; }
         let clearedViewports = [];
-        frame.stats = {
-            drawablesRendered: 0,
-            drawablesSkipped: 0,
-            rectsDrawn: []
-        };
         this.layers.forEach(layer => {
             this.canvasView.withRenderContext(layer.canvasIndex, frame, c => {
                 if (!clearedViewports[layer.canvasIndex]) {
@@ -277,7 +299,6 @@ export class WorldView {
                 layer.render(c);
             });
         });
-        debugLog(`${frame.timestamp}: d${frame.stats.drawablesRendered}/s${frame.stats.drawablesSkipped}`);
         this.viewModel.dirtyRect = null;
     }
 }
@@ -491,25 +512,6 @@ export class PanBehavior {
             default:
                 return Math.min(size.width, size.height);
         }
-    }
-}
-
-class GameFooterView {
-    constructor(a) {
-        this.elem = a.elem;
-        this.zoomInControlButton = new Gaming.ToolButton({
-            parent: this.elem,
-            title: Strings.str("zoomInControlButton"),
-            clickScript: "gameWorldZoomIn"
-        });
-        this.zoomOutControlButton = new Gaming.ToolButton({
-            parent: this.elem,
-            title: Strings.str("zoomOutControlButton"),
-            clickScript: "gameWorldZoomOut"
-        });
-    }
-    
-    screenDidShow() {
     }
 }
 

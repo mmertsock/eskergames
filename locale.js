@@ -2,6 +2,7 @@
 
 if (!Number.uiInteger) {
 
+// Assumes value is already an integer, caller should use round/floor/etc. if needed
 Number.uiInteger = function(value) {
     return Number(value).toLocaleString();
 };

@@ -42,7 +42,8 @@ worldView:
   zoomBehavior:
     # DOM screen points per tile
     range: { min: 20, defaultValue: 160, max: 320 }
-    stepMultiplier: 1.4142135624
+    stepMultiplier2: 1.4142135624
+    stepMultiplier: 2
     edgeOverscroll: *EDGEOVERSCROLL
   panBehavior:
     smallPanPoints: 50 # DOM screen points
@@ -124,6 +125,7 @@ strings:
   newGameButton: New Game
   newGameDialogTitle: New Game
   nextButton: Next
+  perfLabelTemplate: "<fps> fps • <load> load"
   playerCivChoiceLabel: Your civilization
   playerCivLabel: Your civilization
   previousButton: Previous

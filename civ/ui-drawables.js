@@ -28,7 +28,7 @@ export class Drawable {
         if (rect) {
             let should = c.dirtyScreenRect?.intersects(rect);
             if (should) {
-                c.frame.stats.rectsDrawn.push(rect);
+                c.frame.state.rectsDrawn.push(rect);
             }
             return should;
         }
@@ -219,7 +219,7 @@ export class GraphicsDebugDrawable extends Drawable {
     draw(c) {
         let hue = 0;
         c.ctx.lineWidth = 1;
-        c.frame.stats.rectsDrawn.forEach(rect => {
+        c.frame.state.rectsDrawn.forEach(rect => {
             hue = (hue + 10) % 360;
             c.ctx.strokeStyle = `hsl(${hue}, 75%, 70%)`;
             c.ctx.rectStroke(rect);

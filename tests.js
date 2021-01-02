@@ -1309,12 +1309,14 @@ function saveStateTest() {
 }
 
 class AnimationLoopDelegate {
-    constructor(id) { this.id = id; this.log = []; this.lastState = undefined; }
+    constructor(id) { this.id = id; this.log = []; this.lastState = undefined; this.counter = 0; }
     clear() { this.log = []; }
 
     processFrame(frame) {
         this.lastState = frame.loop.state;
         let lf = frame.loop.lastFrame?.timestamp || "none";
+        frame.stats.counter = this.counter++;
+        frame.state.test = "bogus";
         this.log.push(`processFrame:${frame.timestamp},lf:${lf}#${this.id}`);
         if (!!this.shouldPause) { frame.loop.pause(); }
     }
@@ -1339,6 +1341,7 @@ function animationLoopTest() {
         sut.pause();
         this.assertEqual(sut.state, AnimationLoop.State.paused);
         this.assertEqual(log.length, 0, "No animationFrame API calls yet");
+        this.assertTrue(!sut.lastFrame);
         
         sut.resume();
         this.assertEqual(sut.state, AnimationLoop.State.requestedFrame);
@@ -1350,6 +1353,9 @@ function animationLoopTest() {
         sut._frame(1234000);
         this.assertEqual(sut.state, AnimationLoop.State.requestedFrame);
         this.assertElementsEqual(log, ["requestAnimationFrame:2"], "scheduled next frame");
+        this.assertEqual(sut.lastFrame?.timestamp, 1234000);
+        this.assertDefined(sut.lastFrame?.stats, "should preserve stats after processFrame");
+        this.assertTrue(!(sut.lastFrame?.state), "should delete state after processFrame");
         
         log.splice(0, log.length); // Remove all elements in-place
         sut.pause();
@@ -1366,6 +1372,7 @@ function animationLoopTest() {
         this.assertElementsEqual(d1.log, ["processFrame:1234500,lf:1234000#d1"]);
         this.assertEqual(d1.lastState, AnimationLoop.State.receivedFrame);
         this.assertEqual(sut.state, AnimationLoop.State.requestedFrame);
+        this.assertEqual(sut.lastFrame?.timestamp, 1234500);
         
         log.splice(0, log.length); // Remove all elements in-place
         d1.clear();

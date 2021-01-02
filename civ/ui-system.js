@@ -12,6 +12,7 @@ export function uiReady() {
     inj().keyboardInputController = new KeyboardInputController();
     inj().views.root = new DOMRootView();
     inj().animationController = new AnimationController();
+    inj().performanceTracker = new PerformanceTracker(inj().animationController);
 }
 
 export class UI {
@@ -70,11 +71,18 @@ DOMRootView.didResizeEvent = "DOMRootView.didResizeEvent";
 export class AnimationController {
     constructor() {
         this.loop = new Gaming.AnimationLoop(window);
+        this.autoRunDelegates = new Set();
     }
     
+    get hasAutoRunDelegates() { return this.autoRunDelegates.size > 0; }
+    
+    // Auto-starts animation unless delegate.isPassiveFrameListener == true 
     addDelegate(delegate) {
         this.loop.addDelegate(delegate);
-        if (this.loop.delegateCount() > 0 && this.loop.state == Gaming.AnimationLoop.State.paused) {
+        if (!delegate.isPassiveFrameListener) {
+            this.autoRunDelegates.add(delegate);
+        }
+        if (this.hasAutoRunDelegates && this.loop.state == Gaming.AnimationLoop.State.paused) {
             debugLog("AnimationController.addDelegate: resume AnimationLoop");
             this.loop.resume();
         }
@@ -82,10 +90,96 @@ export class AnimationController {
     
     removeDelegate(delegate) {
         this.loop.removeDelegate(delegate);
-        if (this.loop.delegateCount() == 0 && this.loop.state != Gaming.AnimationLoop.State.paused) {
+        if (!delegate.isPassiveFrameListener) {
+            this.autoRunDelegates.delete(delegate);
+        }
+        if (!this.hasAutoRunDelegates && this.loop.state != Gaming.AnimationLoop.State.paused) {
             debugLog("AnimationController.removeDelegate: pause AnimationLoop");
             this.loop.pause();
         }
+    }
+}
+
+class PerformanceTracker {
+    static Kvo() { return {"summary": "_summary"}; }
+    
+    constructor(controller) {
+        this.framesPerSummary = 90;
+        this._recentFrames = [];
+        this._summary = null;
+        this.kvo = new Gaming.Kvo(this);
+        controller.addDelegate(this);
+    }
+    
+    // hm maybe get lastSummary(), which takes top item from a circular array of summary objects. So you can also show a history of performance over time.
+    get summary() { return this._summary; }
+    
+    // For AnimationController
+    get isPassiveFrameListener() { return true; }
+    
+    processFrame(currentFrame) {
+        // Look at lastFrame rather than current to guarantee complete stats without worrying about delegate order
+        let frame = currentFrame.loop.lastFrame;
+        if (!frame) { return; }
+        this._recentFrames.push({
+            timestamp: frame.timestamp,
+            stats: frame.stats
+        });
+        this.buildSummaryIfReady();
+    }
+    
+    buildSummaryIfReady() {
+        if (this._recentFrames.length < this.framesPerSummary) { return; }
+        let oldest = this._recentFrames[0];
+        let newest = this._recentFrames[this._recentFrames.length - 1];
+        let totalRenderTime = this._recentFrames.reduce((a, b) => (a + b.stats.totalRenderTime), 0);
+        let interval = newest.timestamp - oldest.timestamp;
+        this.kvo.summary.setValue({
+            timestamp: newest.timestamp,
+            interval: interval,
+            fps: interval < 1 ? NaN : (this._recentFrames.length / (0.001 * interval)),
+            totalRenderTime: totalRenderTime,
+            drawablesRendered: this.minMaxMean(this._recentFrames.map(item => item.stats.drawablesRendered)),
+            drawablesSkipped: this.minMaxMean(this._recentFrames.map(item => item.stats.drawablesSkipped))
+        });
+        this._recentFrames = [];
+    }
+    
+    minMaxMean(values) {
+        let stats = { min: NaN, max: NaN, sum: 0 };
+        values.forEach(item => {
+            stats.min = isNaN(stats.min) ? item : Math.min(stats.min, item);
+            stats.max = isNaN(stats.max) ? item : Math.max(stats.max, item);
+            stats.sum += item;
+        });
+        stats.mean = values.length == 0 ? NaN : (stats.sum / values.length);
+        return stats;
+    }
+}
+
+export class PerfLabel {
+    constructor(parent) {
+        this.elem = document.createElement("span");
+        this.elem.classList.add("hidden");
+        parent.append(this.elem);
+    }
+    
+    render() {
+        let summary = inj().performanceTracker.summary;
+        this.elem.setCSSClass("hidden", !summary);
+        if (!summary) { return; }
+        let fps = isNaN(summary.fps) ? "?" : Number.uiInteger(Math.round(summary.fps));
+        let load = summary.interval < 1 ? "?" : Number.uiPercent(summary.totalRenderTime / summary.interval);
+        this.elem.innerText = Strings.template("perfLabelTemplate", { fps: fps, load: load });
+    }
+    
+    screenDidShow() {
+        inj().performanceTracker.kvo.summary.addObserver(this, () => this.render());
+    }
+    
+    screenDidHide() {
+        this.elem.classList.add("hidden");
+        Gaming.Kvo.stopAllObservations(this);
     }
 }
 

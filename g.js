@@ -288,6 +288,13 @@ Element.prototype.addRemClass = function(className, shouldAdd) {
     return this;
 };
 
+Element.prototype.setCSSClass = function(className, present) {
+    if (present) { this.classList.add(className); }
+    else { this.classList.remove(className); }
+    return this;
+};
+
+// TODO callers just use classList.toggle directly and remove toggleClass
 Element.prototype.toggleClass = function(className) {
     return this.addRemClass(className, !this.classList.includes(className));
 };
@@ -2119,6 +2126,7 @@ export class AnimationLoop {
         this.window = window;
         this._state = AnimationLoop.State.paused;
         this._frameID = undefined;
+        this.lastFrame = null;
     }
     
     get state() { return this._state; }
@@ -2170,6 +2178,7 @@ export class AnimationLoop {
         }
         let frame = new AnimationFrame(timestamp, this);
         this.forEachDelegate(d => d.processFrame(frame));
+        frame.state = undefined;
         this.lastFrame = frame;
         if (this._state == AnimationLoop.State.receivedFrame) {
             this.resume();
@@ -2188,6 +2197,8 @@ export class AnimationFrame {
         // Milliseconds value. Should be ~= performance.now()
         this.timestamp = timestamp;
         this.loop = loop;
+        this.stats = {}; // Store data in here for performance monitoring, etc.
+        this.state = {}; // Temporary data, removed after the frame is done
     }
     
     get interval() {
