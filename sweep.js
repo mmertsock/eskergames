@@ -552,8 +552,8 @@ export class GameStorage {
     
     get storiesVisible() {
         let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
-        if (!item) { return true; }
-        return item.data.hasOwnProperty("storiesVisible") ? item.data.storiesVisible : true;
+        if (!item) { return false; }
+        return item.data.hasOwnProperty("storiesVisible") ? item.data.storiesVisible : false;
     }
     set storiesVisible(value) {
         this.setPreference("storiesVisible", value);
@@ -823,7 +823,8 @@ export class GameSession {
     }
 
     get hasMoved() {
-        return this.history.moveNumber > GameHistory.firstMoveNumber;
+        // +1 to account for moveNumber incrementing in start -> recordGameState.
+        return this.history.moveNumber > GameHistory.firstMoveNumber + 1;
     }
 
     // debug only
@@ -2970,17 +2971,28 @@ class GameBoardView {
         };
 
         if (this.session.rainbowMode && !this.session.history.isEmpty) {
+            let moveCount = this.session.history.serializedMoves.length;
             context.rainbow = {
-                moves: { min: 0, max: this.session.history.serializedMoves.length },
+                moves: { min: 0, max: moveCount },
                 hue: Object.assign({}, GameBoardView.metrics.rainbow.hue),
                 cleared: Object.assign({}, GameBoardView.metrics.rainbow.cleared),
-                flagged: Object.assign({}, GameBoardView.metrics.rainbow.flagged)
+                flagged: Object.assign({}, GameBoardView.metrics.rainbow.flagged),
+                fadeIn: Object.assign({}, GameBoardView.metrics.rainbow.fadeIn)
             };
             // Limit the amount of color change per move early in the game
             let colors = Math.abs(context.rainbow.hue.max - context.rainbow.hue.min);
-            let interval = colors / this.session.history.serializedMoves.length;
+            let interval = colors / moveCount;
             if ((context.rainbow.hue.maxInterval > 0) && (interval > context.rainbow.hue.maxInterval)) {
-                context.rainbow.hue.max = context.rainbow.hue.maxInterval * this.session.history.serializedMoves.length;
+                context.rainbow.hue.max = context.rainbow.hue.maxInterval * moveCount;
+            }
+            
+            // "Fade in" the saturation/lightness early in the game
+            if (!!context.rainbow.fadeIn && context.rainbow.fadeIn.moveCount > 0 && moveCount < context.rainbow.fadeIn.moveCount) {
+                let fadeIn = context.rainbow.fadeIn;
+                context.rainbow.cleared.saturation = this.rainbowFade(context, moveCount, fadeIn.initialSaturationFactor, context.rainbow.cleared.saturation);
+                context.rainbow.cleared.lightness = this.rainbowFade(context, moveCount, fadeIn.initialLightnessFactor, context.rainbow.cleared.lightness);
+                context.rainbow.flagged.saturation = this.rainbowFade(context, moveCount, fadeIn.initialSaturationFactor, context.rainbow.flagged.saturation);
+                context.rainbow.flagged.lightness = this.rainbowFade(context, moveCount, fadeIn.initialLightnessFactor, context.rainbow.flagged.lightness);
             }
         }
         ctx.rectClear(this.tilePlane.viewportScreenBounds);
@@ -2997,6 +3009,14 @@ class GameBoardView {
         if (hintTile) {
             hintTile.renderHintTile(context);
         }
+    }
+    
+    rainbowFade(context, moveCount, initialFactor, finalValue) {
+        return Math.floor(Math.scaleValueLinear(
+            moveCount,
+            { min: 0, max: context.rainbow.fadeIn.moveCount },
+            { min: initialFactor * finalValue, max: finalValue }
+        ));
     }
 }
 // end class GameBoardView
@@ -3141,7 +3161,7 @@ class GameTileViewState {
         let fillColor = null;
         if (!!context.rainbow && this.showsRainbow && tile.rainbow.cleared >= 0) {
             let hue = Math.scaleValueLinear(tile.rainbow.cleared, context.rainbow.moves, context.rainbow.hue) % 360;
-            let color = `hsl(${hue},${context.rainbow.cleared.saturation},${context.rainbow.cleared.lightness})`;
+            let color = `hsl(${hue},${context.rainbow.cleared.saturation}%,${context.rainbow.cleared.lightness}%)`;
             fillColor = color;
         } else {
             fillColor = this.fillColor;
@@ -3164,7 +3184,7 @@ class GameTileViewState {
                 context.ctx.fillStyle = this.numberTextColors[tile.minedNeighborCount];
             } else if (!!context.rainbow && this.showsRainbowGlyph && tile.rainbow.flagged >= 0) {
                 let hue = Math.scaleValueLinear(tile.rainbow.flagged, context.rainbow.moves, context.rainbow.hue) % 360;
-                let color = `hsl(${hue},${context.rainbow.flagged.saturation},${context.rainbow.flagged.lightness})`;
+                let color = `hsl(${hue},${context.rainbow.flagged.saturation}%,${context.rainbow.flagged.lightness}%)`;
                 context.ctx.fillStyle = color;
             } else {
                 context.ctx.fillStyle = this.textColor;

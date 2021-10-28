@@ -65,16 +65,20 @@ gameBoardView:
   touchScaleFactor: 1.25
   tileWidth: 24
   rainbow:
+    fadeIn:
+      moveCount: 10
+      initialSaturationFactor: 0.2
+      initialLightnessFactor: 1.16
     hue:
       min: 0
       max: 350
       maxInterval: 5
     cleared:
-      saturation: "45%"
-      lightness: "85%"
+      saturation: 45 # percent
+      lightness: 85 #percent
     flagged:
-      saturation: "75%"
-      lightness: "40%"
+      saturation: 75
+      lightness: 40
 gameTileView:
   font: ["bold <size> monospace", 16, "px"]
   borderStrokeStyle: "#444444"
