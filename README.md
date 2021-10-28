@@ -2,7 +2,7 @@
 
 JavaScript games. 100% from-scratch game engine, as a means of keeping my JS skills fresh.
 
-http://games.esker-apps.com/sweep/ to play a Minesweeper clone. I revisit Minesweeper every few years as a programming exercise or to try out a new language or framework.
+https://games.esker-apps.com/sweep/ to play a Minesweeper clone. I revisit Minesweeper every few years as a programming exercise or to try out a new language or framework.
 
 `<marquee>🚧 UNDER CONSTRCUTION 🚧</marquee>`
 
