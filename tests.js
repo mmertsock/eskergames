@@ -22,6 +22,7 @@ import * as Sweep from './sweep.js';
 import * as CivGame from './civ/game.js';
 import * as CivGameUI from './civ/ui-game.js';
 import * as CivSystemUI from './civ/ui-system.js';
+import * as CivDrawables from './civ/ui-drawables.js';
 
 window.Gaming = { Point: Point, Rect: Rect, Vector: Vector };
 
@@ -3306,6 +3307,27 @@ static worldViewTests() {
     }).buildAndRun();
 }
 
+static drawableTests() {
+    const Drawable = CivDrawables.Drawable;
+    new UnitTest("Civ.Drawable", function() {
+        let layer = {};
+        // CanvasRenderContext stub
+        let sr1 = new Rect(0, 0, 100, 100);
+        let srIntersects1 = new Rect(50, 50, 100, 100);
+        let srNoIntersect1 = new Rect(200, 200, 50, 50);
+        let c = { dirtyScreenRect: sr1 };
+        let sut = new Drawable();
+        this.assertTrue(!sut.rect, "rect not set by default");
+        this.assertFalse(sut.shouldDraw(c), "won't draw by default if there's no rect to compare to dirty rect");
+        sut.rect = srIntersects1;
+        this.assertTrue(sut.shouldDraw(c), "shouldDraw uses rect by default");
+        sut.rect = srNoIntersect1;
+        this.assertFalse(sut.shouldDraw(c), "shouldDraw false if rect doesn't intersect");
+        
+        this.assertTrue(false, "set sut.rect updates dirtyRect in Layer");
+    }).buildAndRun();
+}
+
 static savegameTests() {
     new UnitTest("Civ.Game.savegame", function() {
         let newGameModel = CivSystemUI._unitTestSymbols.NewGameDialog.defaultModelValue();
@@ -3423,19 +3445,21 @@ let standardSuite = new TestSession([
     civved.worldModelTests,
     civved.tileProjectionTests,
     civved.worldViewTests,
+    civved.drawableTests,
     civved.savegameTests,
     civved.systemUItests
     // simDateTest
 ]);
 
 let taskSuite = new TestSession([
-    civved.baseGeometryTests,
-    civved.mapTests,
+    // civved.baseGeometryTests,
+    // civved.mapTests,
     civved.worldModelTests,
-    civved.tileProjectionTests,
+    // civved.tileProjectionTests,
     civved.worldViewTests,
-    civved.savegameTests,
-    civved.systemUItests
+    civved.drawableTests,
+    // civved.savegameTests,
+    // civved.systemUItests
 ]);
 
 async function loadCivvedContent() {
@@ -3454,8 +3478,8 @@ async function initCivved() {
     CivGame.inj().rng = Rng.shared;
 }
 
-// TestSession.current = taskSuite;
-TestSession.current = standardSuite;
+TestSession.current = taskSuite;
+// TestSession.current = standardSuite;
 
 export async function uiReady() {
     console.log("uiReady");
