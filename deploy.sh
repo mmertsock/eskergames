@@ -17,6 +17,7 @@ cp g.js "$DEST"
 cp game-content.js "$DEST"
 cp index.html "$DEST"
 cp locale.js "$DEST"
+# cp robots.txt "$DEST"
 cp sprites.html "$DEST"
 cp sprites.js "$DEST"
 cp -R spritesheets/ "$DEST/spritesheets/"
@@ -37,7 +38,6 @@ mkdir -p "$SWEEP_DEST"
 cp sweep.html "$SWEEP_ROOT/index.html"
 cp charts.js "$SWEEP_DEST"
 cp g.css "$SWEEP_DEST"
-cp city.css "$SWEEP_DEST"
 cp g.js "$SWEEP_DEST"
 cp game-content.js "$SWEEP_DEST"
 cp locale.js "$SWEEP_DEST"
@@ -45,7 +45,7 @@ cp sweep-content.yaml "$SWEEP_DEST"
 cp sweep-solver.js "$SWEEP_DEST"
 cp sweep.js "$SWEEP_DEST"
 
-sed -i -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./city.css|./$SWEEP_V_URL/city.css|g" "$SWEEP_ROOT/index.html"
+sed -i -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./g.css|./$SWEEP_V_URL/g.css|g" "$SWEEP_ROOT/index.html"
 
 V_CIV=$(cat version.txt)
 CIV_ROOT="$DEST/civ"
@@ -54,7 +54,7 @@ CIV_V_APP_URL="$V_CIV/app"
 CIV_LIB_PATH="$CIV_ROOT/$CIV_V_LIB_URL/"
 CIV_APP_PATH="$CIV_ROOT/$CIV_V_APP_URL/"
 
-echo "Deploying civ version $_CIV"
+echo "Deploying civ version $V_CIV"
 
 mkdir -p "$CIV_APP_PATH"
 
