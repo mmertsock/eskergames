@@ -284,6 +284,9 @@ export class Game {
             GameContent.addIndexToItemsInArray(content.rules.difficulties);
             content.rules.difficulties.forEach( difficulty => { difficulty.name = Strings.str(difficulty.name); });
         }
+        if (content.solver) {
+            GameContent.addIdToItemsInDictionary(content.solver.solvers);
+        }
         Game.content = content;
         Game.content.rules.allowDebugMode = Game.content.rules.allowDebugMode || (self.location ? (self.location.hostname == "localhost") : false);
         Game.content.rules.maxStarCount = Game.content.rules.highScoreThresholds.length + 1;
@@ -299,6 +302,7 @@ export class Game {
         GameAnalysisDialog.initialize(content.analysisView);
         SweepStory.initialize(content.storiesView);
         Moo.initialize(content.moo);
+        SweepSolver.initialize(content);
     }
 
     static rules() {
@@ -3749,6 +3753,7 @@ class HelpDialog extends GameDialog {
     static initialize() {
         let isTouchFirst = UI.isTouchFirst();
         let elem = document.querySelector("body > help");
+        if (!elem) { return; }
         
         Game.content.keyboard.keyPressShortcuts.forEach(item => {
             if (item.length < 4) { return; }
@@ -4354,7 +4359,6 @@ export let initialize = async function() {
     }
 
     Strings.initialize(content.strings, content.pluralStrings, navigator.language);
-    SweepSolver.initialize();
     Game.initialize(content);
     if (!self.isWorkerScope && !!document.querySelector("moo")) {
         InteractiveSessionView.initialize();

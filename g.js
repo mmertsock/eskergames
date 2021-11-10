@@ -189,7 +189,7 @@ Array.make2D = function(size, block) {
         rows[y] = row;
     }
     return rows;
-}
+};
 Array.prototype.maxElement = function() {
     if (this.length == 0) { return undefined; }
     return this.reduce((x, y) => Math.max(x, y), this[0]);

@@ -9,7 +9,7 @@ import {
     FlexCanvasGrid,
     GameTask,
     Kvo,
-    PeriodicRandomComponent, Point,
+    PerfTimer, PeriodicRandomComponent, Point,
     RandomComponent, RandomBlobGenerator, RandomLineGenerator, Rect, Rng,
     SaveStateItem, SelectableList, SaveStateCollection, Serializer,
     TaskQueue, TilePlane,
@@ -19,6 +19,7 @@ import {
 import { GameContent, GameScriptEngine } from './game-content.js';
 
 import * as Sweep from './sweep.js';
+import * as SweepSolver from './sweep-solver.js';
 import * as CivGame from './civ/game.js';
 import * as CivGameUI from './civ/ui-game.js';
 import * as CivSystemUI from './civ/ui-system.js';
@@ -34,9 +35,9 @@ function appendOutputItem(msg, className) {
     TestSession.outputElement.append(elem);
 }
 
-function logTestMsg(msg) {
+function logTestMsg(msg, className) {
     console.log(msg);
-    appendOutputItem(msg, "log");
+    appendOutputItem(msg, className ? className : "log");
 }
 
 function debugDump(obj) {
@@ -62,19 +63,21 @@ export class TestSession {
     }
     async run(outputElement) {
         TestSession.outputElement = outputElement;
+        let timer = new PerfTimer("TestSession.run").start();
         for (let i = 0; i < this.testFuncs.length; i += 1) {
             await this.testFuncs[i]();
         }
-        this.summarize();
+        this.summarize(timer);
     }
-    summarize() {
+    summarize(timer) {
         logTestHeader("Test Summary " + new Date().toLocaleString());
         logTestMsg(`Tests run: ${this.testsPassed + this.testsFailed}`);
         if (this.testsFailed > 0) {
             logTestFail(`Tests failed: ${this.testsFailed}`);
         } else {
-            logTestMsg("All tests passed.");
+            logTestMsg("All tests passed.", "success");
         }
+        logTestMsg(timer.end().summary, "trace");
     }
 }
 TestSession.current = null;
@@ -211,6 +214,7 @@ class UnitTest {
         return true;
     }
     assertNoThrow(block, msg) {
+        this.expectations += 1;
         try {
             return block();
         } catch(e) {
@@ -219,6 +223,7 @@ class UnitTest {
         }
     }
     assertThrows(block, msg) {
+        this.expectations += 1;
         try {
             block();
             this.logFailure(this._assertMessage(`assertThrows failure`, msg));
@@ -2812,6 +2817,239 @@ swept.autosaveTests = async function() {
     }).buildAndRun();
 };
 
+swept.convolutionTests = async function() {
+    const ConvolutionPattern = SweepSolver.ConvolutionPattern;
+    let stubTile = function(x, y) {
+        return new Sweep.GameTile(new Point(x, y));
+    };
+    let stubInput = function() {
+        let tiles = [];
+        for (let y = 0; y < 3; y++) {
+            for (let x = 0; x < 3; x++) {
+                tiles.push(stubTile(x, y));
+            }
+        }
+        return new ConvolutionInput({ tile: stubTile() });
+    };
+    let makeGame = function(a) {
+        let board = new Sweep.GameBoard({ size: a.size, mineCount: 0 });
+        a.mined?.forEach(coord => {
+            board.tileAtCoord(coord).isMined = true;
+        });
+        board.reset();
+        a.cleared?.forEach(coord => {
+            board.tileAtCoord(coord)._covered = false;
+        });
+        a.flagged?.forEach(coord => {
+            board.tileAtCoord(coord)._flag = Sweep.TileFlag.assertMine;
+        });
+        return { board: board };
+    };
+    
+    await initSweep();
+    
+    new UnitTest("ConvolutionPattern.Input", function() {
+        let game = { board: new Sweep.GameBoard({ size: {width: 6, height: 5}, mineCount: 5 }) };
+        let sut = new ConvolutionPattern.Input(game, new Rect(1, 3, 4, 2));
+        this.assertEqual(sut.tile(new Point(0, 0))?.coord, new Point(1, 3), "(0, 0)");
+        this.assertEqual(sut.tile(new Point(1, 0))?.coord, new Point(2, 3), "(1, 0)");
+        this.assertEqual(sut.tile(new Point(3, 0))?.coord, new Point(4, 3), "(3, 0)");
+        this.assertEqual(sut.tile(new Point(0, 1))?.coord, new Point(1, 4), "(0, 1)");
+        this.assertTrue(null == sut.tile(new Point(4, 0)), "past x bounds");
+        this.assertTrue(null == sut.tile(new Point(0, 2)), "past y bounds");
+        this.assertTrue(null == sut.tile(new Point(-1, 0)), "offset x -1");
+        this.assertTrue(null == sut.tile(new Point(0, -1)), "offset y -1");
+        this.assertTrue(null == sut.tile(new Point(-3, 4)), "way off");
+        
+        this.assertDefined(ConvolutionPattern.Input.make(game, new Rect(1, 3, 4, 2)), "1 3 4 2");
+        this.assertDefined(ConvolutionPattern.Input.make(game, new Rect(0, 0, game.board.size.width, game.board.size.height)), "full size");
+        this.assertTrue(null == ConvolutionPattern.Input.make(game, new Rect(-1, 3, 4, 2)), "x: -1");
+        this.assertTrue(null == ConvolutionPattern.Input.make(game, new Rect(1, -1, 4, 2)), "y: -1");
+        this.assertTrue(null == ConvolutionPattern.Input.make(game, new Rect(0, 3, 7, 2)), "too wide");
+        this.assertTrue(null == ConvolutionPattern.Input.make(game, new Rect(0, 3, 7, 4)), "too high");
+        
+        let inputs = [];
+        let tiles = [];
+        sut.visitTiles((inputCoord, tile, input) => {
+            if (input != sut) { return; }
+            inputs.push(`${inputCoord?.x},${inputCoord?.y}`);
+            tiles.push(`${tile?.coord?.x},${tile?.coord?.y}`);
+        });
+        this.assertEqual(inputs.join(" "), "0,0 1,0 2,0 3,0 0,1 1,1 2,1 3,1");
+        this.assertEqual(tiles.join(" "), "1,3 2,3 3,3 4,3 1,4 2,4 3,4 4,4");
+    }).buildAndRun();
+    
+    new UnitTest("ConvolutionPattern", function() {
+        let game = makeGame({
+            size: {width: 6, height: 5},
+            mined: [],
+            cleared: [],
+            flagged: []
+        });
+        let any = new ConvolutionPattern({
+            name: "match anything, do nothing",
+            match: "..\n..",
+            action: "..\n.."
+        });
+        let someCovered = new ConvolutionPattern({
+            name: "covered 0,0 & 1,1",
+            match: ".#\n#.", // 0,0 and 1,1
+            action: "..\n.."
+        });
+        let someCleared = new ConvolutionPattern({
+            name: "cleared 0,0 & 1,1",
+            match: ".C\nC.",
+            action: "..\n.."
+        });
+        
+        let someCoveredWhitespace = this.assertNoThrow(() => new ConvolutionPattern({
+            name: "covered 0,0 & 1,1",
+            match: " .#\n  #.  \n\n", // 0,0 and 1,1
+            action: "    ..\n.. "
+        }));
+        this.assertEqual(any, any, "identity");
+        this.assertEqual(someCovered, someCoveredWhitespace, "Whitespace ignored in match/action matrixes");
+        this.assertFalse(any.isEqual(someCovered), "any != someCovered");
+        this.assertFalse(any.isEqual(someCleared), "any != someCleared");
+        
+        let input = any.makeInput(game, new Point(0, 0)); // ##;##
+        this.assertEqual(input.rect, new Rect(0, 0, 2, 2));
+        this.assertTrue(any.matches(input), `${any.debugDescription} matches ${input.debugDescription}`);
+        this.assertTrue(someCovered.matches(input), `${someCovered.debugDescription} matches ${input.debugDescription}`);
+        this.assertFalse(someCleared.matches(input), `${someCleared.debugDescription} !matches ${input.debugDescription}`);
+        
+        this.assertEqual(any.actions(input).length, 0, "all noops produces no actions");
+        
+        game = makeGame({ size: game.board.size, cleared: [new Point(0, 0), new Point(1, 1), new Point(0, 1)] });
+        input = any.makeInput(game, new Point(0, 0)); // CC;C#
+        this.assertTrue(any.matches(input), `${any.debugDescription} matches ${input.debugDescription}`);
+        this.assertFalse(someCovered.matches(input), `${someCovered.debugDescription} matches ${input.debugDescription}`);
+        this.assertTrue(someCleared.matches(input), `${someCleared.debugDescription} !matches ${input.debugDescription}`);
+        
+        // board origin:
+        // 11** <-cheatsheet   1##F##
+        // 0122        state-> 012###
+        game = makeGame({
+            size: game.board.size,
+            mined: [new Point(2, 1), new Point(3, 1)],
+            cleared: [new Point(0, 0), new Point(1, 0), new Point(2, 0), new Point(0, 1)],
+            flagged: [new Point(3, 1)]
+        });
+        // this.assertEqual(game.board.tileAtCoord(new Point(1, 0)).isCovered, false);
+        // this.assertEqual(game.board.tileAtCoord(new Point(0, 0)).minedNeighborCount, 0);
+        
+        let numbers = new ConvolutionPattern({ name: "numbers", match: "C.\n01", action: "..\n.." });
+        console.log(numbers);
+        this.assertTrue(numbers.matches(numbers.makeInput(game, new Point(0, 0))), "matches origin" + numbers.debugDescription);
+        this.assertFalse(numbers.matches(numbers.makeInput(game, new Point(1, 0))), "!matches offset" + numbers.debugDescription);
+        let flagged = new ConvolutionPattern({ name: "flagged", match: ".F\n..", action: "..\n.." });
+        this.assertTrue(flagged.matches(flagged.makeInput(game, new Point(2, 0))), "matches offset 2 " + flagged.debugDescription);
+        this.assertFalse(flagged.matches(flagged.makeInput(game, new Point(1, 0))), "!matches offset 1" + flagged.debugDescription);
+        
+        // .. => F.
+        // ..    .C
+        let actionMaker = new ConvolutionPattern({ name: "actionMaker", match: "..\n..", action: "F.\n.C" });
+        let actionMaker2 = this.assertNoThrow(() => new ConvolutionPattern({ name: "actionMaker", match: "..\n..", action: "F0\n8C" }), "Numbers/# are no-ops in action matrix");
+        let actionMaker3 = this.assertNoThrow(() => new ConvolutionPattern({ name: "actionMaker", match: "..\n..", action: "F#\n3C" }), "Numbers/# are no-ops in action matrix");
+        this.assertEqual(actionMaker, actionMaker2, "Numbers/# are no-ops in action matrix");
+        this.assertEqual(actionMaker, actionMaker3, "Numbers/# are no-ops in action matrix");
+        
+        let actions = actionMaker.actions(actionMaker.makeInput(game, new Point(2, 0)));
+        if (this.assertEqual(actions.length, 2, "two actions produced")) {
+            let setFlagAction = null;
+            let clearAction = null;
+            if (actions[0].constructor.name == "SetFlagAction") {
+                setFlagAction = actions[0]; clearAction = actions[1];
+            } else {
+                setFlagAction = actions[1]; clearAction = actions[0];
+            }
+            this.assertEqual(setFlagAction.constructor.name, "SetFlagAction");
+            this.assertEqual(setFlagAction.tile.coord, new Point(2, 1));
+            this.assertEqual(clearAction.constructor.name, "RevealTileAction");
+            this.assertEqual(clearAction.tile.coord, new Point(3, 0));
+        }
+        
+        actions = actionMaker.actions(actionMaker.makeInput(game, new Point(0, 0)));
+        this.assertEqual(actions.length, 0, "No clear/flag action produced if already cleared");
+        
+        actions = actionMaker.actions(actionMaker.makeInput(game, new Point(3, 0)));
+        if (this.assertEqual(actions.length, 1, "No flag action produced if already flagged")) {
+            this.assertEqual(actions[0].constructor.name, "RevealTileAction");
+            this.assertEqual(actions[0].tile.coord, new Point(4, 0));
+        }
+        
+        actions = actionMaker.actions(actionMaker.makeInput(game, new Point(2, 1)));
+        if (this.assertEqual(actions.length, 1, "No clear action produced if already flagged")) {
+            this.assertEqual(actions[0].constructor.name, "SetFlagAction");
+            this.assertEqual(actions[0].tile.coord, new Point(2, 2));
+        }
+        
+        // ######    DD####
+        // ######    DD#CC#
+        // ###### => #BBCC#
+        // 1##F##    1BBAA#
+        // 012###    012AA#
+        let matches = any.findNonoverlappingMatches(game);
+        let matchCoords = matches.map(input => `${input.rect.origin.x},${input.rect.origin.y}`).join(" ");
+        this.assertEqual(matchCoords, "0,0 2,0 4,0 0,2 2,2 4,2");
+        matches = someCovered.findNonoverlappingMatches(game);
+        matchCoords = matches.map(input => `${input.rect.origin.x},${input.rect.origin.y}`).join(" ");
+        this.assertEqual(matchCoords, "3,0 1,1 3,2 0,3");
+    }).buildAndRun();
+        
+    new UnitTest("ConvolutionPattern.Transforms", function() {
+        // C..  ..F
+        // 01.  ..C
+        let rotator = new ConvolutionPattern({ name: "rotator", match: "C..\n01.", action: "..F\n..C" });
+        let rotated0 = rotator.rotated(0);
+        this.assertEqual(rotated0.matchDescription, "C..;01.", rotated0.fullName + " matches");
+        this.assertEqual(rotated0.actionDescription, "..F;..C", rotated0.fullName + " actions");
+        let rotated1 = rotator.rotated(1);
+        this.assertEqual(rotated1.matchDescription, "..;.1;C0", rotated1.fullName + " matches");
+        this.assertEqual(rotated1.actionDescription, "FC;..;..", rotated1.fullName + " actions");
+        let rotated2 = rotator.rotated(2);
+        this.assertEqual(rotated2.matchDescription, ".10;..C", rotated2.fullName + " matches");
+        this.assertEqual(rotated2.actionDescription, "C..;F..", rotated2.fullName + " actions");
+        let rotated3 = rotator.rotated(3);
+        this.assertEqual(rotated3.matchDescription, "0C;1.;..", rotated3.fullName + " matches");
+        this.assertEqual(rotated3.actionDescription, "..;..;CF", rotated3.fullName + " actions");
+        let rotated21 = rotated2.rotated(1);
+        this.assertEqual(rotated21.matchDescription, rotated3.matchDescription);
+        this.assertEqual(rotated21.actionDescription, rotated3.actionDescription);
+        
+        let flipped1 = rotator.flippedHorizontally();
+        this.assertEqual(flipped1.matchDescription, "..C;.10", "flip-x match matrix");
+        this.assertEqual(flipped1.actionDescription, "F..;C..", "flip-x action matrix");
+        let flipped2 = rotator.flippedHorizontally().flippedHorizontally();
+        this.assertTrue(rotator.isEqual(flipped2), "flip-x twice is identity");
+        
+        flipped1 = rotator.flippedVertically();
+        flipped2 = rotator.flippedVertically().flippedVertically();
+        this.assertEqual(flipped1.matchDescription, "01.;C..", "flip-y match matrix");
+        this.assertEqual(flipped1.actionDescription, "..C;..F", "flip-y action matrix");
+        this.assertTrue(rotator.isEqual(flipped2), "flip-y twice is identity");
+        
+        let tPlain = new ConvolutionPattern({ name: "tPlain", match: "##\n##", action: "FF\nFF" });
+        this.assertEqual(tPlain.allUniqueTransforms().length, 1, "##;## has no other unique transforms");
+        
+        let t1212 = new ConvolutionPattern({ name: "t1212", match: "1#\n1#", action: ".F\n.F" });
+        this.assertEqual(t1212.allUniqueTransforms().length, 4, "1212 has 4 transforms");
+
+        // 4 rotations with no flip, 4 rotations of one of the flips, but the other flip's rotations are all duplicates. I think this is the max
+        // number of unique rotations any pattern can have.
+        let t1234 = new ConvolutionPattern({ name: "t1234", match: "34\n#2", action: "..\nF." });
+        this.assertEqual(t1234.allUniqueTransforms().length, 8, "1234 has 8 transforms");
+    }).buildAndRun();
+    
+    new UnitTest("ConvolutionPattern.Invalid", function() {
+        this.assertThrows(() => new ConvolutionPattern({ name: "", match: "", action: "" }), "empty");
+        this.assertThrows(() => new ConvolutionPattern({ name: "", match: "...\n..", action: "...\n.." }), "non-rectangular");
+        this.assertThrows(() => new ConvolutionPattern({ name: "", match: "...\n...", action: "...\n.." }), "m/a size mismatch");
+        this.assertThrows(() => new ConvolutionPattern({ name: "", match: ".X\n..", action: "..\n.." }), "bad match chars");
+        this.assertThrows(() => new ConvolutionPattern({ name: "", match: "..\n..", action: ".X\n.." }), "bad action chars");
+    }).buildAndRun();
+};
+
 UnitTest.prototype.civRun = function(injBlock) {
     let oldContent = CivGame.inj().content;
     if (injBlock) { injBlock(); }
@@ -3452,6 +3690,11 @@ let standardSuite = new TestSession([
 ]);
 
 let taskSuite = new TestSession([
+    // swept.autosaveTests
+    swept.convolutionTests
+]);
+
+let taskSuite2 = new TestSession([
     // civved.baseGeometryTests,
     // civved.mapTests,
     civved.worldModelTests,
@@ -3483,7 +3726,6 @@ TestSession.current = taskSuite;
 
 export async function uiReady() {
     console.log("uiReady");
-    await initCivved();
-    console.log("gonna run");
+    // await initCivved();
     TestSession.current.run(document.querySelector("#testOutput"));
 }

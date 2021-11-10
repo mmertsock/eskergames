@@ -245,6 +245,82 @@ moo:
     duration: 500
     spread: 50
 
+################## SOLVERS ################
+
+solver:
+  enabled:
+    - ClearHintedTileSolver
+    - clearBehind1Gate
+    - isthmus1Pair
+    - isthmus2Pair
+    - edge12Ends
+    - ClearFullyFlaggedTileSolver
+    - ExactCoveredTileMatchSolver
+    - GuessAtStartSolver
+  solvers:
+    ClearHintedTileSolver:
+      type: ClearHintedTileSolver
+      name: TODO
+    ClearFullyFlaggedTileSolver:
+      type: ClearFullyFlaggedTileSolver
+      name: TODO
+    ExactCoveredTileMatchSolver:
+      type: ExactCoveredTileMatchSolver
+      name: TODO
+    GuessAtStartSolver:
+      type: GuessAtStartSolver
+      name: TODO
+    clearBehind1Gate:
+      type: ConvolutionPatternSolver
+      # TODO localize
+      # TODO help dialog description text
+      name: "Clear behind a 1-gate"
+      allUniqueTransforms: true
+      match: |
+        CC#.
+        C11.
+        CC#.
+      action: |
+        ...C
+        .11C
+        ...C
+    isthmus1Pair:
+      type: ConvolutionPatternSolver
+      name: "1-pair isthmus"
+      allUniqueTransforms: true
+      match: |
+        C...
+        C11.
+        C...
+      action: |
+        ...C
+        .11C
+        ...C
+    isthmus2Pair:
+      type: ConvolutionPatternSolver
+      name: "2-pair isthmus"
+      allUniqueTransforms: true
+      match: |
+        C...
+        C22.
+        C...
+      action: |
+        ...C
+        .22C
+        ...C
+    edge12Ends:
+      type: ConvolutionPatternSolver
+      name: "Solve ends of a 1-2 edge"
+      allUniqueTransforms: true
+      match: |
+        CCCC
+        C12C
+        ####
+      action: |
+        ....
+        .12.
+        C##F
+
 ################## STRINGS ################
 
 strings:
