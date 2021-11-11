@@ -217,11 +217,11 @@ shareGame pre {
     margin-top: 0.25em;
 }
 
-highScores controls {
+highScores controls, tabbedView > controls {
     background-color: transparent;
 }
 
-highScores a.tool {
+highScores a.tool, tabbedView > controls a.tool {
     margin: 0 0.75em;
 }
 
@@ -576,6 +576,8 @@ comment.position-2 {
     <p data-l10n-str="shareDialogInstructions"></p>
     <div><pre></pre></div>
 </shareGame>
+
+<tabbedView class="hidden"><controls class="tabs"><row></row></controls><div></div></tabbedView>
 
 <highScores class="hidden">
     <div class="difficulties"><controls><row></row></controls></div>

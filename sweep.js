@@ -847,19 +847,27 @@ export class GameSession {
         });
         SweepPerfTimer.endShared();
     }
-
-    toggleDebugMode() {
-        this.debugMode = !this.debugMode;
+    
+    setDebugMode(value) {
+        this.debugMode = !!value;
         if (this.debugMode) {
             this.isClean = false;
         }
         this.renderViews();
     }
 
-    toggleRainbowMode() {
-        this.rainbowMode = !this.rainbowMode;
+    toggleDebugMode() {
+        this.setDebugMode(!this.debugMode);
+    }
+    
+    setRainbowMode(value) {
+        this.rainbowMode = !!value;
         GameStorage.shared.rainbowMode = this.rainbowMode;
         this.renderViews();
+    }
+
+    toggleRainbowMode() {
+        this.setRainbowMode(!this.rainbowMode);
     }
 
     // Not reentrant.
@@ -2545,15 +2553,15 @@ class GameControlsView {
         this.session = config.session;
         this.elem = config.elem;
         this.elem.removeAllChildren();
-        this.newGameButton = new ToolButton({
-            parent: this.elem,
-            title: Strings.str("newGameButton"),
-            click: () => this.newGame(true)
-        });
         this.showNewGameDialogButton = new ToolButton({
             parent: this.elem,
             title: Strings.str("showNewGameDialogButton"),
             click: () => this.showNewGameDialog()
+        });
+        this.showOptionsDialogButton = new ToolButton({
+            parent: this.elem,
+            title: Strings.str("showOptionsDialogButton"),
+            click: () => this.showOptionsDialog()
         });
         this.showHelpButton = new ToolButton({
             parent: this.elem,
@@ -2580,26 +2588,11 @@ class GameControlsView {
             title: Strings.str("solverStepButton"),
             click: () => this.solverStep()
         });
-        this.toggleRainbowButton = new ToolButton({
-            parent: this.elem,
-            title: Strings.str("toggleRainbowButton"),
-            click: () => this.toggleRainbowMode()
-        });
         this.shareButton = new ToolButton({
             parent: this.elem,
             title: Strings.str("shareButton"),
             click: () => this.shareGame()
         });
-
-        if (Game.rules().allowDebugMode) {
-            this.debugModeButton = new ToolButton({
-                parent: this.elem,
-                title: Strings.str("toggleDebugModeButton"),
-                click: () => this.toggleDebugMode()
-            });
-        } else {
-            this.debugModeButton = null;
-        }
 
         this.target = new DispatchTarget();
         this.target.register(Achievement.achievementUpdatedEvent, (e, achievement) => {
@@ -2624,10 +2617,6 @@ class GameControlsView {
         // this.showAnalysisButton.isEnabled = GameAnalysisDialog.isValid(this.session);
         this.showHintButton.isEnabled = AttemptHintAction.isValid(this.session);
         this.solverStepButton.isEnabled = AttemptSolverStepAction.isValid(this.session);
-        this.toggleRainbowButton.isSelected = this.session ? this.session.rainbowMode : false;
-        if (this.debugModeButton) {
-            this.debugModeButton.isSelected = this.session ? this.session.debugMode : false
-        }
     }
 
     newGame(prompt) {
@@ -2664,6 +2653,11 @@ class GameControlsView {
     showNewGameDialog() {
         if (UI.isShowingDialog()) { return; }
         new NewGameDialog().show();
+    }
+    
+    showOptionsDialog() {
+        if (UI.isShowingDialog()) { return; }
+        new OptionsDialog(this.session).show();
     }
 
     showHelp() {
@@ -2713,6 +2707,51 @@ class GameControlsView {
         if (this.session) { this.session.toggleDebugMode(); }
     }
 } // end class GameControlsView
+
+class TabbedView {
+    /// a.parent: DOM element TabbedView will append itself to.
+    /// a.items: ordered array of tab content. Should have contentElem and .tabLabel properties.
+    /// a.selectedIndex: optional, initial index to select.
+    constructor(a) {
+        this.contentElem = document.querySelector("body > tabbedView")
+            .cloneNode(true).addRemClass("hidden", false);
+        this.buttonsContainer = this.contentElem.querySelector("controls.tabs");
+        this.tabButtonsElem = this.contentElem.querySelector("controls.tabs > row");
+        this.contentContainer = this.contentElem.querySelector("div");
+        a.parent.append(this.contentElem);
+        
+        this.items = a.items;
+        this.tabButtons = [];
+        
+        this.configureView();
+        this.selectTab(a.hasOwnProperty("selectedIndex") ? a.selectedIndex : 0);
+    }
+    
+    configureView() {
+        let showTabs = this.items.length > 1;
+        this.tabButtons = [];
+        this.tabButtonsElem.removeAllChildren();
+        this.contentContainer.removeAllChildren();
+        this.buttonsContainer.classList.toggle("hidden", !showTabs);
+        
+        this.items.forEach((tab, index) => {
+            this.tabButtons.push(new ToolButton({
+                id: "",
+                parent: this.tabButtonsElem,
+                title: tab.tabLabel,
+                click: () => this.selectTab(index)
+            }));
+            this.contentContainer.append(tab.contentElem);
+        });
+    }
+    
+    selectTab(index) {
+        index = Math.clamp(index, { min: 0, max: this.items.length - 1 });
+        this.tabButtons.forEach((item, itemIndex) => item.isSelected = (index == itemIndex));
+        this.items.forEach((item, itemIndex) => item.contentElem.classList.toggle("hidden", (index != itemIndex)));
+        return this;
+    }
+}
 
 function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 
@@ -3917,6 +3956,115 @@ class GameAnalysisDialog extends GameDialog {
     }
 } // end class GameAnalysisDialog
 
+class DisplayOptionsSection {
+    constructor(session) {
+        this.session = session;
+        this.contentElem = GameDialog.createFormElem();
+        // Broken: multiple observers with the same observer target, same Kvo property type, but different source objects.
+        this.kvoTokens = { rainbowToggle: {}, storiesToggle: {}, debugModeToggle: {} };
+        
+        this.rainbowToggle = new Gaming.FormValueView.ToggleInputView({
+            parent: this.contentElem,
+            title: Strings.str("displayOptionsRainbowToggleLabel"),
+            value: true,
+            selected: this.session.rainbowMode
+        });
+        this.rainbowToggle.kvo.checked.addObserver(this.kvoTokens.rainbowToggle, () => {
+            this.setRainbowMode();
+        });
+        this.storiesToggle = new Gaming.FormValueView.ToggleInputView({
+            parent: this.contentElem,
+            title: Strings.str("displayOptionsStoriesToggleLabel"),
+            value: true,
+            selected: GameStorage.shared.storiesVisible
+        });
+        this.storiesToggle.kvo.checked.addObserver(this.kvoTokens.storiesToggle, () => {
+            this.setStoriesMode();
+        });
+        
+        if (Game.rules().allowDebugMode) {
+            this.debugModeToggle = new Gaming.FormValueView.ToggleInputView({
+                parent: this.contentElem,
+                title: Strings.str("displayOptionsDebugModeToggleLabel"),
+                value: true,
+                selected: this.session.debugMode
+            });
+            this.debugModeToggle.kvo.checked.addObserver(this.kvoTokens.debugModeToggle, () => {
+                this.setDebugMode();
+            });
+        } else {
+            this.debugModeToggle = null;
+        }
+    }
+    
+    remove() {
+        Object.getOwnPropertyNames(this.kvoTokens).forEach(id => {
+            Gaming.Kvo.stopAllObservations(this.kvoTokens[id]);
+        });
+    }
+    
+    get tabLabel() { return Strings.str("displayOptionsTabLabel"); }
+    
+    setRainbowMode() {
+        debugLog("setRainbowMode");
+        this.session.setRainbowMode(this.rainbowToggle.checked);
+    }
+
+    setStoriesMode() {
+        GameScriptEngine.shared.execute("setStoriesVisible", this.storiesToggle.checked, null);
+    }
+    
+    setDebugMode() {
+        this.session.setDebugMode(this.debugModeToggle.checked);
+    }
+} // end class DisplayOptionsSection
+
+class SolverOptionsSection {
+    constructor() {
+        this.contentElem = GameDialog.createFormElem();
+        this.contentElem.innerText = "Henlo";
+        
+        // TODO reorder and enable/disable solvers
+    }
+    
+    get tabLabel() { return Strings.str("solverOptionsTabLabel"); }
+}
+
+class OptionsDialog extends GameDialog {
+    constructor(session) {
+        super();
+        
+        this.sections = [
+            new DisplayOptionsSection(session),
+            // new SolverOptionsSection()
+        ];
+        
+        this.contentElem = GameDialog.createContentElem();
+        
+        this.x = new ToolButton({
+            title: Strings.str("optionsDialogDismiss"),
+            click: () => this.dismiss()
+        });
+        
+        this.tabs = new TabbedView({
+            parent: this.contentElem,
+            items: this.sections,
+            selectedIndex: 0
+        });
+    }
+        
+    dismiss() {
+        this.sections.forEach(section => {
+            if (section.remove) { section.remove(); }
+        });
+        super.dismiss();
+    }
+    
+    get title() { return Strings.str("optionsDialogTitle"); }
+    get isModal() { return false; }
+    get dialogButtons() { return [this.x.elem]; }
+} // end class OptionsDialog
+
 class TrophiesDialog extends GameDialog {
     static show(storage, difficulty) {
         const highScores = storage.highScoresByDifficulty;
@@ -4139,6 +4287,9 @@ class SweepStoriesView {
         GameScriptEngine.shared.registerCommand("showStory", (subject, evt) => this.showStory(subject));
         GameScriptEngine.shared.registerCommand("toggleStoriesVisible", () => {
             this.isVisible = !GameStorage.shared.storiesVisible;
+        });
+        GameScriptEngine.shared.registerCommand("setStoriesVisible", (subject, evt) => {
+            this.isVisible = !!subject;
         });
         
         if (this.isEnabled) {

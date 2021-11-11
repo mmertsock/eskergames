@@ -3278,6 +3278,48 @@ class TextInputView extends InputView {
 }
 FormValueView.TextInputView = TextInputView;
 
+class ToggleInputView extends InputView {
+    static Kvo() { return {"checked": "checked"}; }
+    
+    static createElement(a) {
+        let elem = document.createElement("label").addRemClass("toggleInput", true);
+        // TODO use iOS-style toggle switch instead
+        elem.append(document.createElement("input").configure(input => {
+            input.type = "checkbox";
+            input.value = a.value;
+            input.checked = !!a.selected;
+        }));
+        if (a.title) {
+            elem.append(document.createElement("span").configure(span => {
+                span.innerText = a.title;
+            }));
+        }
+        
+        return elem;
+    }
+    
+    constructor(config, elem) {
+        super(config, elem || ToggleInputView.createElement(config));
+        this.value = config.value;
+        this.valueElem.addEventListener("change", () => {
+            this.kvo.checked.notifyChanged();
+        });
+        this._title = this.title;
+        this.kvo = new Kvo(this);
+    }
+    
+    get title() {
+        return this.elem.querySelector("label span")?.innerText;
+    }
+    
+    get checked() { return this.valueElem.checked; }
+    set checked(value) {
+        this.valueElem.checked = value;
+        this.kvo.checked.notifyChanged();
+    }
+}
+FormValueView.ToggleInputView = ToggleInputView;
+
 class SingleChoiceInputView extends InputView {
     static createElement(config) {
         var elem = document.createElement("label").addRemClass("singleChoiceInput", true);

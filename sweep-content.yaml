@@ -349,6 +349,10 @@ strings:
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✕"
   difficultyChoiceLabelTemplate: "<name>"
+  displayOptionsDebugModeToggleLabel: "Debug Mode"
+  displayOptionsRainbowToggleLabel: "🌈 Rainbow Mode!"
+  displayOptionsStoriesToggleLabel: "Show Stories"
+  displayOptionsTabLabel: Display
   errorAlertDismissButton: Bummer
   errorAlertTitle: "Oh No!"
   failedToLoadGameMessage: There was a problem loading the game data.
@@ -384,7 +388,7 @@ strings:
   helpKeyboardEscapePressed: "esc|: Close popups, etc."
   helpKeyboardMoo: "🐄|: moo"
   helpKeyboardMooTooltip: "%> moo ⏎"
-  helpKeyboardNewGame: "N|: New game"
+  helpKeyboardNewGame: "N|: New game using current options"
   helpKeyboardShowAnalysis: "#|: Show game stats"
   helpKeyboardShowHelp: "?|: Show help"
   helpKeyboardShowTrophies: "*|: Show trophy room"
@@ -401,7 +405,6 @@ strings:
   lostAlertTitle: You Lost
   mooActionDescription: mooooo
   mousePointerNoun: Mouse
-  newGameButton: New
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
   newGameHeightInputLabelTemplate: "Height (<min>–<max>)"
@@ -410,6 +413,8 @@ strings:
   newGameTileCountPlaceholder: "# Tiles"
   newGameWhilePlayingPrompt: "Ready to start a new game?"
   newGameWidthInputLabelTemplate: "Width (<min>–<max>)"
+  optionsDialogTitle: Options
+  optionsDialogDismiss: Alright
   oxfordCommaManyItemsSeparator: ", "
   oxfordCommaManyItemsTemplate: "<first>, and <last>"
   oxfordCommaTwoItemsTemplate: "<first> and <last>"
@@ -431,7 +436,7 @@ strings:
   setFlagNoneActionDescription: Cleared a mine marker
   shareButton: Share
   shareDialogDismiss: Done
-  shareDialogInstructions: "Copy and share/save the code below. To use it, go to Options, select Import, and paste the code."
+  shareDialogInstructions: "Copy and share/save the code below. To use it, go to New, select Import, and paste the code."
   shareDialogTitle: Share
   shareGameBoardCodeTemplate: "-- Try this Sweep game: <width>x<height>, <mineCount#mineCount#formattedMineCount>, <starCount>/<maxStarCount> difficulty --\n<data>"
   showAnalysisButton: Stats
@@ -439,7 +444,8 @@ strings:
   showHintActionDescription: Got a hint
   showHintButton: Hint
   showHintErrorText: Can’t find any hints to show.
-  showNewGameDialogButton: Options
+  showNewGameDialogButton: New
+  showOptionsDialogButton: Options
   showTrophiesButton: Trophies
   solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
   solverClearHintedTileActionDescription: "Solver: cleared tile indicated by last hint"
@@ -447,6 +453,7 @@ strings:
   solverGotStuckMessage: "I don’t know what to do!"
   solverGuessAtStartActionDescription: Guessed a tile to start the game
   solverStepButton: Solve
+  solverOptionsTabLabel: Solvers
   stars1: "★☆☆☆☆"
   stars2: "★★☆☆☆"
   stars3: "★★★☆☆"
@@ -455,8 +462,6 @@ strings:
   storiesBarDismiss: "✕"
   storyDialogDismiss: Haha Stories Everywhere
   storyDialogTitle: "<possessive> Story"
-  toggleDebugModeButton: "Debug"
-  toggleRainbowButton: "🌈"
   touchPointerNoun: Touch
   tapAction: tap
   trophiesDialogDismiss: Done
@@ -519,7 +524,6 @@ strings:
     lostAlertButton: Qué pena
     lostAlertDialogTextTemplate: "Tu Puntaje: <points>"
     lostAlertTitle: Perdiste
-    newGameButton: Nuevo
     newGameDialogStartButton: Comienzo
     newGameDialogTitle: "Nuevo Juego"
     newGameHeightInputLabelTemplate: "Altura (<min>–<max>)"
@@ -543,6 +547,7 @@ strings:
     saveHighScoreDialogTitle: "¡Tu Ganaste!"
     saveHighScoreDisabledButton: OK
     saveHighScoreDisabledDialogTextTemplate: "Tu puntaje: <points>. Pero no puede guardar su puntaje alto porque recibió ayuda."
+    showNewGameDialogButton: Nuevo
     trophiesDialogDismiss: Hecho
 
 # arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
