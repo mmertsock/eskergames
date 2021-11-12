@@ -84,6 +84,15 @@ controls > row {
     justify-content: center;
 }
 
+tabbedView {
+    display: block;
+    margin: 0.3em 0;
+}
+
+tabbedView > controls.tabs > row {
+    margin: 0.3em 0;
+}
+
 header row {
     margin: 0 auto;
     padding: 0.25em;
@@ -346,7 +355,16 @@ gameDialog.prompt.buttons-1 > nav {
 }
 
 gameDialog.newGame {
-    min-width: 15em;
+    min-width: 16em;
+}
+
+gameDialog.options {
+    min-width: 16em;
+}
+
+gameDialog.options a.tool.solver-reset {
+    margin: 0.5em 0 0 20px;
+    max-width: 6em;
 }
 
 gameDialog > nav label {
@@ -582,7 +600,7 @@ comment.position-2 {
 <tabbedView class="hidden"><controls class="tabs"><row></row></controls><div></div></tabbedView>
 
 <highScores class="hidden">
-    <div class="difficulties"><controls><row></row></controls></div>
+    <tabbedView class="difficulties"><controls><row></row></controls></tabbedView>
     <div class="scores"></div>
     <scoreTemplate class="hidden">
         <ol><li><row><name>–––</name><date></date><points></points><stars></stars></row></li></ol>

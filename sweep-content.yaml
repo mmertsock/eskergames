@@ -51,11 +51,11 @@ keyboard:
     - [Slash, showHelp, null, helpKeyboardShowHelp]
     - [KeyN, newGame, true, helpKeyboardNewGame]
     - [Shift+KeyN, showNewGameDialog, null, helpKeyboardShowNewGameDialog]
+    - [Comma, showOptionsDialog, null, helpKeyboardShowOptionsDialog]
     - [Digit8, showTrophies, null, helpKeyboardShowTrophies] # asterisk
     - [Digit3, showAnalysis, null, helpKeyboardShowAnalysis] # pound
     - [Shift+Digit1, showHint, null, helpKeyboardShowHint] # bang
     - [Shift+Digit4, solverStep, null, helpKeyboardSolverStep] # dollar
-    - [Shift+KeyO, toggleStoriesVisible, null, helpKeyboardToggleStoriesVisible]
     - [KeyQ, toggleRainbowMode]
     - [KeyM, moo, m, helpKeyboardMoo]
     - [KeyO, moo, o]
@@ -248,7 +248,7 @@ moo:
 ################## SOLVERS ################
 
 solver:
-  enabled:
+  defaultOrder:
     - ClearHintedTileSolver
     - clearBehind1Gate
     - isthmus1Pair
@@ -260,21 +260,21 @@ solver:
   solvers:
     ClearHintedTileSolver:
       type: ClearHintedTileSolver
-      name: TODO
+      name: solverNameClearHintedTileSolver
     ClearFullyFlaggedTileSolver:
       type: ClearFullyFlaggedTileSolver
-      name: TODO
+      name: solverNameClearFullyFlaggedTileSolver
     ExactCoveredTileMatchSolver:
       type: ExactCoveredTileMatchSolver
-      name: TODO
+      name: solverNameExactCoveredTileMatchSolver
     GuessAtStartSolver:
       type: GuessAtStartSolver
-      name: TODO
+      name: solverNameGuessAtStartSolver
     clearBehind1Gate:
       type: ConvolutionPatternSolver
       # TODO localize
       # TODO help dialog description text
-      name: "Clear behind a 1-gate"
+      name: solverNameClearBehind1Gate
       allUniqueTransforms: true
       match: |
         CC#.
@@ -286,7 +286,7 @@ solver:
         ...C
     isthmus1Pair:
       type: ConvolutionPatternSolver
-      name: "1-pair isthmus"
+      name: solverNameIsthmus1Pair
       allUniqueTransforms: true
       match: |
         C...
@@ -298,7 +298,7 @@ solver:
         ...C
     isthmus2Pair:
       type: ConvolutionPatternSolver
-      name: "2-pair isthmus"
+      name: solverNameIsthmus2Pair
       allUniqueTransforms: true
       match: |
         C...
@@ -310,7 +310,7 @@ solver:
         ...C
     edge12Ends:
       type: ConvolutionPatternSolver
-      name: "Solve ends of a 1-2 edge"
+      name: solverNameEdge12Ends
       allUniqueTransforms: true
       match: |
         CCCC
@@ -388,14 +388,14 @@ strings:
   helpKeyboardEscapePressed: "esc|: Close popups, etc."
   helpKeyboardMoo: "🐄|: moo"
   helpKeyboardMooTooltip: "%> moo ⏎"
-  helpKeyboardNewGame: "N|: New game using current options"
+  helpKeyboardNewGame: "N|: New game using current config"
   helpKeyboardShowAnalysis: "#|: Show game stats"
   helpKeyboardShowHelp: "?|: Show help"
   helpKeyboardShowTrophies: "*|: Show trophy room"
   helpKeyboardShowHint: "!|: Get a hint"
-  helpKeyboardShowNewGameDialog: "⇧ + N|: Show options for new game"
+  helpKeyboardShowNewGameDialog: "⇧ + N|: Configure a new game"
+  helpKeyboardShowOptionsDialog: ",|: Show options"
   helpKeyboardSolverStep: "$|: Auto-solve"
-  helpKeyboardToggleStoriesVisible: "⇧ + O|: Toggle stories"
   highScoresDialogTitle: High Scores
   importCodeTitle: Code
   importCodePlaceholder: Paste game code here
@@ -447,13 +447,24 @@ strings:
   showNewGameDialogButton: New
   showOptionsDialogButton: Options
   showTrophiesButton: Trophies
+  # solverConvolutionFilterActionDescription: "Solver: applied pattern ”%@“"
   solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
   solverClearHintedTileActionDescription: "Solver: cleared tile indicated by last hint"
   solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: <flaggedKnownMines#length#formattedLength>"
   solverGotStuckMessage: "I don’t know what to do!"
   solverGuessAtStartActionDescription: Guessed a tile to start the game
+  solverNameClearBehind1Gate: "Clear behind a 1-gate"
+  solverNameClearFullyFlaggedTileSolver: "Clear all remaining neighbors of a fully-flagged tile"
+  solverNameClearHintedTileSolver: "Clear a tile indicated in a hint"
+  solverNameEdge12Ends: "Solve ends of a 1-2 edge"
+  solverNameExactCoveredTileMatchSolver: "Flag all neighbors when count matches tile number"
+  solverNameGuessAtStartSolver: "Guess a random tile at start"
+  solverNameIsthmus1Pair: "1-pair isthmus"
+  solverNameIsthmus2Pair: "2-pair isthmus"
   solverStepButton: Solve
+  solverOptionsResetButton: Reset
   solverOptionsTabLabel: Solvers
+  solverOptionsToggleCollectionLabel: "Enable these solvers:"
   stars1: "★☆☆☆☆"
   stars2: "★★☆☆☆"
   stars3: "★★★☆☆"

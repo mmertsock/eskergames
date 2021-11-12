@@ -1,8 +1,8 @@
 "use-strict";
 
 import { Strings } from './locale.js';
-import { debugLog, debugWarn, PerfTimer, Point, Rect } from './g.js';
-import { ActionResult, GameSession, GameTile, SweepAction, TileCollection, TileFlag, TileTransform } from './sweep.js';
+import { debugLog, debugWarn, Kvo, PerfTimer, Point, Rect } from './g.js';
+import { ActionResult, GameSession, GameStorage, GameTile, SweepAction, TileCollection, TileFlag, TileTransform } from './sweep.js';
 
 function mark__Solver_Agent() {} // ~~~~~~ Solver Agent ~~~~~~
 
@@ -23,12 +23,81 @@ class SolverResult {
     }
 }
 
+export class SolverPreferences {
+    static Kvo() { return {"enabledIDs": "enabledIDs", "orderedSolvers": "orderedSolvers"}; }
+    
+    static initialize(config) {
+        SolverPreferences.shared = new SolverPreferences(config);
+    }
+    
+    constructor(config) {
+        this.defaultOrder = config.solver.defaultOrder;
+        this.solvers = config.solver.solvers;
+        this.kvo = new Kvo(this);
+    }
+    
+    get enabledIDs() {
+        let ids = GameStorage.shared.orderedSolvers;
+        if (!Array.isArray(ids) || ids.length == 0) {
+            return this.defaultOrder;
+        } else {
+            return ids;
+        }
+    }
+    
+    set enabledIDs(newValue) {
+        GameStorage.shared.orderedSolvers = newValue;
+        this.kvo.enabledIDs.notifyChanged();
+    }
+    
+    get defaultOrderedSolvers() {
+        return this.makePreferencesArray(this.defaultOrder);
+    }
+    
+    get orderedSolvers() {
+        return this.makePreferencesArray(this.enabledIDs);
+    }
+    
+    set orderedSolvers(newValue) {
+        if (!Array.isArray(newValue) || newValue.length == 0) {
+            this.enabledIDs = this.defaultOrder;
+        } else {
+            let ids = newValue.filter(item => item.enabled).map(item => item.id);
+            this.enabledIDs = (ids.length == 0) ? this.defaultOrder : ids;
+        }
+        this.kvo.orderedSolvers.notifyChanged();
+    }
+    
+    /// Assumes enabledIDs is a valid non-empty array.
+    makePreferencesArray(enabledIDs) {
+        return this.defaultOrder.map(id => {
+            let info = this.solvers[id];
+            if (!info) { return null; }
+            return {
+                id: id,
+                enabled: enabledIDs.includes(id),
+                info: info
+            };
+        }).filter(item => item != null);
+    }
+}
+
 export class SolverAgent {
     constructor(config) {
+        this.content = config.content; // Game.content
         this.session = config.session;
-        this.solvers = config.solvers;
         this.debugMode = !!config.debugMode;
         this.hintTile = null;
+        this.rebuildSolvers();
+        SolverPreferences.shared.kvo.enabledIDs.addObserver(this, () => this.rebuildSolvers());
+    }
+    
+    remove() {
+        Kvo.stopAllObservations(this);
+    }
+    
+    rebuildSolvers() {
+        this.solvers = Solver.makeOrderedSolvers(SolverPreferences.shared.enabledIDs, this.content);
     }
 
     tryStep() {
@@ -61,9 +130,8 @@ function mark__Basic_Solvers() {} // ~~~~~~ Basic Solvers ~~~~~~
 
 // Abstract base class
 export class Solver {
-    static initialize(content) {
-        Solver.allSolvers = content.solver.enabled
-            .map(id => Solver.makeSolver(id, content))
+    static makeOrderedSolvers(enabledIDs, content) {
+        return enabledIDs.map(id => Solver.makeSolver(id, content))
             .filter(s => s != null);
     }
     
@@ -584,5 +652,5 @@ ConvolutionPattern.ActionMatrixItem = class {
 };
 
 export function initialize(content) {
-    Solver.initialize(content);
+    SolverPreferences.initialize(content);
 };

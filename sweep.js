@@ -286,6 +286,10 @@ export class Game {
         }
         if (content.solver) {
             GameContent.addIdToItemsInDictionary(content.solver.solvers);
+            Object.getOwnPropertyNames(content.solver.solvers).forEach(id => {
+                let item = content.solver.solvers[id];
+                item.name = Strings.str(item.name);
+            });
         }
         Game.content = content;
         Game.content.rules.allowDebugMode = Game.content.rules.allowDebugMode || (self.location ? (self.location.hostname == "localhost") : false);
@@ -562,6 +566,14 @@ export class GameStorage {
     set storiesVisible(value) {
         this.setPreference("storiesVisible", value);
     }
+    
+    get orderedSolvers() {
+        let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
+        return item?.data.orderedSolvers;
+    }
+    set orderedSolvers(value) {
+        this.setPreference("orderedSolvers", value);
+    }
 
     setPreference(key, value) {
         let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
@@ -806,7 +818,8 @@ export class GameSession {
         this.warningMessage = null;
         
         let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
-        this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
+        this.solver?.remove();
+        this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, content: Game.content });
 
         this.recordGameState();
         this.forEachDelegate(d => {
@@ -818,7 +831,8 @@ export class GameSession {
     resume() {
         this.moveState = MoveState.ready;
         let debug = Game.rules().allowDebugMode && Game.rules().solverDebugMode;
-        this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, solvers: SweepSolver.Solver.allSolvers });
+        this.solver?.remove();
+        this.solver = new SweepSolver.SolverAgent({ session: this, debugMode: debug, content: Game.content });
         this.warningMessage = Strings.str("welcomeBack");
         this.forEachDelegate(d => {
             if (d.gameResumed) { d.gameResumed(this, this.game, null); }
@@ -2602,6 +2616,7 @@ class GameControlsView {
         let gse = GameScriptEngine.shared;
         gse.registerCommand("newGame", prompt => this.newGame(prompt));
         gse.registerCommand("showNewGameDialog", () => this.showNewGameDialog());
+        gse.registerCommand("showOptionsDialog", () => this.showOptionsDialog());
         gse.registerCommand("showHelp", () => this.showHelp());
         gse.registerCommand("showTrophies", () => this.showTrophies());
         gse.registerCommand("showAnalysis", () => this.showAnalysis());
@@ -3969,16 +3984,17 @@ class DisplayOptionsSection {
             value: true,
             selected: this.session.rainbowMode
         });
-        this.rainbowToggle.kvo.checked.addObserver(this.kvoTokens.rainbowToggle, () => {
+        this.rainbowToggle.kvo.selected.addObserver(this.kvoTokens.rainbowToggle, () => {
             this.setRainbowMode();
         });
+        
         this.storiesToggle = new Gaming.FormValueView.ToggleInputView({
             parent: this.contentElem,
             title: Strings.str("displayOptionsStoriesToggleLabel"),
             value: true,
             selected: GameStorage.shared.storiesVisible
         });
-        this.storiesToggle.kvo.checked.addObserver(this.kvoTokens.storiesToggle, () => {
+        this.storiesToggle.kvo.selected.addObserver(this.kvoTokens.storiesToggle, () => {
             this.setStoriesMode();
         });
         
@@ -3989,7 +4005,7 @@ class DisplayOptionsSection {
                 value: true,
                 selected: this.session.debugMode
             });
-            this.debugModeToggle.kvo.checked.addObserver(this.kvoTokens.debugModeToggle, () => {
+            this.debugModeToggle.kvo.selected.addObserver(this.kvoTokens.debugModeToggle, () => {
                 this.setDebugMode();
             });
         } else {
@@ -4006,37 +4022,76 @@ class DisplayOptionsSection {
     get tabLabel() { return Strings.str("displayOptionsTabLabel"); }
     
     setRainbowMode() {
-        debugLog("setRainbowMode");
-        this.session.setRainbowMode(this.rainbowToggle.checked);
+        this.session.setRainbowMode(this.rainbowToggle.selected);
     }
 
     setStoriesMode() {
-        GameScriptEngine.shared.execute("setStoriesVisible", this.storiesToggle.checked, null);
+        GameScriptEngine.shared.execute("setStoriesVisible", this.storiesToggle.selected, null);
     }
     
     setDebugMode() {
-        this.session.setDebugMode(this.debugModeToggle.checked);
+        this.session.setDebugMode(this.debugModeToggle.selected);
     }
 } // end class DisplayOptionsSection
 
 class SolverOptionsSection {
     constructor() {
+        this.preferences = SweepSolver.SolverPreferences.shared;
         this.contentElem = GameDialog.createFormElem();
-        this.contentElem.innerText = "Henlo";
         
-        // TODO reorder and enable/disable solvers
+        this.toggleCollection = new Gaming.FormValueView.ToggleInputCollection({
+            parent: this.contentElem,
+            id: "orderedSolvers",
+            title: Strings.str("solverOptionsToggleCollectionLabel"),
+            choices: this.preferences.orderedSolvers.map(item => {
+                return {
+                    title: item.info.name,
+                    value: item.id
+                };
+            })
+        });
+        
+        this.resetButton = new ToolButton({
+            parent: this.contentElem,
+            title: Strings.str("solverOptionsResetButton"),
+            click: () => this.reset()
+        }).configure(b => b.elem.classList.toggle("solver-reset", true));
+        
+        // Initialize state of toggles
+        this.enabledIDs = this.preferences.enabledIDs;
+        
+        this.preferences.kvo.enabledIDs.addObserver(this, () => {
+            this.enabledIDs = this.preferences.enabledIDs;
+        });
+    }
+    
+    remove() {
+        Gaming.Kvo.stopAllObservations(this);
+        this.preferences.enabledIDs = this.enabledIDs;
     }
     
     get tabLabel() { return Strings.str("solverOptionsTabLabel"); }
+    
+    get enabledIDs() {
+        return this.toggleCollection.value;
+    }
+    
+    set enabledIDs(newValue) {
+        this.toggleCollection.value = newValue;
+    }
+    
+    reset() {
+        this.enabledIDs = this.preferences.defaultOrder;
+    }
 }
 
 class OptionsDialog extends GameDialog {
     constructor(session) {
-        super();
+        super({ rootElemClass: "options" });
         
         this.sections = [
             new DisplayOptionsSection(session),
-            // new SolverOptionsSection()
+            new SolverOptionsSection()
         ];
         
         this.contentElem = GameDialog.createContentElem();
@@ -4285,9 +4340,6 @@ class SweepStoriesView {
         this._isVisible = GameStorage.shared.storiesVisible;
         
         GameScriptEngine.shared.registerCommand("showStory", (subject, evt) => this.showStory(subject));
-        GameScriptEngine.shared.registerCommand("toggleStoriesVisible", () => {
-            this.isVisible = !GameStorage.shared.storiesVisible;
-        });
         GameScriptEngine.shared.registerCommand("setStoriesVisible", (subject, evt) => {
             this.isVisible = !!subject;
         });
