@@ -92,16 +92,19 @@ gameForm label.textAreaInput textarea {
     margin: 2pt auto 4pt auto;
 }
 
-gameForm label, gameForm div.singleChoiceInput {
+gameForm label, gameForm div.singleChoiceInput, gameForm div.toggleInput {
     margin: 2pt 0;
 }
 
 gameForm label.textInput span:after, label.textAreaInput span:after { content: ":"; }
 gameForm label.textInput span { padding-right: 3pt; }
-gameForm label.singleChoiceInput span { padding-left: 3pt; }
+gameForm label.singleChoiceInput span,
+    gameForm label.toggleInput span { padding-left: 3pt; }
 
 gameForm div.singleChoiceInput > span { display: block; }
 gameForm div.singleChoiceInput > span:after { content: ":"; }
+
+gameForm label.toggleInput input { font-size: 75%; }
 
 #dialogs {
     display: flex;

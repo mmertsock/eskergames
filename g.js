@@ -3279,13 +3279,16 @@ class TextInputView extends InputView {
 FormValueView.TextInputView = TextInputView;
 
 class ToggleInputView extends InputView {
-    static Kvo() { return {"checked": "checked"}; }
+    static Kvo() { return {"selected": "selected"}; }
     
     static createElement(a) {
         let elem = document.createElement("label").addRemClass("toggleInput", true);
         // TODO use iOS-style toggle switch instead
         elem.append(document.createElement("input").configure(input => {
             input.type = "checkbox";
+            if (a.collection) {
+                input.name = a.collection.id;
+            }
             input.value = a.value;
             input.checked = !!a.selected;
         }));
@@ -3302,7 +3305,7 @@ class ToggleInputView extends InputView {
         super(config, elem || ToggleInputView.createElement(config));
         this.value = config.value;
         this.valueElem.addEventListener("change", () => {
-            this.kvo.checked.notifyChanged();
+            this.kvo.selected.notifyChanged();
         });
         this._title = this.title;
         this.kvo = new Kvo(this);
@@ -3312,13 +3315,66 @@ class ToggleInputView extends InputView {
         return this.elem.querySelector("label span")?.innerText;
     }
     
-    get checked() { return this.valueElem.checked; }
-    set checked(value) {
+    get selected() { return this.valueElem.checked; }
+    set selected(value) {
         this.valueElem.checked = value;
-        this.kvo.checked.notifyChanged();
+        this.kvo.selected.notifyChanged();
     }
 }
 FormValueView.ToggleInputView = ToggleInputView;
+
+class ToggleInputCollection extends FormValueView {
+    static Kvo() { return {"value": "value"}; }
+    
+    static createElement(a) {
+        let elem = document.createElement("div").addRemClass("toggleInput", true);
+        if (a.title) {
+            elem.append(document.createElement("span").configure(item => item.innerText = a.title));
+        }
+        return elem;
+    }
+    
+    constructor(a) {
+        super(a, ToggleInputCollection.createElement(a));
+        this.id = a.id;
+        this.choices = a.choices.map(item => new ToggleInputView({
+            parent: this.elem,
+            collection: this,
+            title: item.title,
+            value: item.value,
+            selected: !!item.selected
+        }));
+        this.elem.querySelectorAll("input").forEach(input => {
+            input.addEventListener("change", () => {
+                this.kvo.value.notifyChanged();
+            });
+        });
+        this.kvo = new Kvo(this);
+    }
+
+    get title() {
+        return this.elem.querySelector("div.toggleInput > span").innerText;
+    }
+
+    get isValid() {
+        return this.validationRules.every(rule => rule(this));
+    }
+
+    /// Ordered array of the .values of all toggles that are selected.
+    get value() {
+        return this.choices.filter(item => item.selected)
+            .map(item => item.value);
+    }
+    
+    /// Selects all toggles with values in the given array, deselects all other toggles.
+    set value(newValue) {
+        this.choices.forEach(item => {
+            item.selected = newValue.includes(item.value);
+        });
+        this.kvo.value.notifyChanged();
+    }
+}
+FormValueView.ToggleInputCollection = ToggleInputCollection;
 
 class SingleChoiceInputView extends InputView {
     static createElement(config) {
