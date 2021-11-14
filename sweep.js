@@ -274,7 +274,7 @@ export class GameBoard {
         if (SweepPerfTimer.shared) {
             SweepPerfTimer.shared.counters.visitTiles += (3 * this._allTiles.length) + mineTiles.length;
         }
-        debugLog(Game.debugSummary(this));
+        // debugLog(Game.debugSummary(this));
     }
 } // end class GameBoard
 
@@ -295,7 +295,7 @@ export class Game {
         Game.content.rules.allowDebugMode = Game.content.rules.allowDebugMode || (self.location ? (self.location.hostname == "localhost") : false);
         Game.content.rules.maxStarCount = Game.content.rules.highScoreThresholds.length + 1;
         GameScriptEngine.shared = new GameScriptEngine();
-        Achievement.initialize();
+        Achievement.initialize(content);
         GameScriptEngine.shared.registerCommand("getGameMetadata", UI.getGameMetadata);
         
         UI.prepareStaticContent();
@@ -380,7 +380,7 @@ export class Game {
     get mineCount() { return this.board.mineCount; }
 
     get statistics() {
-        var stats = {
+        let stats = {
             difficulty: this.difficulty,
             mineCount: this.mineCount,
             totalTileCount: this.board.size.width * this.board.size.height,
@@ -388,7 +388,9 @@ export class Game {
             clearedTileCount: 0,
             progress: 0,
             progressPercent: 0,
-            points: 0
+            points: 0,
+            starCount: undefined,
+            stars: undefined,
         };
         this.board.visitTiles(null, tile => {
             if (tile.flag.isEqual(TileFlag.assertMine)) { stats.assertMineFlagCount += 1; }
@@ -441,10 +443,126 @@ let MoveState = {
     active: 2
 };
 
+
+export class StatsHistory {
+    constructor(a) {
+        this.storage = a.storage; // GameStorage
+    }
+    
+    /// GameSession should call this at the end of every game, immediately before posting gameCompletedEvent,
+    /// so that event listeners can access the latest statistics.
+    gameCompleted(session) {
+        if (!InteractiveSessionView.isMain(session)) { return; }
+        let summary = this.summary;
+        if (summary.addCompletedGame(session)) {
+            this.storage.statsHistorySummary = summary;
+        }
+    }
+    
+    get summary() {
+        try {
+            return StatsHistory.Summary.fromDeserializedWrapper(this.storage.statsHistorySummary);
+        } catch (e) {
+            debugWarn(`Failed to deserialize saved StatsHistory.Summary: ${e}`);
+            return new StatsHistory.Summary(null);
+        }
+    }
+}
+StatsHistory.Summary = class StatsHistorySummary {
+    constructor(data) {
+        if (!data) {
+            this.totalMoveCountAllGames = 0;
+            this.totalPointsAllGames = 0;
+            this.totalTilesClearedAllGames = 0;
+            this.totalActiveTimeElapsed = 0;
+            this.totalGamesWon = 0;
+            this.totalMinesWon = 0;
+            this.totalStarsWon = 0;
+            this.totalPointsWon = 0;
+            this.totalGamesLost = 0;
+        } else {
+            Gaming.deserializeAssertProperties(data, [
+                "schemaVersion",
+                "totalMoveCountAllGames",
+                "totalPointsAllGames",
+                "totalTilesClearedAllGames",
+                "totalActiveTimeElapsed",
+                "totalGamesWon",
+                "totalMinesWon",
+                "totalStarsWon",
+                "totalPointsWon",
+                "totalGamesLost"
+            ]);
+            if (data.schemaVersion != Game.schemaVersion) {
+                throw new Error("schemaVersionUnsupported");
+            }
+            this.totalMoveCountAllGames = data.totalMoveCountAllGames;
+            this.totalPointsAllGames = data.totalPointsAllGames;
+            this.totalTilesClearedAllGames = data.totalTilesClearedAllGames;
+            this.totalActiveTimeElapsed = data.totalActiveTimeElapsed;
+            this.totalGamesWon = data.totalGamesWon;
+            this.totalMinesWon = data.totalMinesWon;
+            this.totalStarsWon = data.totalStarsWon;
+            this.totalPointsWon = data.totalPointsWon;
+            this.totalGamesLost = data.totalGamesLost;
+        }
+    }
+    
+    get objectForSerialization() {
+        return {
+            date: Date.now(),
+            schemaVersion: Game.schemaVersion,
+            totalMoveCountAllGames: this.totalMoveCountAllGames,
+            totalPointsAllGames: this.totalPointsAllGames,
+            totalTilesClearedAllGames: this.totalTilesClearedAllGames,
+            totalActiveTimeElapsed: this.totalActiveTimeElapsed,
+            totalGamesWon: this.totalGamesWon,
+            totalMinesWon: this.totalMinesWon,
+            totalStarsWon: this.totalStarsWon,
+            totalPointsWon: this.totalPointsWon,
+            totalGamesLost: this.totalGamesLost
+        };
+    }
+    
+    static fromDeserializedWrapper(data) {
+        return new this(data);
+    }
+    
+    get debugDescription() {
+        return `<StatsHistorySummary ${JSON.stringify(this.objectForSerialization)}>`;
+    }
+    
+    /// Returns true if the game session was valid and its stats were collected.
+    addCompletedGame(session) {
+        // TODO verify that game ID doesn't show up in the recents list
+        if (!session.isClean) { return false; }
+        if (!(session.state == GameState.won || session.state == GameState.lost)) {
+            return false;
+        }
+        
+        let stats = session.game.statistics;
+        this.totalMoveCountAllGames += session.history.serializedMoves.length;
+        this.totalPointsAllGames += stats.points;
+        this.totalTilesClearedAllGames += stats.clearedTileCount;
+        this.totalActiveTimeElapsed += stats.activeTimeElapsed;
+        if (session.state == GameState.won) {
+            this.totalGamesWon += 1;
+            this.totalMinesWon += stats.mineCount;
+            this.totalStarsWon += stats.starCount;
+            this.totalPointsWon += stats.points;
+        }
+        if (session.state == GameState.lost) {
+            this.totalGamesLost += 1;
+        }
+        return true;
+    }
+}
+
 export class GameStorage {
     constructor() {
         this.preferencesCollection = new SaveStateCollection(window.localStorage, "SweepSettings");
         this.highScoresCollection = new SaveStateCollection(window.localStorage, "SweepHighScores");
+        this.statsHistoryCollection = new SaveStateCollection(window.localStorage, "SweepStatsHistory");
         this.achievementsCollection = new SaveStateCollection(window.localStorage, "SweepAchievements");
     }
 
@@ -497,6 +615,16 @@ export class GameStorage {
                 return { difficulty: difficulty, highScores: [] };
             })
         };
+    }
+    
+    get statsHistorySummary() {
+        let item = this.statsHistoryCollection.getItem(this.statsHistoryCollection.namespace);
+        return item?.data;
+    }
+    
+    set statsHistorySummary(summary) {
+        let item = new SaveStateItem(this.statsHistoryCollection.namespace, summary.constructor.name, summary.date, summary.objectForSerialization);
+        this.statsHistoryCollection.saveItem(item);
     }
 
     get achievementsByID() {
@@ -790,6 +918,7 @@ export class GameSession {
         this.debugMode = false;
         this.rainbowMode = GameStorage.shared.rainbowMode;
         this.history = new GameHistory();
+        this.statsHistory = new StatsHistory({ storage: GameStorage.shared });
         this.isClean = !this.debugMode; // false if cheated, etc.
         this.mostRecentAction = new ActionResult();
         this.hintTile = null;
@@ -1040,6 +1169,7 @@ export class GameSession {
         this.state = GameState.lost;
         this.endTime = Date.now();
         this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
+        this.statsHistory.gameCompleted(this);
         Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
     }
 
@@ -1076,6 +1206,7 @@ export class GameSession {
             this.state = GameState.won;
             this.endTime = Date.now();
             this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
+            this.statsHistory.gameCompleted(this);
             Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
         }
     }
@@ -1995,7 +2126,7 @@ TileTransform.ClearedMoveNumberFilter = ClearedMoveNumberFilter;
 function mark__Achievement() {} // ~~~~~~ Achievement ~~~~~~
 
 export class Achievement {
-    static initialize() {
+    static initialize(content) {
         Achievement.allTypes = {
             "Achievement.HighestScoreInAnyGame": Achievement.HighestScoreInAnyGame,
             "Achievement.Moo": Achievement.Moo,
@@ -2010,10 +2141,13 @@ export class Achievement {
             "Achievement.Won3StarGame": Achievement.Won3StarGame,
             "Achievement.Won4StarGame": Achievement.Won4StarGame,
             "Achievement.Won5StarGame": Achievement.Won5StarGame,
+            "Achievement.Cleared1000TilesAllTime": Achievement.Cleared1000TilesAllTime,
+            "Achievement.Cleared20000TilesAllTime": Achievement.Cleared20000TilesAllTime
         };
         AchievementStorage.shared = new AchievementStorage.Local();
         let data = AchievementStorage.shared.loadAll();
-        this.all = Object.getOwnPropertyNames(Achievement.allTypes).map(id => {
+        
+        this.all = content.orderedAchievements.map(id => {
             let constructor = Achievement.allTypes[id];
             try {
                 if (!constructor) {
@@ -2163,7 +2297,6 @@ AchievementStorage.InMemory = class extends AchievementStorage {
     saveAchievement(achievement) {
         debugLog(achievement.objectForSerialization);
         let item = new SaveStateItem(achievement.id, achievement.id, Date.now(), achievement.objectForSerialization);
-        debugLog(item);
         this.all[achievement.id] = achievement.objectForSerialization;
     }
 };
@@ -2353,6 +2486,39 @@ Achievement.Uncovered7NeighborCountTile = class Uncovered7NeighborCountTile exte
 Achievement.Uncovered8NeighborCountTile = class Uncovered8NeighborCountTile extends UncoveredNeighborCountTile {
     setDefaultConfig() {
         this.value = 8;
+        this.status = Achievement.Status.hidden;
+    }
+};
+
+class ClearedTilesAllTime extends Achievement {
+    static formatValue(achievement) {
+        return { value: Number.uiInteger(achievement.value) };
+    }
+    
+    isValid(session) {
+        return session.isClean
+            && (this.status != Achievement.Status.achieved)
+            && (session.state == GameState.won || session.state == GameState.lost);
+    }
+    
+    gameCompleted(session, date) {
+        let cleared = session.statsHistory.summary.totalTilesClearedAllGames;
+        if (cleared >= this.value) {
+            this.achieved(this.value, date);
+        }
+    }
+}
+
+Achievement.Cleared1000TilesAllTime = class Cleared1000TilesAllTime extends ClearedTilesAllTime {
+    setDefaultConfig() {
+        this.value = 1000;
+        this.status = Achievement.Status.locked;
+    }
+};
+
+Achievement.Cleared20000TilesAllTime = class Cleared1000TilesAllTime extends ClearedTilesAllTime {
+    setDefaultConfig() {
+        this.value = 20000;
         this.status = Achievement.Status.hidden;
     }
 };
@@ -4252,7 +4418,7 @@ class AchievementsSection {
             viewModel.name = Strings.template(config.name, viewModel.value);
             viewModel.value = config.value ? Strings.template(config.value, viewModel.value) : viewModel.value;
             return viewModel;
-        }).sort((a, b) => a.name.localeCompare(b.name));
+        });
 
         let list = document.createElement("ul");
         let template = document.querySelector("achievementTemplate");

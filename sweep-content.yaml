@@ -154,23 +154,6 @@ storiesView:
       # loses
       displayMoves: [99, 77, 76, 85]
 achievements:
-  Achievement.MostPointsInSingleMove:
-    name: achievementsMostPointsInSingleMoveName
-  Achievement.HighestScoreInAnyGame:
-    name: achievementsHighestScoreInAnyGameName
-  Achievement.MostClearedInSingleMove:
-    name: achievementsMostClearedInSingleMoveName
-  Achievement.Moo:
-    name: achievementsMooName
-    formattedValue: "🐄"
-  Achievement.HighestScoreInFiveStarGame:
-    name: achievementsHighestScoreInFiveStarGameName
-  Achievement.HighestScoreWithoutFlags:
-    name: achievementsHighestScoreWithoutFlags
-  Achievement.Uncovered7NeighborCountTile: &UNCOVEREDNEIGHBORCOUNT
-    name: achievementsUncoveredNeighborCountTileName
-    value: achievementsUncoveredNeighborCountTileValue
-  Achievement.Uncovered8NeighborCountTile: *UNCOVEREDNEIGHBORCOUNT
   Achievement.Won1StarGame: &WONSTARS
     name: achievementsWonStarsName
     value: achievementsWonStarsValue
@@ -178,6 +161,43 @@ achievements:
   Achievement.Won3StarGame: *WONSTARS
   Achievement.Won4StarGame: *WONSTARS
   Achievement.Won5StarGame: *WONSTARS
+  Achievement.HighestScoreInAnyGame:
+    name: achievementsHighestScoreInAnyGameName
+  Achievement.HighestScoreInFiveStarGame:
+    name: achievementsHighestScoreInFiveStarGameName
+  Achievement.HighestScoreWithoutFlags:
+    name: achievementsHighestScoreWithoutFlags
+  Achievement.MostPointsInSingleMove:
+    name: achievementsMostPointsInSingleMoveName
+  Achievement.MostClearedInSingleMove:
+    name: achievementsMostClearedInSingleMoveName
+  Achievement.Moo:
+    name: achievementsMooName
+    formattedValue: "🐄"
+  Achievement.Uncovered7NeighborCountTile: &UNCOVEREDNEIGHBORCOUNT
+    name: achievementsUncoveredNeighborCountTileName
+    value: achievementsUncoveredNeighborCountTileValue
+  Achievement.Uncovered8NeighborCountTile: *UNCOVEREDNEIGHBORCOUNT
+  Achievement.Cleared1000TilesAllTime: &CLEAREDALLTIME
+    name: achievementsClearedTilesAllTimeName
+    value: achievementsClearedTilesAllTimeValue
+  Achievement.Cleared20000TilesAllTime: *CLEAREDALLTIME
+orderedAchievements:
+  - "Achievement.Won1StarGame"
+  - "Achievement.Won2StarGame"
+  - "Achievement.Won3StarGame"
+  - "Achievement.Won4StarGame"
+  - "Achievement.Won5StarGame"
+  - "Achievement.HighestScoreInAnyGame"
+  - "Achievement.HighestScoreInFiveStarGame"
+  - "Achievement.HighestScoreWithoutFlags"
+  - "Achievement.MostPointsInSingleMove"
+  - "Achievement.MostClearedInSingleMove"
+  - "Achievement.Moo"
+  - "Achievement.Uncovered7NeighborCountTile"
+  - "Achievement.Uncovered8NeighborCountTile"
+  - "Achievement.Cleared1000TilesAllTime"
+  - "Achievement.Cleared20000TilesAllTime"
 
 analysisView:
   historyChart:
@@ -327,6 +347,8 @@ strings:
   _defaultRegion: en-us
   # _debugRegion: es-us
   _debug: true
+  achievementsClearedTilesAllTimeName: "Cleared <value> total tiles in all games (win or lose)"
+  achievementsClearedTilesAllTimeValue: "<value>"
   achievementsDialogTitle: Achievements
   achievementsHighestScoreInFiveStarGameName: "Highest score at 5-star difficulty (win or lose)"
   achievementsHighestScoreInAnyGameName: "Highest score in any game (win or lose)"
