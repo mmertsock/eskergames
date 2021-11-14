@@ -182,6 +182,10 @@ achievements:
     name: achievementsClearedTilesAllTimeName
     value: achievementsClearedTilesAllTimeValue
   Achievement.Cleared20000TilesAllTime: *CLEAREDALLTIME
+  Achievement.Won100MinesAllTime: &WONMINESALLTIME
+    name: achievementsWonMinesAllTimeName
+    value: achievementsWonMinesAllTimeValue
+  Achievement.Won2000MinesAllTime: *WONMINESALLTIME
 orderedAchievements:
   - "Achievement.Won1StarGame"
   - "Achievement.Won2StarGame"
@@ -198,6 +202,8 @@ orderedAchievements:
   - "Achievement.Uncovered8NeighborCountTile"
   - "Achievement.Cleared1000TilesAllTime"
   - "Achievement.Cleared20000TilesAllTime"
+  - "Achievement.Won100MinesAllTime"
+  - "Achievement.Won2000MinesAllTime"
 
 analysisView:
   historyChart:
@@ -360,6 +366,8 @@ strings:
   achievementsUncoveredNeighborCountTileValue: "<minedNeighborCount>✷"
   achievementsWonStarsName: "Won a <value>-star difficulty game"
   achievementsWonStarsValue: "<value>★"
+  achievementsWonMinesAllTimeName: "Cleared <value> total mines in all won games"
+  achievementsWonMinesAllTimeValue: "<value>✷"
   analysisChartMoveNumberLabel: Moves
   analysisChartSeriesNameAssertMineFlagCount: Mines Flagged
   analysisChartSeriesNameScore: Score

@@ -2142,7 +2142,9 @@ export class Achievement {
             "Achievement.Won4StarGame": Achievement.Won4StarGame,
             "Achievement.Won5StarGame": Achievement.Won5StarGame,
             "Achievement.Cleared1000TilesAllTime": Achievement.Cleared1000TilesAllTime,
-            "Achievement.Cleared20000TilesAllTime": Achievement.Cleared20000TilesAllTime
+            "Achievement.Cleared20000TilesAllTime": Achievement.Cleared20000TilesAllTime,
+            "Achievement.Won100MinesAllTime": Achievement.Won100MinesAllTime,
+            "Achievement.Won2000MinesAllTime": Achievement.Won2000MinesAllTime
         };
         AchievementStorage.shared = new AchievementStorage.Local();
         let data = AchievementStorage.shared.loadAll();
@@ -2512,13 +2514,46 @@ class ClearedTilesAllTime extends Achievement {
 Achievement.Cleared1000TilesAllTime = class Cleared1000TilesAllTime extends ClearedTilesAllTime {
     setDefaultConfig() {
         this.value = 1000;
-        this.status = Achievement.Status.locked;
+        this.status = Achievement.Status.hidden;
     }
 };
 
 Achievement.Cleared20000TilesAllTime = class Cleared1000TilesAllTime extends ClearedTilesAllTime {
     setDefaultConfig() {
         this.value = 20000;
+        this.status = Achievement.Status.hidden;
+    }
+};
+
+class WonMinesAllTime extends Achievement {
+    static formatValue(achievement) {
+        return { value: Number.uiInteger(achievement.value) };
+    }
+    
+    isValid(session) {
+        return session.isClean
+            && (this.status != Achievement.Status.achieved)
+            && (session.state == GameState.won);
+    }
+    
+    gameCompleted(session, date) {
+        let mineCount = session.statsHistory.summary.totalMinesWon;
+        if (mineCount >= this.value) {
+            this.achieved(this.value, date);
+        }
+    }
+}
+
+Achievement.Won100MinesAllTime = class Won100MinesAllTime extends WonMinesAllTime {
+    setDefaultConfig() {
+        this.value = 100;
+        this.status = Achievement.Status.hidden;
+    }
+};
+
+Achievement.Won2000MinesAllTime = class Won2000MinesAllTime extends WonMinesAllTime {
+    setDefaultConfig() {
+        this.value = 2000;
         this.status = Achievement.Status.hidden;
     }
 };

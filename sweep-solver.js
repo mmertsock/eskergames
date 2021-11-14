@@ -38,7 +38,7 @@ export class SolverPreferences {
     
     get enabledIDs() {
         let ids = GameStorage.shared.orderedSolvers;
-        if (!Array.isArray(ids) || ids.length == 0) {
+        if (!Array.isArray(ids)) {
             return this.defaultOrder;
         } else {
             return ids;
@@ -59,11 +59,11 @@ export class SolverPreferences {
     }
     
     set orderedSolvers(newValue) {
-        if (!Array.isArray(newValue) || newValue.length == 0) {
+        if (!Array.isArray(newValue)) {
             this.enabledIDs = this.defaultOrder;
         } else {
             let ids = newValue.filter(item => item.enabled).map(item => item.id);
-            this.enabledIDs = (ids.length == 0) ? this.defaultOrder : ids;
+            this.enabledIDs = ids;
         }
         this.kvo.orderedSolvers.notifyChanged();
     }
