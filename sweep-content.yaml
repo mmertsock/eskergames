@@ -178,6 +178,9 @@ achievements:
     name: achievementsUncoveredNeighborCountTileName
     value: achievementsUncoveredNeighborCountTileValue
   Achievement.Uncovered8NeighborCountTile: *UNCOVEREDNEIGHBORCOUNT
+  Achievement.Won100Stars:
+    name: achievementsWonAllTimeStarsName
+    value: achievementsWonAllTimeStarsValue
   Achievement.Cleared1000TilesAllTime: &CLEAREDALLTIME
     name: achievementsClearedTilesAllTimeName
     value: achievementsClearedTilesAllTimeValue
@@ -200,6 +203,7 @@ orderedAchievements:
   - "Achievement.Moo"
   - "Achievement.Uncovered7NeighborCountTile"
   - "Achievement.Uncovered8NeighborCountTile"
+  - "Achievement.Won100Stars"
   - "Achievement.Cleared1000TilesAllTime"
   - "Achievement.Cleared20000TilesAllTime"
   - "Achievement.Won100MinesAllTime"
@@ -364,6 +368,8 @@ strings:
   achievementsMostPointsInSingleMoveName: Most points earned in a single move
   achievementsUncoveredNeighborCountTileName: "Uncovered a tile with <minedNeighborCount#minedNeighborCount#formattedMinedNeighborCount>!"
   achievementsUncoveredNeighborCountTileValue: "<minedNeighborCount>✷"
+  achievementsWonAllTimeStarsName: "Won games totaling <value> difficulty stars"
+  achievementsWonAllTimeStarsValue: "<value>★"
   achievementsWonStarsName: "Won a <value>-star difficulty game"
   achievementsWonStarsValue: "<value>★"
   achievementsWonMinesAllTimeName: "Cleared <value> total mines in all won games"

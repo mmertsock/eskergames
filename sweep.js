@@ -2141,6 +2141,7 @@ export class Achievement {
             "Achievement.Won3StarGame": Achievement.Won3StarGame,
             "Achievement.Won4StarGame": Achievement.Won4StarGame,
             "Achievement.Won5StarGame": Achievement.Won5StarGame,
+            "Achievement.Won100Stars": Achievement.Won100Stars,
             "Achievement.Cleared1000TilesAllTime": Achievement.Cleared1000TilesAllTime,
             "Achievement.Cleared20000TilesAllTime": Achievement.Cleared20000TilesAllTime,
             "Achievement.Won100MinesAllTime": Achievement.Won100MinesAllTime,
@@ -2621,6 +2622,31 @@ Achievement.Won4StarGame = class Won4StarGame extends WonStars {
 };
 Achievement.Won5StarGame = class Won5StarGame extends WonStars {
     static starCount() { return 5; }
+};
+
+Achievement.Won100Stars = class Won100Stars extends Achievement {
+    static formatValue(achievement) {
+        return { value: Number.uiInteger(achievement.value) };
+    }
+    
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.won)
+            && this.status != Achievement.Status.achieved;
+    }
+    
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = 100;
+        this.status = Achievement.Status.hidden;
+    }
+    
+    gameCompleted(session, date) {
+        let starCount = session.statsHistory.summary.totalStarsWon;
+        if (starCount >= this.value) {
+            this.achieved(starCount, date);
+        }
+    }
 };
 
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
