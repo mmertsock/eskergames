@@ -56,7 +56,6 @@ keyboard:
     - [Digit3, showAnalysis, null, helpKeyboardShowAnalysis] # pound
     - [Shift+Digit1, showHint, null, helpKeyboardShowHint] # bang
     - [Shift+Digit4, solverStep, null, helpKeyboardSolverStep] # dollar
-    - [KeyQ, toggleRainbowMode]
     - [KeyM, moo, m, helpKeyboardMoo]
     - [KeyO, moo, o]
     - [KeyC, moo, c]
@@ -64,21 +63,32 @@ keyboard:
 gameBoardView:
   touchScaleFactor: 1.25
   tileWidth: 24
-  rainbow:
-    fadeIn:
-      moveCount: 10
-      initialSaturationFactor: 0.2
-      initialLightnessFactor: 1.16
-    hue:
-      min: 0
-      max: 350
-      maxInterval: 5
-    cleared:
-      saturation: 45 # percent
-      lightness: 85 #percent
-    flagged:
-      saturation: 75
-      lightness: 40
+  backgroundFrameCount: 5
+  displayModes:
+    - id: plain
+      name: gameBoardViewDisplayModePlain
+      isDefault: true
+    - id: rainbow
+      name: gameBoardViewDisplayModeRainbow
+      showsRainbow: true
+      rainbow:
+        fadeIn:
+          moveCount: 10
+          initialSaturationFactor: 0.2
+          initialLightnessFactor: 1.16
+        hue:
+          min: 0
+          max: 350
+          maxInterval: 5
+        cleared:
+          saturation: 45 # percent
+          lightness: 85 #percent
+        flagged:
+          saturation: 75
+          lightness: 40
+    - id: richard
+      name: gameBoardViewDisplayModeRichard
+      isTransparentBoard: true
 gameTileView:
   font: ["bold <size> monospace", 16, "px"]
   borderStrokeStyle: "#444444"
@@ -87,29 +97,53 @@ gameTileView:
   coveredBevelWidth: 2
 gameTileViewState:
   coveredColor: &COVEREDCOLOR "#c0c0c0"
-  revealedColor: &REVEALEDCOLOR "#ececec"
+  revealedColor: &REVEALEDCOLOR "hsl(0, 0%, 93%)"
   incorrectColor: &INCORRECTCOLOR "#ffcccc"
+  richard-coveredColor: &RICHARDCOVEREDCOLOR "hsl(0, 0%, 65%)"
+  richard-revealedColor: &RICHARDREVEALEDCOLOR "hsla(0, 0%, 93%, 0.3)"
   covered:
     fillColor: *COVEREDCOLOR
+    variants:
+      richard:
+        fillColor: *RICHARDCOVEREDCOLOR
   assertMine:
     glyph: &ASSERTMINEGLYPH "▲"
     textColor: "#ff3300"
     fillColor: *COVEREDCOLOR
     showsRainbowGlyph: true
+    variants:
+      richard:
+        textColor: "hsl(12, 85%, 45%)"
+        fillColor: *RICHARDCOVEREDCOLOR
   maybeMine:
     glyph: "?"
     textColor: "#0033ff"
     fillColor: *COVEREDCOLOR
     showsRainbowGlyph: true
+    variants:
+      richard:
+        textColor: "hsl(228, 85%, 45%, 1)"
+        fillColor: *RICHARDCOVEREDCOLOR
   clear:
     fillColor: *REVEALEDCOLOR
     showsRainbow: true
+    variants:
+      rainbow:
+        showsRainbow: true
+      richard:
+        fillColor: *RICHARDREVEALEDCOLOR
   safe:
     textColor: "#666666"
     # numbers 1 through 8: blue -> red
     numberTextColors: ["#666666", "hsl(217, 50%, 40%)", "hsl(186, 50%, 40%)", "hsl(155, 50%, 40%)", "hsl(124, 50%, 40%)", "hsl(93, 50%, 40%)", "hsl(62, 50%, 40%)", "hsl(31, 50%, 40%)", "hsl(0, 50%, 40%)"]
     fillColor: *REVEALEDCOLOR
     showsRainbow: true
+    variants:
+      rainbow:
+        showsRainbow: true
+      richard:
+        fillColor: *RICHARDREVEALEDCOLOR
+        numberTextColors: ["#666666", "hsl(217, 50%, 30%)", "hsl(186, 50%, 30%)", "hsl(155, 50%, 30%)", "hsl(124, 50%, 30%)", "hsl(93, 50%, 30%)", "hsl(62, 50%, 30%)", "hsl(31, 50%, 30%)", "hsl(0, 50%, 30%)"]
   mineTriggered:
     glyph: "✸"
     textColor: "#990000"
@@ -209,7 +243,7 @@ orderedAchievements:
   - "Achievement.HighestScoreInFiveStarGame"
   - "Achievement.HighestScoreWithoutFlags"
   - "Achievement.LongestGamePlayed"
-  # - "Achievement.MostPointsPerMinute" Disabled in production until fully tuned.
+  - "Achievement.MostPointsPerMinute"
   - "Achievement.MostPointsInSingleMove"
   - "Achievement.MostClearedInSingleMove"
   - "Achievement.Moo"
@@ -383,7 +417,6 @@ strings:
   achievementsMostClearedInSingleMoveName: Largest area cleared in a single move
   achievementsMostPointsInSingleMoveName: Most points earned in a single move
   achievementsMostPointsPerMinuteName: Most points per minute earned in a winning game
-  # achievementsMostPointsPerMinuteValue: "<value> ppm"
   achievementsTotalPlayTimeName: "Total play time of <value> hours"
   achievementsTotalPlayTimeValue: "<value>h"
   achievementsUncoveredNeighborCountTileName: "Uncovered a tile with <minedNeighborCount#minedNeighborCount#formattedMinedNeighborCount>!"
@@ -405,9 +438,10 @@ strings:
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✕"
   difficultyChoiceLabelTemplate: "<name>"
-  displayOptionsDebugModeToggleLabel: "Debug Mode"
+  displayOptionsDebugModeToggleLabel: "👾 Debug Mode"
+  displayOptionsDisplayModeLabel: Display Mode
   displayOptionsRainbowToggleLabel: "🌈 Rainbow Mode!"
-  displayOptionsStoriesToggleLabel: "Show Stories"
+  displayOptionsStoriesToggleLabel: "📀 Show Stories"
   displayOptionsTabLabel: Display
   errorAlertDismissButton: Bummer
   errorAlertTitle: "Oh No!"
@@ -415,6 +449,9 @@ strings:
   failedToParseGame: "Invalid game code :("
   flagAllNeighborsActionTemplate: &flagAllNeighborsActionTemplate "<flaggedKnownMines#length#formattedLength>"
   gameBoardDebugSummaryTemplate: &gameBoardDebugSummaryTemplate "Board size <width>/<height> = <totalTileCount> tiles. <totalMineCount> mines. Tile/mine ratio: <tileMineRatio>. Total points: <totalPoints>. Histogram: <histogram>"
+  gameBoardViewDisplayModePlain: "🕴 Plain"
+  gameBoardViewDisplayModeRainbow: "🌈 Rainbow Mode!"
+  gameBoardViewDisplayModeRichard: "🖼 Picture!"
   gameDifficultyAdvanced: Advanced
   gameDifficultyBeginner: Beginner
   gameDifficultyCustom: Custom

@@ -291,6 +291,14 @@ export class Game {
                 item.name = Strings.str(item.name);
             });
         }
+        if (content.gameBoardView?.displayModes) {
+            GameContent.addIndexToItemsInArray(content.gameBoardView.displayModes);
+            content.gameBoardView.displayModes.forEach(item => { item.name = Strings.str(item.name); });
+            content.gameBoardView.displayModes.forEach(item => {
+                item.showsRainbow = !!item.showsRainbow;
+                item.isDefault = !!item.isDefault;
+            });
+        }
         Game.content = content;
         Game.content.rules.allowDebugMode = Game.content.rules.allowDebugMode || (self.location ? (self.location.hostname == "localhost") : false);
         Game.content.rules.maxStarCount = Game.content.rules.highScoreThresholds.length + 1;
@@ -688,13 +696,13 @@ export class GameStorage {
     set lastPlayerName(value) {
         this.setPreference("lastPlayerName", value);
     }
-
-    get rainbowMode() {
+    
+    get gameBoardViewDisplayMode() {
         let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
-        return item ? !!item.data.rainbowMode : false;
+        return GameBoardView.displayModeWithID(item?.data.gameBoardViewDisplayMode);
     }
-    set rainbowMode(value) {
-        this.setPreference("rainbowMode", value);
+    set gameBoardViewDisplayMode(value) {
+        this.setPreference("gameBoardViewDisplayMode", value?.id);
     }
     
     get storiesVisible() {
@@ -1009,7 +1017,7 @@ export class GameSession {
         this.endTime = null;
         this.sessionTimer = new GameSessionTimer();
         this.debugMode = false;
-        this.rainbowMode = GameStorage.shared.rainbowMode;
+        this.gameBoardViewDisplayMode = GameStorage.shared.gameBoardViewDisplayMode;
         this.history = new GameHistory();
         this.statsHistory = new StatsHistory({ storage: GameStorage.shared });
         this.isClean = !this.debugMode; // false if cheated, etc.
@@ -1099,14 +1107,14 @@ export class GameSession {
         this.setDebugMode(!this.debugMode);
     }
     
-    setRainbowMode(value) {
-        this.rainbowMode = !!value;
-        GameStorage.shared.rainbowMode = this.rainbowMode;
+    setGameBoardViewDisplayMode(value) {
+        this.gameBoardViewDisplayMode = value;
+        GameStorage.shared.gameBoardViewDisplayMode = this.gameBoardViewDisplayMode;
         this.renderViews();
     }
-
-    toggleRainbowMode() {
-        this.setRainbowMode(!this.rainbowMode);
+    
+    get isRainbowMode() {
+        return this.gameBoardViewDisplayMode.showsRainbow;
     }
 
     // Not reentrant.
@@ -3057,7 +3065,6 @@ class GameControlsView {
         gse.registerCommand("showAnalysis", () => this.showAnalysis());
         gse.registerCommand("showHint", () => this.showHint());
         gse.registerCommand("solverStep", () => this.solverStep());
-        gse.registerCommand("toggleRainbowMode", () => this.toggleRainbowMode());
         
         this.session.addDelegate(this);
     }
@@ -3141,10 +3148,6 @@ class GameControlsView {
         if (this.session) {
             this.session.performAction(new AttemptSolverStepAction());
         }
-    }
-
-    toggleRainbowMode() {
-        if (this.session) { this.session.toggleRainbowMode(); }
     }
 
     shareGame() {
@@ -3385,6 +3388,15 @@ class GameBoardView {
         GameBoardView.metrics = config;
         GameBoardView.metrics.inputAccomodationScale = UI.isTouchFirst() ? GameBoardView.metrics.touchScaleFactor : 1;
     }
+    
+    static displayModes() {
+        return GameBoardView.metrics.displayModes;
+    }
+    
+    static displayModeWithID(id) {
+        let mode = GameBoardView.metrics.displayModes.find(item => item.id == id);
+        return mode || GameBoardView.metrics.displayModes.find(item => !!item.isDefault);
+    }
 
     constructor(config) {
         this.session = config.session;
@@ -3420,7 +3432,7 @@ class GameBoardView {
     }
 
     getContext() {
-        return this.canvas.getContext("2d");
+        return this.canvas.getContext("2d", {alpha: this.session.gameBoardViewDisplayMode.isTransparentBoard});
     }
 
     configure() {
@@ -3456,6 +3468,7 @@ class GameBoardView {
         let ctx = this.getContext();
         let context = {
             ctx: ctx,
+            displayMode: this.session.gameBoardViewDisplayMode,
             pixelScale: this.pixelScale,
             tilePlane: this.tilePlane,
             session: this.session,
@@ -3463,14 +3476,14 @@ class GameBoardView {
             rainbow: null
         };
 
-        if (this.session.rainbowMode && !this.session.history.isEmpty) {
+        if (context.displayMode.showsRainbow && !this.session.history.isEmpty) {
             let moveCount = this.session.history.serializedMoves.length;
             context.rainbow = {
                 moves: { min: 0, max: moveCount },
-                hue: Object.assign({}, GameBoardView.metrics.rainbow.hue),
-                cleared: Object.assign({}, GameBoardView.metrics.rainbow.cleared),
-                flagged: Object.assign({}, GameBoardView.metrics.rainbow.flagged),
-                fadeIn: Object.assign({}, GameBoardView.metrics.rainbow.fadeIn)
+                hue: Object.assign({}, context.displayMode.rainbow.hue),
+                cleared: Object.assign({}, context.displayMode.rainbow.cleared),
+                flagged: Object.assign({}, context.displayMode.rainbow.flagged),
+                fadeIn: Object.assign({}, context.displayMode.rainbow.fadeIn)
             };
             // Limit the amount of color change per move early in the game
             let colors = Math.abs(context.rainbow.hue.max - context.rainbow.hue.min);
@@ -3488,8 +3501,12 @@ class GameBoardView {
                 context.rainbow.flagged.lightness = this.rainbowFade(context, moveCount, fadeIn.initialLightnessFactor, context.rainbow.flagged.lightness);
             }
         }
+        
+        let frame = this.session.history.serializedMoves.length % GameBoardView.metrics.backgroundFrameCount;
+        this.canvas.className = `${context.displayMode.id} frame-${frame}`;
+        
         ctx.rectClear(this.tilePlane.viewportScreenBounds);
-
+        
         let hintTile = null;
         this.tileViews.forEach(tile => {
             if (this.session.hintTile == tile.model) {
@@ -3614,8 +3631,8 @@ class GameTileView {
         }
     }
 
-    renderContent(context, rect, viewState) {
-        viewState.render(context, rect, this.model);
+    renderContent(context, rect, viewStateLookup) {
+        viewStateLookup[context.displayMode.id].render(context, rect, this.model);
         return this;
     }
 } // end class GameTileView
@@ -3623,16 +3640,16 @@ class GameTileView {
 class GameTileViewState {
     // config: dictionary with values: {glyph:, textColor:, fillColor:}
     static initialize(config) {
-        GameTileViewState.covered = new GameTileViewState(config.covered);
-        GameTileViewState.assertMine = new GameTileViewState(config.assertMine);
-        GameTileViewState.maybeMine = new GameTileViewState(config.maybeMine);
-        GameTileViewState.clear = new GameTileViewState(config.clear);
-        GameTileViewState.safe = new GameTileViewState(Object.assign({}, config.safe, { glyph: tile => `${tile.minedNeighborCount}` }));
-        GameTileViewState.mineTriggered = new GameTileViewState(config.mineTriggered);
-        GameTileViewState.mineRevealed = new GameTileViewState(config.mineRevealed);
-        GameTileViewState.incorrectFlag = new GameTileViewState(config.incorrectFlag);
-        GameTileViewState.hintTile = new GameTileViewState(config.hintTile);
-        GameTileViewState.debug = new GameTileViewState(config.debug);
+        GameTileViewState.covered = new GameTileViewState(config.covered).displayModesLookup();
+        GameTileViewState.assertMine = new GameTileViewState(config.assertMine).displayModesLookup();
+        GameTileViewState.maybeMine = new GameTileViewState(config.maybeMine).displayModesLookup();
+        GameTileViewState.clear = new GameTileViewState(config.clear).displayModesLookup();
+        GameTileViewState.safe = new GameTileViewState(Object.assign({}, config.safe, { glyph: tile => `${tile.minedNeighborCount}` })).displayModesLookup();
+        GameTileViewState.mineTriggered = new GameTileViewState(config.mineTriggered).displayModesLookup();
+        GameTileViewState.mineRevealed = new GameTileViewState(config.mineRevealed).displayModesLookup();
+        GameTileViewState.incorrectFlag = new GameTileViewState(config.incorrectFlag).displayModesLookup();
+        GameTileViewState.hintTile = new GameTileViewState(config.hintTile).displayModesLookup();
+        GameTileViewState.debug = new GameTileViewState(config.debug).displayModesLookup();
     }
 
     constructor(config) {
@@ -3648,6 +3665,20 @@ class GameTileViewState {
         this.numberTextColors = config.numberTextColors;
         this.showsRainbow = !!config.showsRainbow;
         this.showsRainbowGlyph = !!config.showsRainbowGlyph;
+        this.variants = config.variants;
+    }
+    
+    displayModesLookup() {
+        let lookup = {};
+        GameBoardView.displayModes().forEach(item => {
+            if (this.variants) {
+                let variant = new GameTileViewState(Object.assign({}, this, this.variants[item.id]));
+                lookup[item.id] = variant;
+            } else {
+                lookup[item.id] = this;
+            }
+        });
+        return lookup;
     }
 
     render(context, rect, tile) {
@@ -4411,16 +4442,22 @@ class DisplayOptionsSection {
         this.session = session;
         this.contentElem = GameDialog.createFormElem();
         // Broken: multiple observers with the same observer target, same Kvo property type, but different source objects.
-        this.kvoTokens = { rainbowToggle: {}, storiesToggle: {}, debugModeToggle: {} };
+        this.kvoTokens = { displayModeInput: {}, rainbowToggle: {}, storiesToggle: {}, debugModeToggle: {} };
         
-        this.rainbowToggle = new Gaming.FormValueView.ToggleInputView({
+        let currentDisplayMode = this.session.gameBoardViewDisplayMode;
+        this.displayModeInput = new Gaming.FormValueView.SingleChoiceInputCollection({
+            id: "displayModeInput",
             parent: this.contentElem,
-            title: Strings.str("displayOptionsRainbowToggleLabel"),
-            value: true,
-            selected: this.session.rainbowMode
+            title: Strings.str("displayOptionsDisplayModeLabel"),
+            validationRules: [Gaming.FormValueView.SingleChoiceInputCollection.selectionRequiredRule],
+            choices: GameBoardView.displayModes().map(item => { return {
+                title: item.name,
+                value: item.id,
+                selected: item.id == currentDisplayMode.id
+            }; })
         });
-        this.rainbowToggle.kvo.selected.addObserver(this.kvoTokens.rainbowToggle, () => {
-            this.setRainbowMode();
+        this.displayModeInput.kvo.value.addObserver(this.kvoTokens.displayModeInput, () => {
+            this.setGameBoardViewDisplayMode();
         });
         
         this.storiesToggle = new Gaming.FormValueView.ToggleInputView({
@@ -4456,8 +4493,9 @@ class DisplayOptionsSection {
     
     get tabLabel() { return Strings.str("displayOptionsTabLabel"); }
     
-    setRainbowMode() {
-        this.session.setRainbowMode(this.rainbowToggle.selected);
+    setGameBoardViewDisplayMode() {
+        let mode = GameBoardView.displayModeWithID(this.displayModeInput.value);
+        this.session.setGameBoardViewDisplayMode(mode);
     }
 
     setStoriesMode() {
