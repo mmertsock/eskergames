@@ -167,10 +167,16 @@ achievements:
     name: achievementsHighestScoreInFiveStarGameName
   Achievement.HighestScoreWithoutFlags:
     name: achievementsHighestScoreWithoutFlags
+  Achievement.LongestGamePlayed:
+    name: achievementsLongestGamePlayedName
+    value: achievementsLongestGamePlayedValue
   Achievement.MostPointsInSingleMove:
     name: achievementsMostPointsInSingleMoveName
   Achievement.MostClearedInSingleMove:
     name: achievementsMostClearedInSingleMoveName
+  Achievement.MostPointsPerMinute:
+    name: achievementsMostPointsPerMinuteName
+    minimumDurationMS: 5000
   Achievement.Moo:
     name: achievementsMooName
     formattedValue: "🐄"
@@ -189,6 +195,10 @@ achievements:
     name: achievementsWonMinesAllTimeName
     value: achievementsWonMinesAllTimeValue
   Achievement.Won2000MinesAllTime: *WONMINESALLTIME
+  Achievement.TotalPlayTime10Hours: &TOTALPLAYTIME
+    name: achievementsTotalPlayTimeName
+    value: achievementsTotalPlayTimeValue
+  Achievement.TotalPlayTime100Hours: *TOTALPLAYTIME
 orderedAchievements:
   - "Achievement.Won1StarGame"
   - "Achievement.Won2StarGame"
@@ -198,6 +208,8 @@ orderedAchievements:
   - "Achievement.HighestScoreInAnyGame"
   - "Achievement.HighestScoreInFiveStarGame"
   - "Achievement.HighestScoreWithoutFlags"
+  - "Achievement.LongestGamePlayed"
+  # - "Achievement.MostPointsPerMinute" Disabled in production until fully tuned.
   - "Achievement.MostPointsInSingleMove"
   - "Achievement.MostClearedInSingleMove"
   - "Achievement.Moo"
@@ -208,6 +220,8 @@ orderedAchievements:
   - "Achievement.Cleared20000TilesAllTime"
   - "Achievement.Won100MinesAllTime"
   - "Achievement.Won2000MinesAllTime"
+  - "Achievement.TotalPlayTime10Hours"
+  - "Achievement.TotalPlayTime100Hours"
 
 analysisView:
   historyChart:
@@ -363,16 +377,22 @@ strings:
   achievementsHighestScoreInFiveStarGameName: "Highest score at 5-star difficulty (win or lose)"
   achievementsHighestScoreInAnyGameName: "Highest score in any game (win or lose)"
   achievementsHighestScoreWithoutFlags: Highest score without using mine markers
+  achievementsLongestGamePlayedName: Longest game played
+  achievementsLongestGamePlayedValue: "<minutes>m <seconds>s"
   achievementsMooName: "Deployed the cow to eat a mine!"
   achievementsMostClearedInSingleMoveName: Largest area cleared in a single move
   achievementsMostPointsInSingleMoveName: Most points earned in a single move
+  achievementsMostPointsPerMinuteName: Most points per minute earned in a winning game
+  # achievementsMostPointsPerMinuteValue: "<value> ppm"
+  achievementsTotalPlayTimeName: "Total play time of <value> hours"
+  achievementsTotalPlayTimeValue: "<value>h"
   achievementsUncoveredNeighborCountTileName: "Uncovered a tile with <minedNeighborCount#minedNeighborCount#formattedMinedNeighborCount>!"
   achievementsUncoveredNeighborCountTileValue: "<minedNeighborCount>✷"
   achievementsWonAllTimeStarsName: "Won games totaling <value> difficulty stars"
   achievementsWonAllTimeStarsValue: "<value>★"
   achievementsWonStarsName: "Won a <value>-star difficulty game"
   achievementsWonStarsValue: "<value>★"
-  achievementsWonMinesAllTimeName: "Cleared <value> total mines in all won games"
+  achievementsWonMinesAllTimeName: "Cleared <value> total mines in all winning games"
   achievementsWonMinesAllTimeValue: "<value>✷"
   analysisChartMoveNumberLabel: Moves
   analysisChartSeriesNameAssertMineFlagCount: Mines Flagged

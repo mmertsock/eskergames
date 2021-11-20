@@ -480,6 +480,8 @@ StatsHistory.Summary = class StatsHistorySummary {
             this.totalStarsWon = 0;
             this.totalPointsWon = 0;
             this.totalGamesLost = 0;
+            this.totalActiveTimeElapsed = 0;
+            this.totalWallTimeElapsed = 0;
         } else {
             Gaming.deserializeAssertProperties(data, [
                 "schemaVersion",
@@ -491,7 +493,9 @@ StatsHistory.Summary = class StatsHistorySummary {
                 "totalMinesWon",
                 "totalStarsWon",
                 "totalPointsWon",
-                "totalGamesLost"
+                "totalGamesLost",
+                "totalActiveTimeElapsed",
+                "totalWallTimeElapsed"
             ]);
             if (data.schemaVersion != Game.schemaVersion) {
                 throw new Error("schemaVersionUnsupported");
@@ -505,6 +509,8 @@ StatsHistory.Summary = class StatsHistorySummary {
             this.totalStarsWon = data.totalStarsWon;
             this.totalPointsWon = data.totalPointsWon;
             this.totalGamesLost = data.totalGamesLost;
+            this.totalActiveTimeElapsed = data.totalActiveTimeElapsed;
+            this.totalWallTimeElapsed = data.totalWallTimeElapsed;
         }
     }
     
@@ -520,7 +526,9 @@ StatsHistory.Summary = class StatsHistorySummary {
             totalMinesWon: this.totalMinesWon,
             totalStarsWon: this.totalStarsWon,
             totalPointsWon: this.totalPointsWon,
-            totalGamesLost: this.totalGamesLost
+            totalGamesLost: this.totalGamesLost,
+            totalActiveTimeElapsed: this.totalActiveTimeElapsed,
+            totalWallTimeElapsed: this.totalWallTimeElapsed
         };
     }
     
@@ -544,7 +552,8 @@ StatsHistory.Summary = class StatsHistorySummary {
         this.totalMoveCountAllGames += session.history.serializedMoves.length;
         this.totalPointsAllGames += stats.points;
         this.totalTilesClearedAllGames += stats.clearedTileCount;
-        this.totalActiveTimeElapsed += stats.activeTimeElapsed;
+        this.totalActiveTimeElapsed += session.sessionTimer.activeTimeElapsed;
+        this.totalWallTimeElapsed += session.sessionTimer.wallTimeElapsed;
         if (session.state == GameState.won) {
             this.totalGamesWon += 1;
             this.totalMinesWon += stats.mineCount;
@@ -577,7 +586,9 @@ export class GameStorage {
             mineCount: stats.mineCount,
             totalTileCount: stats.totalTileCount,
             assertMineFlagCount: stats.assertMineFlagCount,
-            clearedTileCount: stats.clearedTileCount
+            clearedTileCount: stats.clearedTileCount,
+            activeTimeElapsed: session.sessionTimer.activeTimeElapsed,
+            wallTimeElapsed: session.sessionTimer.wallTimeElapsed,
         };
 
         let data = this.highScoresByDifficulty;
@@ -902,6 +913,87 @@ class MoveHistoryMoment {
     }
 }
 
+export class GameSessionTimer {
+    constructor(a) {
+        a = Object.assign({}, { activeTimeElapsed: 0, wallTimeElapsed: 0 }, a);
+        // Accumulated values
+        this._activeTime = a.activeTimeElapsed;
+        this._wallTime = a.wallTimeElapsed;
+        this._activeStartTime = -1; // Date.now type value
+        this._wallStartTime = -1; // Date.now type value
+    }
+    
+    get state() {
+        if (this._wallStartTime <= 0) {
+            return GameSessionTimer.State.stopped;
+        } else if (this._activeStartTime <= 0) {
+            return GameSessionTimer.State.paused;
+        } else {
+            return GameSessionTimer.State.active;
+        }
+    }
+    
+    get activeTimeElapsed() {
+        if (this._activeStartTime > 0) {
+            return this._activeTime + (Date.now() - this._activeStartTime);
+        } else {
+            return this._activeTime;
+        }
+    }
+    
+    get wallTimeElapsed() {
+        if (this._wallStartTime > 0) {
+            return this._wallTime + (Date.now() - this._wallStartTime);
+        } else {
+            return this._wallTime;
+        }
+    }
+    
+    get debugDescription() {
+        return `<${this.constructor.name} ${this.state} a=${this.activeTimeElapsed} w=${this.wallTimeElapsed}>`;
+    }
+    
+    start() {
+        if (this.state != GameSessionTimer.State.stopped) {
+            return;
+        }
+        this._wallStartTime = Date.now();
+        this.resume();
+    }
+    
+    stop() {
+        if (this.state == GameSessionTimer.State.stopped) {
+            return;
+        }
+        this.pause();
+        this._wallTime = this.wallTimeElapsed;
+        this._wallStartTime = -1;
+    }
+    
+    pause() {
+        if (this.state != GameSessionTimer.State.active) {
+            return;
+        }
+        this._activeTime = this.activeTimeElapsed;
+        this._activeStartTime = -1;
+    }
+    
+    resume(now) {
+        if (this.state != GameSessionTimer.State.paused) {
+            return;
+        }
+        this._activeStartTime = Date.now();
+    }
+}
+GameSessionTimer.State = {
+    // Ignores pause/resume requests. Neither wall time or active time accumulate.
+    stopped: 0,
+    // Respects pause/resume requests. Wall time accumulates but active time does not.
+    paused: 1,
+    // Respects pause/resume requests. Both wall time active time accumulate.
+    active: 2
+};
+
 export class GameSession {
     static quit(prompt) {
         if (!prompt || confirm(Strings.str("quitGameConfirmPrompt"))) {
@@ -915,6 +1007,7 @@ export class GameSession {
         this.moveState = MoveState.ready;
         this.startTime = Date.now();
         this.endTime = null;
+        this.sessionTimer = new GameSessionTimer();
         this.debugMode = false;
         this.rainbowMode = GameStorage.shared.rainbowMode;
         this.history = new GameHistory();
@@ -924,6 +1017,8 @@ export class GameSession {
         this.hintTile = null;
         this.solver = null;
         this.debugTiles = [];
+        window.addEventListener("focus", () => this.sessionTimer.resume());
+        window.addEventListener("blur", () => this.sessionTimer.pause());
     }
 
     start(newGame) {
@@ -940,6 +1035,7 @@ export class GameSession {
         this.moveState = MoveState.ready;
         this.startTime = Date.now();
         this.endTime = null;
+        this.sessionTimer = new GameSessionTimer();
         this.history.reset();
         this.isClean = !this.debugMode;
         this.mostRecentAction = new ActionResult();
@@ -1057,6 +1153,7 @@ export class GameSession {
     // contexts like tile clearing.
     beginMove() {
         if (this.moveState == MoveState.pending) {
+            this.sessionTimer.start();
             this.hintTile = null;
             this.debugTiles = [];
             this.warningMessage = null;
@@ -1169,6 +1266,7 @@ export class GameSession {
         this.state = GameState.lost;
         this.endTime = Date.now();
         this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
+        this.sessionTimer.stop();
         this.statsHistory.gameCompleted(this);
         Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
     }
@@ -1206,6 +1304,7 @@ export class GameSession {
             this.state = GameState.won;
             this.endTime = Date.now();
             this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
+            this.sessionTimer.stop();
             this.statsHistory.gameCompleted(this);
             Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
         }
@@ -1357,6 +1456,7 @@ GameSession.prototype.objectForAutosave = function() {
         isClean: this.isClean,
         mostRecentAction: this.mostRecentAction ? this.mostRecentAction.objectForAutosave() : null,
         hintTileCoord: this.hintTile ? this.hintTile.coordForSerialization : null,
+        sessionTimer: this.sessionTimer.objectForAutosave(),
         startTime: this.startTime,
         endTime: this.endTime
     };
@@ -1391,7 +1491,19 @@ GameSession.fromAutosave = function(data) {
     }
     session.startTime = data.startTime;
     session.endTime = data.endTime;
+    session.sessionTimer = GameSessionTimer.fromAutosave(data.sessionTimer);
     return session;
+};
+
+GameSessionTimer.prototype.objectForAutosave = function() {
+    return {
+        activeTimeElapsed: this.activeTimeElapsed,
+        wallTimeElapsed: this.wallTimeElapsed
+    };
+};
+
+GameSessionTimer.fromAutosave = function(data) {
+    return new GameSessionTimer(data);
 };
 
 Game.prototype.objectForAutosave = function() {
@@ -1422,7 +1534,7 @@ Game.fromAutosave = function(data) {
 };
 
 GameBoard.prototype.objectForAutosave = function() {
-    return {
+    let data = {
         size: this.size,
         mineCount: this.mineCount,
         gameState: this.gameState,
@@ -1433,10 +1545,11 @@ GameBoard.prototype.objectForAutosave = function() {
                 flagged: this._allTiles.map(tile => tile.rainbow.flagged)
             }
         }
-    }
-    let data = this.compactSerialized;
-    data.gameState = this.gameState;
+    };
     return data;
+    // let data = this.compactSerialized;
+    // data.gameState = this.gameState;
+    // return data;
 };
 
 GameBoard.fromAutosave = function(data) {
@@ -2128,13 +2241,19 @@ function mark__Achievement() {} // ~~~~~~ Achievement ~~~~~~
 export class Achievement {
     static initialize(content) {
         Achievement.allTypes = {
+            "Achievement.Cleared1000TilesAllTime": Achievement.Cleared1000TilesAllTime,
+            "Achievement.Cleared20000TilesAllTime": Achievement.Cleared20000TilesAllTime,
             "Achievement.HighestScoreInAnyGame": Achievement.HighestScoreInAnyGame,
             "Achievement.Moo": Achievement.Moo,
             "Achievement.MostClearedInSingleMove": Achievement.MostClearedInSingleMove,
             "Achievement.MostPointsInSingleMove": Achievement.MostPointsInSingleMove,
+            "Achievement.MostPointsPerMinute": Achievement.MostPointsPerMinute,
             "Achievement.HighestScoreInFiveStarGame": Achievement.HighestScoreInFiveStarGame,
             "Achievement.HighestScoreWithoutFlags": Achievement.HighestScoreWithoutFlags,
-            "Achievement.Uncovered7NeighborCountTile": Achievement.Uncovered7NeighborCountTile,
+            "Achievement.LongestGamePlayed": Achievement.LongestGamePlayed,
+            "Achievement.TotalPlayTime10Hours": Achievement.TotalPlayTime10Hours,
+            "Achievement.TotalPlayTime100Hours": Achievement.TotalPlayTime100Hours,
+            "Achievement.Uncovered7NeighborCountTile": Achievement.Uncovered7NeighborCountTile, // TODO why not working?
             "Achievement.Uncovered8NeighborCountTile": Achievement.Uncovered8NeighborCountTile,
             "Achievement.Won1StarGame": Achievement.Won1StarGame,
             "Achievement.Won2StarGame": Achievement.Won2StarGame,
@@ -2142,10 +2261,8 @@ export class Achievement {
             "Achievement.Won4StarGame": Achievement.Won4StarGame,
             "Achievement.Won5StarGame": Achievement.Won5StarGame,
             "Achievement.Won100Stars": Achievement.Won100Stars,
-            "Achievement.Cleared1000TilesAllTime": Achievement.Cleared1000TilesAllTime,
-            "Achievement.Cleared20000TilesAllTime": Achievement.Cleared20000TilesAllTime,
             "Achievement.Won100MinesAllTime": Achievement.Won100MinesAllTime,
-            "Achievement.Won2000MinesAllTime": Achievement.Won2000MinesAllTime
+            "Achievement.Won2000MinesAllTime": Achievement.Won2000MinesAllTime,
         };
         AchievementStorage.shared = new AchievementStorage.Local();
         let data = AchievementStorage.shared.loadAll();
@@ -2403,6 +2520,63 @@ Achievement.HighestScoreWithoutFlags = class HighestScoreWithoutFlags extends Ac
     }
 };
 
+Achievement.MostPointsPerMinute = class MostPointsPerMinute extends Achievement {
+    static pointsPerMinute(points, activeTimeElapsed) {
+        if (activeTimeElapsed < Game.content.achievements["Achievement.MostPointsPerMinute"].minimumDurationMS) {
+            return NaN;
+        }
+        let minutes = activeTimeElapsed / 60000.0;
+        return points / minutes;
+    }
+    
+    static formatValue(achievement) {
+        return Number.uiInteger(Math.round(achievement.value));
+    }
+    
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = 0;
+    }
+    
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.won);
+    }
+    
+    gameCompleted(session, date) {
+        let pointsPerMinute = Achievement.MostPointsPerMinute.pointsPerMinute(session.game.statistics.points, session.sessionTimer.activeTimeElapsed);
+        if (!isNaN(pointsPerMinute) && pointsPerMinute > this.value) {
+            this.achieved(pointsPerMinute, date);
+        }
+    }
+};
+
+Achievement.LongestGamePlayed = class LongestGamePlayed extends Achievement {
+    static formatValue(achievement) {
+        let minutes = Math.floor(achievement.value / 60000.0);
+        let seconds = Math.floor((achievement.value / 1000) - (60 * minutes));
+        return { minutes: minutes, seconds: seconds };
+    }
+    
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.status = Achievement.Status.locked;
+        this.value = 0; // in milliseconds
+    }
+    
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.won || session.state == GameState.lost);
+    }
+    
+    gameCompleted(session, date) {
+        let duration = session.sessionTimer.activeTimeElapsed;
+        if (duration > this.value) {
+            this.achieved(duration, date);
+        }
+    }
+};
+
 Achievement.MostClearedInSingleMove = class MostClearedInSingleMove extends Achievement {
     static formatValue(achievement) {
         if (achievement.status != Achievement.Status.achieved) { return ""; }
@@ -2647,6 +2821,40 @@ Achievement.Won100Stars = class Won100Stars extends Achievement {
             this.achieved(starCount, date);
         }
     }
+};
+
+class TotalPlayTimeAchievement extends Achievement {
+    static formatValue(achievement) {
+        return { value: Number.uiInteger(achievement.value) };
+    }
+    
+    setDefaultConfig() {
+        super.setDefaultConfig();
+        this.value = this.constructor.hours();
+        this.status = Achievement.Status.hidden;
+    }
+    
+    isValid(session) {
+        return session.isClean
+            && (session.state == GameState.won || session.state == GameState.lost)
+            && this.status != Achievement.Status.achieved;
+    }
+    
+    gameCompleted(session, date) {
+        let duration = session.statsHistory.summary.totalActiveTimeElapsed;
+        let hours = duration / (3600000.0);
+        if (hours >= this.value) {
+            this.achieved(this.value, date);
+        }
+    }
+}
+
+Achievement.TotalPlayTime10Hours = class TotalPlayTime10Hours extends TotalPlayTimeAchievement {
+    static hours() { return 10; }
+};
+
+Achievement.TotalPlayTime100Hours = class TotalPlayTime100Hours extends TotalPlayTimeAchievement {
+    static hours() { return 100; }
 };
 
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~

@@ -173,6 +173,7 @@ class UnitTest {
         return true;
     }
     assertEqualTol(a, b, tol, msg) {
+        this.expectations += 1;
         if (typeof(a?.isEqual) == 'function') {
             if (!a.isEqual(b, tol)) {
                 this.logFailure(this._assertMessage(`assertEqualTol failure: ${this.describe(a)} neq ${this.describe(b)}`, msg));
@@ -2755,6 +2756,9 @@ swept.autosaveTests = async function() {
         let tile = game.board._allTiles[0];
         session.performAction(new Sweep.SweepAction.RevealTileAction({ tile: tile, revealBehavior: Sweep.GameSession.revealBehaviors.safe }));
         session.hintTile = game.board._allTiles[2];
+        // Simulate some play time
+        session.sessionTimer.activeStartTime = Date.now() - 1000;
+        session.sessionTimer.wallStartTime = Date.now() - 2000;
         
         let data = session.objectForAutosave();
         // console.log(data);
@@ -2791,6 +2795,8 @@ swept.autosaveTests = async function() {
                     this.assertEqual(restored.hintTile.coord.x, session.hintTile.coord.x);
                     this.assertEqual(restored.hintTile.coord.y, session.hintTile.coord.y);
                 }
+                this.assertEqualTol(restored.sessionTimer.activeTimeElapsed, 1000, 10, "restored activeTimeElapsed");
+                this.assertEqualTol(restored.sessionTimer.wallTimeElapsed, 2000, 10, "restored wallTimeElapsed");
                 this.assertEqual(restored.startTime, session.startTime);
                 this.assertEqual(restored.endTime, session.endTime);
             }
@@ -2814,6 +2820,63 @@ swept.autosaveTests = async function() {
                 this.assertEqual(restored.game.board.mineCount, session.game.board.mineCount);
             }
         }
+    }).buildAndRun();
+};
+
+swept.gameSessionTimerTests = async function() {
+    await initSweep();
+    new UnitTest("Sweep.GameSessionTimer", function() {
+        let sut = new Sweep.GameSessionTimer();
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.stopped, "defaults to stopped");
+        this.assertEqualTol(sut.activeTimeElapsed, 0, 5, "activeTimeElapsed 0 from init()");
+        this.assertEqualTol(sut.wallTimeElapsed, 0, 5, "wallTimeElapsed 0 from init()");
+        sut.start();
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.active, "started");
+        this.assertEqualTol(sut.activeTimeElapsed, 0, 5, "activeTimeElapsed 0 from fresh start");
+        this.assertEqualTol(sut.wallTimeElapsed, 0, 5, "wallTimeElapsed 0 from fresh start");
+        sut._activeStartTime = Date.now() - 1000;
+        sut._wallStartTime = Date.now() - 2000;
+        this.assertEqualTol(sut.activeTimeElapsed, 1000, 5, "activeTimeElapsed, fresh start, sim 1000 ms");
+        this.assertEqualTol(sut.wallTimeElapsed, 2000, 5, "wallTimeElapsed, fresh start, sim 2000 ms");
+        this.assertEqualTol(sut.activeTimeElapsed, 1000, 5, "activeTimeElapsed, multiple calls shouldn't over-accumulate");
+        this.assertEqualTol(sut.wallTimeElapsed, 2000, 5, "wallTimeElapsed, multiple calls shouldn't over-accumulate");
+        
+        sut.pause();
+        sut.pause(); // Multiple pauses should be idempotent
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.paused, "paused");
+        this.assertEqualTol(sut.activeTimeElapsed, 1000, 5, "activeTimeElapsed, paused, accumulated 1000 ms");
+        this.assertEqualTol(sut.wallTimeElapsed, 2000, 5, "wallTimeElapsed, paused, sim 2000 ms");
+        sut._wallStartTime = Date.now() - 3000;
+        this.assertEqualTol(sut.wallTimeElapsed, 3000, 5, "wallTimeElapsed, paused, sim 3000 ms");
+        sut.resume();
+        sut.resume(); // Multiple resumes should be idempotent
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.active, "resumed");
+        this.assertEqualTol(sut.activeTimeElapsed, 1000, 5, "activeTimeElapsed, resumed, still 1000 ms");
+        this.assertEqualTol(sut.wallTimeElapsed, 3000, 5, "wallTimeElapsed, resumed, sim 3000 ms");
+        
+        sut.stop();
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.stopped, "stopped");
+        this.assertEqualTol(sut.activeTimeElapsed, 1000, 5, "activeTimeElapsed, stopped, 1000 ms");
+        this.assertEqualTol(sut.wallTimeElapsed, 3000, 5, "wallTimeElapsed, stopped, 3000 ms");
+        
+        sut.resume();
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.stopped, "resume ignored");
+        this.assertEqualTol(sut.activeTimeElapsed, 1000, 5, "activeTimeElapsed, resume ignored during stop, 1000 ms");
+        this.assertEqualTol(sut.wallTimeElapsed, 3000, 5, "wallTimeElapsed, resume ignored during stop, 3000 ms");
+        
+        sut.start();
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.active, "restarted");
+        this.assertEqualTol(sut.activeTimeElapsed, 1000, 5, "activeTimeElapsed, restarted, 1000 ms");
+        this.assertEqualTol(sut.wallTimeElapsed, 3000, 5, "wallTimeElapsed, restarted, 3000 ms");
+        sut._activeStartTime = Date.now() - 500;
+        sut._wallStartTime = Date.now() - 500;
+        this.assertEqualTol(sut.activeTimeElapsed, 1500, 5, "activeTimeElapsed, restarted, sim 500 ms more");
+        this.assertEqualTol(sut.wallTimeElapsed, 3500, 5, "wallTimeElapsed, restarted, sim 500 ms more");
+        
+        sut = new Sweep.GameSessionTimer({ activeTimeElapsed: 10000, wallTimeElapsed: 20000 });
+        this.assertEqual(sut.state, Sweep.GameSessionTimer.State.stopped, "restored and stopped");
+        this.assertEqualTol(sut.activeTimeElapsed, 10000, 5, "activeTimeElapsed restored");
+        this.assertEqualTol(sut.wallTimeElapsed, 20000, 5, "wallTimeElapsed restored");
     }).buildAndRun();
 };
 
@@ -3690,8 +3753,9 @@ let standardSuite = new TestSession([
 ]);
 
 let taskSuite = new TestSession([
-    // swept.autosaveTests
-    swept.convolutionTests
+    swept.autosaveTests,
+    // swept.convolutionTests,
+    swept.gameSessionTimerTests
 ]);
 
 let taskSuite2 = new TestSession([
