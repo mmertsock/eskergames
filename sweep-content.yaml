@@ -63,7 +63,6 @@ keyboard:
 gameBoardView:
   touchScaleFactor: 1.25
   tileWidth: 24
-  backgroundFrameCount: 5
   displayModes:
     - id: plain
       name: gameBoardViewDisplayModePlain
@@ -89,6 +88,7 @@ gameBoardView:
     - id: richard
       name: gameBoardViewDisplayModeRichard
       isTransparentBoard: true
+      backgroundFrameCount: 10
 gameTileView:
   font: ["bold <size> monospace", 16, "px"]
   borderStrokeStyle: "#444444"

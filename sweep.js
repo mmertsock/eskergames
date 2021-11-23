@@ -3502,8 +3502,10 @@ class GameBoardView {
             }
         }
         
-        let frame = this.session.history.serializedMoves.length % GameBoardView.metrics.backgroundFrameCount;
-        this.canvas.className = `${context.displayMode.id} frame-${frame}`;
+        if (Number.isInteger(context.displayMode.backgroundFrameCount)) {
+            let frame = this.session.history.serializedMoves.length % context.displayMode.backgroundFrameCount;
+            this.canvas.className = `${context.displayMode.id} frame-${frame}`;
+        }
         
         ctx.rectClear(this.tilePlane.viewportScreenBounds);
         

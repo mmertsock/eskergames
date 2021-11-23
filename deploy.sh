@@ -41,12 +41,12 @@ cp g.css "$SWEEP_DEST"
 cp g.js "$SWEEP_DEST"
 cp game-content.js "$SWEEP_DEST"
 cp locale.js "$SWEEP_DEST"
-cp richard-0.jpg "$SWEEP_DEST"
+cp richard/richard*.jpg "$SWEEP_DEST"
 cp sweep-content.yaml "$SWEEP_DEST"
 cp sweep-solver.js "$SWEEP_DEST"
 cp sweep.js "$SWEEP_DEST"
 
-sed -i -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./g.css|./$SWEEP_V_URL/g.css|g" -e "s|./richard-|./$SWEEP_V_URL/richard-|g" "$SWEEP_ROOT/index.html"
+sed -i -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./g.css|./$SWEEP_V_URL/g.css|g" -e "s|./richard/|./$SWEEP_V_URL/|g" "$SWEEP_ROOT/index.html"
 
 V_CIV=$(cat version.txt)
 CIV_ROOT="$DEST/civ"
