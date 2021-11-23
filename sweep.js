@@ -2652,7 +2652,7 @@ class UncoveredNeighborCountTile extends Achievement {
 
     moveCompleted(session, date) {
         let collection = TileCollection.allTiles(session)
-            .applying(ClearedMoveNumberFilter.exactly(session.history.moveNumber))
+            .applying(ClearedMoveNumberFilter.exactly(session.history.lastMove?.moveNumber))
             .applying(MinedNeighborCountRangeFilter.exactly(this.value))
             .applying(new MineFilter(false));
         if (!collection.isEmpty) {
