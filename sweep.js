@@ -1271,12 +1271,7 @@ export class GameSession {
 
     mineTriggered(tile) {
         tile.reveal(this.history.moveNumber);
-        this.state = GameState.lost;
-        this.endTime = Date.now();
-        this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
-        this.sessionTimer.stop();
-        this.statsHistory.gameCompleted(this);
-        Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
+        this.completeGame(GameState.lost);
     }
 
     undoLoss() {
@@ -1309,13 +1304,18 @@ export class GameSession {
             return true;
         });
         if (!anyUnfinished) {
-            this.state = GameState.won;
-            this.endTime = Date.now();
-            this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
-            this.sessionTimer.stop();
-            this.statsHistory.gameCompleted(this);
-            Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
+            this.completeGame(GameState.won);
         }
+    }
+    
+    completeGame(state) {
+        this.state = state;
+        this.endTime = Date.now();
+        this.history.setCurrentMove(new MoveHistoryMoment({ session: this }));
+        this.sessionTimer.stop();
+        // debugLog(`ppm: ${Achievement.MostPointsPerMinute.pointsPerMinute(this.game.statistics.points, this.sessionTimer.activeTimeElapsed)}`);
+        this.statsHistory.gameCompleted(this);
+        Dispatch.shared.postEventSync(GameSession.gameCompletedEvent, this, this.debugMode);
     }
 }
 Gaming.Mixins.Gaming.DelegateSet(GameSession);
