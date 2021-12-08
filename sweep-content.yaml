@@ -493,9 +493,10 @@ strings:
   importCodeTitle: Code
   importCodePlaceholder: Paste game code here
   importCodeValidMessage: "Game code recognized!"
-  lostAlertButton: Bummer
   lostAlertDialogTextTemplate: "Your score: <points>"
+  lostAlertDismissButton: Bummer
   lostAlertTitle: You Lost
+  lostAlertUndoButton: Undo
   mooActionDescription: mooooo
   mousePointerNoun: Mouse
   newGameDialogStartButton: "Start"
@@ -570,6 +571,9 @@ strings:
   tapAction: tap
   trophiesDialogDismiss: Done
   trophiesDialogTitle: "✷ Trophy Room ✷"
+  undoLossAlertTitle: Undo Loss
+  undoLossAlertMessage: "Oops, let’s forget that happened. You can continue playing this game, but it won’t count toward high scores or achievements."
+  undoLossAlertDismissButton: Understood
   warningAbortRevealNeighborsIncorrectFlagCount: "Won’t clear this area: incorrect flag count"
   warningAbortRevealNeighborsMaybeFlags: "Won’t clear this area: unsafe around “?” flags"
   warningAbortRevealNeighborsNoCandidates: No tiles to clear in this area
@@ -625,8 +629,8 @@ strings:
     helpKeyboardShowNewGameDialog: "⇧ + N|: Mostrar opciones para un juego nuevo"
     helpKeyboardSolverStep: "$|: Resolver automáticamente"
     highScoresDialogTitle: "Puntajes Altos"
-    lostAlertButton: Qué pena
     lostAlertDialogTextTemplate: "Tu Puntaje: <points>"
+    lostAlertDismissButton: Qué pena
     lostAlertTitle: Perdiste
     newGameDialogStartButton: Comienzo
     newGameDialogTitle: "Nuevo Juego"

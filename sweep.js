@@ -705,6 +705,15 @@ export class GameStorage {
         this.setPreference("gameBoardViewDisplayMode", value?.id);
     }
     
+    get undoButtonExplained() {
+        let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
+        if (!item) { return false; }
+        return item.data.hasOwnProperty("undoButtonExplained") ? item.data.undoButtonExplained : false;
+    }
+    set undoButtonExplained(value) {
+        this.setPreference("undoButtonExplained", value);
+    }
+    
     get storiesVisible() {
         let item = this.preferencesCollection.getItem(this.preferencesCollection.namespace);
         if (!item) { return false; }
@@ -3305,12 +3314,29 @@ class InteractiveSessionView {
                 new AlertDialog({
                     title: Strings.str("lostAlertTitle"),
                     message: Strings.template("lostAlertDialogTextTemplate", Game.formatStatistics(this.session.game.statistics)),
-                    buttons: [{ title: Strings.str("lostAlertButton") }]
+                    buttons: [
+                        { title: Strings.str("lostAlertDismissButton") },
+                        { title: Strings.str("lostAlertUndoButton"), click: dialog => this.undoLoss(dialog) }
+                    ]
                 }).show();
                 break;
             default:
                 break;
         }
+    }
+    
+    undoLoss(dialog) {
+        dialog.dismiss();
+        if (GameStorage.shared.undoButtonExplained) {
+            this.session.undoLoss();
+            return;
+        }
+        GameStorage.shared.undoButtonExplained = true;
+        new AlertDialog({
+            title: Strings.str("undoLossAlertTitle"),
+            message: Strings.str("undoLossAlertMessage"),
+            buttons: [ { title: Strings.str("undoLossAlertDismissButton"), click: dialog => this.undoLoss(dialog) } ]
+        }).show();
     }
 }
 InteractiveSessionView.shared = null;
