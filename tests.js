@@ -1141,6 +1141,45 @@ var stringsTest = function() {
     }).build()(null, null);
 };
 
+let missingStringsTests = async function() {
+    let sourceFile = "sweep-content.yaml";
+    let content = await GameContent.loadYamlFromLocalFile(sourceFile, GameContent.cachePolicies.forceOnFirstLoad);
+    let test = new UnitTest("MissingStrings", function(a) {
+        let otherLanguages = ["_es"];
+        if (!this.assertDefined(content, "`content` object defined")) { return; }
+        if (!this.assertDefined(content[a.rootKey], `content.${a.rootKey} defined`)) { return; }
+        let strings = content[a.rootKey];
+        let keys = Object.getOwnPropertyNames(strings).filter(key => !key.startsWith("_"));
+        otherLanguages.forEach(lang => {
+            if (!this.assertDefined(strings[lang], `Language dict ${lang} exists in ${a.rootKey}`)) {
+                return;
+            }
+            let langStrings = strings[lang];
+            let keysNotFound = [];
+            keys.forEach(key => {
+                if (!langStrings.hasOwnProperty(key)) {
+                    keysNotFound.push(key);
+                }
+            });
+            if (!this.assertEqual(keysNotFound.length, 0, `Keys not found in ${a.rootKey}/${lang}: ${keysNotFound.length}`)) {
+                logTestMsg(keysNotFound.join("\n"));
+            }
+            
+            keysNotFound = [];
+            Object.getOwnPropertyNames(langStrings).forEach(otherKey => {
+                if (!strings.hasOwnProperty(otherKey)) {
+                    keysNotFound.push(otherKey);
+                }
+            });
+            if (!this.assertEqual(keysNotFound.length, 0, `Keys in ${a.rootKey}/${lang} but not in default language: ${keysNotFound.length}`)) {
+                logTestMsg(keysNotFound.join("\n"));
+            }
+        });
+    }).build();
+    test({ rootKey: "strings" });
+    test({ rootKey: "pluralStrings" });
+};
+
 class SelectableStub {
     constructor(name, defaultValue) {
         this.name = name;
@@ -3769,6 +3808,10 @@ let taskSuite2 = new TestSession([
     // civved.systemUItests
 ]);
 
+let taskSuiteL10N = new TestSession([
+    missingStringsTests
+]);
+
 async function loadCivvedContent() {
     console.log("loadCivvedContent");
     CivGame.inj().gse = new GameScriptEngine();
@@ -3785,7 +3828,8 @@ async function initCivved() {
     CivGame.inj().rng = Rng.shared;
 }
 
-TestSession.current = taskSuite;
+TestSession.current = taskSuiteL10N;
+// TestSession.current = taskSuite;
 // TestSession.current = standardSuite;
 
 export async function uiReady() {
