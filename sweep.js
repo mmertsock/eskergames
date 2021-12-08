@@ -1132,6 +1132,7 @@ export class GameSession {
     // That way performAction can represent a single block of user interaction, can manage
     // state, etc.
     performAction(action) {
+        if (UI.isShowingDialog()) { return; }
         // SweepPerfTimer.startShared("performAction");
         this.moveState = MoveState.pending;
         let start = this.game.statistics;
@@ -3087,7 +3088,7 @@ class GameControlsView {
 
     newGame(prompt) {
         if (!this.session) { return debugWarn("no session"); }
-        if (Gaming.GameDialogManager.shared.currentDialog) {
+        if (UI.isShowingDialog()) {
             let dialog = Gaming.GameDialogManager.shared.currentDialog;
             if (!dialog.isModal) {
                 dialog.dismiss();
@@ -4314,7 +4315,6 @@ class HelpDialog extends GameDialog {
             HelpDialog.appendShortcut(elem, config[0], config[1]);
         });
         elem.querySelector(".shortcuts li:last-child").title = Strings.str("helpKeyboardMooTooltip");
-        
         elem.querySelector(".version").innerText = Strings.template("gameVersionLabelTemplate", { appVersion: Game.appVersion });
     }
 
