@@ -58,8 +58,9 @@ keyboard:
     - [Shift+Digit4, solverStep, null, helpKeyboardSolverStep] # dollar
     - [KeyM, moo, m, helpKeyboardMoo]
     - [KeyO, moo, o]
-    - [KeyC, moo, c]
-    - [KeyW, moo, w]
+    - [KeyC, uncoverTileUnderPointer]
+    - [KeyF, flagTileUnderPointer]
+    - [KeyX, clearNeighborsUnderPointer]
 gameBoardView:
   touchScaleFactor: 1.25
   tileWidth: 24
@@ -159,6 +160,9 @@ gameTileViewState:
   hintTile:
     strokeStyle: "hsla(120, 65%, 65%, 1)"
     borderStrokeWidth: 3
+  hoverTile:
+    strokeStyle: "hsla(0, 0%, 0%, 0.25)"
+    borderStrokeWidth: 2
   debug:
     fillColor: "hsla(83, 100%, 50%, 0.2)"
 storiesView:
@@ -434,7 +438,8 @@ strings:
   analysisViewDismiss: Cool
   analysisViewTitle: Stats
   continuePlayingButton: Cancel
-  clickAction: click
+  clickAction: Click
+  clickActionInline: click
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✕"
   difficultyChoiceLabelTemplate: "<name>"
@@ -471,11 +476,11 @@ strings:
   helpContentHowToPlay3: Work incrementally from the edge of the tiles you have cleared, deducing which tiles are safe based on the arrangement of numbers
   helpContentShortcutsHeader: Keyboard shortcuts
   helpPointerInstructionsHeader: "<pointerNoun> interactions"
-  # %3C == "<". %3E == ">"
-  helpPointerInstructions1: "<%3C>kbd<%3E><pointerActionVerb><%3C>/kbd<%3E>: Clears the selected tile, and adjacent tiles if mine count is zero"
-  helpPointerInstructions2: "<%3C>kbd<%3E>⇧ + <pointerActionVerb><%3C>/kbd<%3E> on a covered tile: Toggle flags to mark potential mines. For safety, clicking on a flagged tile will not clear it"
-  helpPointerInstructions3: "<%3C>kbd<%3E>⇧ + <pointerActionVerb><%3C>/kbd<%3E> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the tile clicked"
-  helpPointerInstructions4: "<%3C>kbd<%3E>⌥ + <pointerActionVerb> or ⌘ + <pointerActionVerb><%3C>/kbd<%3E>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the clicked tile"
+  helpPointerInstructionsSubHeader: "<pointerActionVerb> to act on a tile directly, or use the indicated keyboard command while pointing the <mousePointerNounInline> cursor at a tile."
+  helpPointerInstructions1: "<%3C>kbd<%3E><pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + C<%3C>/kbd<%3E>: Clears the selected tile, and adjacent tiles if mine count is zero"
+  helpPointerInstructions2: "<%3C>kbd<%3E>⇧ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + F<%3C>/kbd<%3E> on a covered tile: Toggle flags to mark potential mines. For safety, you can’t clear a flagged tile"
+  helpPointerInstructions3: "<%3C>kbd<%3E>⇧ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + F<%3C>/kbd<%3E> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the selected tile"
+  helpPointerInstructions4: "<%3C>kbd<%3E>⌥ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E>⌘ + <pointerActionVerb><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + X<%3C>/kbd<%3E>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the selected tile"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   helpKeyboardEscapePressed: "esc|: Close popups, etc."
@@ -499,6 +504,7 @@ strings:
   lostAlertUndoButton: Undo
   mooActionDescription: mooooo
   mousePointerNoun: Mouse
+  mousePointerNounInline: mouse
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
   newGameHeightInputLabelTemplate: "Height (<min>–<max>)"
@@ -568,7 +574,9 @@ strings:
   storyDialogDismiss: Haha Stories Everywhere
   storyDialogTitle: "<possessive> Story"
   touchPointerNoun: Touch
-  tapAction: tap
+  touchPointerNounInline: touch
+  tapAction: Tap
+  tapActionInline: tap
   trophiesDialogDismiss: Done
   trophiesDialogTitle: "✷ Trophy Room ✷"
   undoLossAlertTitle: Undo Loss

@@ -1122,8 +1122,11 @@ export class GameSession {
         this.renderViews();
     }
     
-    get isRainbowMode() {
-        return this.gameBoardViewDisplayMode.showsRainbow;
+    setHoverTileCoord(coord) {
+        let tile = coord ? this.game.board.tileAtCoord(coord) : null;
+        if (tile == this.hoverTile) { return; }
+        this.hoverTile = tile;
+        this.renderViews();
     }
 
     // Not reentrant.
@@ -2932,6 +2935,8 @@ class PointInputController {
         this.eventTarget.addEventListener("mouseup", this._mousedUp.bind(this));
         if (config.trackAllMovement) {
             this.eventTarget.addEventListener("mousemove", this._moved.bind(this));
+            this.eventTarget.addEventListener("mouseenter", this._entered.bind(this));
+            this.eventTarget.addEventListener("mouseleave", this._left.bind(this));
         }
     }
 
@@ -2955,6 +2960,14 @@ class PointInputController {
     }
 
     _moved(evt) {
+        this._buildSequence(evt, false, false);
+    }
+    
+    _entered(evt) {
+        this._buildSequence(evt, false, false);
+    }
+    
+    _left(evt) {
         this._buildSequence(evt, false, false);
     }
 
@@ -3012,6 +3025,52 @@ class GameBoardController {
                 this.session.performAction(new RevealTileAction({ point: modelCoord, revealBehavior: revealBehavior }));
             }
         }
+    }
+}
+
+class HoverController {
+    constructor(view) {
+        this.view = view;
+        this.session = view.session;
+        this.pixelScale = window.devicePixelRatio;
+        this.inputController = new PointInputController({
+            eventTarget: view.canvas,
+            trackAllMovement: true
+        });
+        this.inputController.pushDelegate(this);
+        
+        let gse = GameScriptEngine.shared;
+        gse.registerCommand("uncoverTileUnderPointer", () => this.uncoverTileUnderPointer());
+        gse.registerCommand("flagTileUnderPointer", () => this.flagTileUnderPointer());
+        gse.registerCommand("clearNeighborsUnderPointer", () => this.clearNeighborsUnderPointer());
+    }
+    
+    pointSessionChanged(inputSequence, inputController) {
+        if (!(inputSequence.latestEvent.type == "mouseenter"
+            || inputSequence.latestEvent.type == "mousemove")) {
+            this.session.setHoverTileCoord(null);
+            return;
+        }
+        
+        let point = new Point(inputSequence.latestPoint.x * this.pixelScale, inputSequence.latestPoint.y * this.pixelScale);
+        let modelCoord = this.view.tilePlane.modelTileForScreenPoint(point);
+        // debugLog(`setHover ${modelCoord?.x} ${modelCoord?.y}`);
+        this.session.setHoverTileCoord(modelCoord);
+    }
+        
+    uncoverTileUnderPointer() {
+        if (!this.session.hoverTile) { return; }
+        this.session.performAction(new RevealTileAction({ tile: this.session.hoverTile, revealBehavior: GameSession.revealBehaviors.safe }));
+    }
+    
+    flagTileUnderPointer() {
+        if (!this.session.hoverTile) { return; }
+        this.session.performAction(new FlaggingAction({ tile: this.session.hoverTile }));
+    }
+    
+    clearNeighborsUnderPointer() {
+        if (!this.session.hoverTile) { return; }
+        this.session.performAction(new RevealTileAction({ tile: this.session.hoverTile, revealBehavior: GameSession.revealBehaviors.assertTrustingFlags }));
     }
 }
 
@@ -3248,8 +3307,11 @@ class UI {
     static getGameMetadata() {
         return {
             appVersion: Game.appVersion,
+            mousePointerNounInline: Strings.str("mousePointerNounInline"),
             pointerActionVerb: Strings.str(UI.isTouchFirst() ? "tapAction" : "clickAction"),
-            pointerNoun: Strings.str(UI.isTouchFirst() ? "touchPointerNoun" : "mousePointerNoun")
+            pointerActionVerbInline: Strings.str(UI.isTouchFirst() ? "tapActionInline" : "clickActionInline"),
+            pointerNoun: Strings.str(UI.isTouchFirst() ? "touchPointerNoun" : "mousePointerNoun"),
+            pointerNounInline: Strings.str(UI.isTouchFirst() ? "touchPointerNounInline" : "mousePointerNounInline")
         };
     }
 }
@@ -3433,8 +3495,10 @@ class GameBoardView {
         this.game = config.session.game;
         if (!!config.interactive) {
             this.controller = new GameBoardController(this);
+            this.hoverController = new HoverController(this);
         } else {
             this.controller = null;
+            this.hoverController = null;
         }
         
         this.session.addDelegate(this);
@@ -3537,9 +3601,13 @@ class GameBoardView {
         ctx.rectClear(this.tilePlane.viewportScreenBounds);
         
         let hintTile = null;
+        let hoverTile = null;
         this.tileViews.forEach(tile => {
             if (this.session.hintTile == tile.model) {
                 hintTile = tile;
+            }
+            if (this.session.hoverTile == tile.model) {
+                hoverTile = tile;
             }
             tile.render(context);
         });
@@ -3547,6 +3615,10 @@ class GameBoardView {
         // Render hintTile last for z-order purposes
         if (hintTile) {
             hintTile.renderHintTile(context);
+        }
+        
+        if (hoverTile) {
+            hoverTile.renderHoverTile(context);
         }
     }
     
@@ -3626,6 +3698,11 @@ class GameTileView {
         const rect = context.tilePlane.screenRectForModelTile(this.model.coord);
         this.renderContent(context, rect, GameTileViewState.hintTile);
     }
+    
+    renderHoverTile(context) {
+        const rect = context.tilePlane.screenRectForModelTile(this.model.coord);
+        this.renderContent(context, rect, GameTileViewState.hoverTile);
+    }
 
     renderCovered(context, rect) {
         switch (this.model.flag.value) {
@@ -3678,6 +3755,7 @@ class GameTileViewState {
         GameTileViewState.mineRevealed = new GameTileViewState(config.mineRevealed).displayModesLookup();
         GameTileViewState.incorrectFlag = new GameTileViewState(config.incorrectFlag).displayModesLookup();
         GameTileViewState.hintTile = new GameTileViewState(config.hintTile).displayModesLookup();
+        GameTileViewState.hoverTile = new GameTileViewState(config.hoverTile).displayModesLookup();
         GameTileViewState.debug = new GameTileViewState(config.debug).displayModesLookup();
     }
 
