@@ -438,8 +438,6 @@ strings:
   analysisViewDismiss: Cool
   analysisViewTitle: Stats
   continuePlayingButton: Cancel
-  clickAction: Click
-  clickActionInline: click
   defaultPlayerName: "✷✷✷"
   dialogDismissButton: "✕"
   difficultyChoiceLabelTemplate: "<name>"
@@ -475,12 +473,18 @@ strings:
   helpContentHowToPlay2: A cleared tile has a number indicating how many of the eight adjacent tiles are mined. No number means none of the adjacent tiles are mined
   helpContentHowToPlay3: Work incrementally from the edge of the tiles you have cleared, deducing which tiles are safe based on the arrangement of numbers
   helpContentShortcutsHeader: Keyboard shortcuts
-  helpPointerInstructionsHeader: "<pointerNoun> interactions"
-  helpPointerInstructionsSubHeader: "<pointerActionVerb> to act on a tile directly, or use the indicated keyboard command while pointing the <mousePointerNounInline> cursor at a tile."
-  helpPointerInstructions1: "<%3C>kbd<%3E><pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + C<%3C>/kbd<%3E>: Clears the selected tile, and adjacent tiles if mine count is zero"
-  helpPointerInstructions2: "<%3C>kbd<%3E>⇧ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + F<%3C>/kbd<%3E> on a covered tile: Toggle flags to mark potential mines. For safety, you can’t clear a flagged tile"
-  helpPointerInstructions3: "<%3C>kbd<%3E>⇧ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + F<%3C>/kbd<%3E> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the selected tile"
-  helpPointerInstructions4: "<%3C>kbd<%3E>⌥ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E>⌘ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + X<%3C>/kbd<%3E>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the selected tile"
+  helpPointerInstructionsHeader: "Mouse interactions"
+  helpPointerInstructionsSubHeader: "Click to act on a tile directly, or use the indicated keyboard command while pointing the cursor at a tile."
+  helpPointerInstructions1: "<%3C>kbd<%3E>click<%3C>/kbd<%3E> or <%3C>kbd<%3E>mouse + C<%3C>/kbd<%3E>: Clears the selected tile, and adjacent tiles if mine count is zero"
+  helpPointerInstructions2: "<%3C>kbd<%3E>⇧ + click<%3C>/kbd<%3E> or <%3C>kbd<%3E>mouse + F<%3C>/kbd<%3E> on a covered tile: Toggle flags to mark potential mines. For safety, you can’t clear a flagged tile"
+  helpPointerInstructions3: "<%3C>kbd<%3E>⇧ + click<%3C>/kbd<%3E> or <%3C>kbd<%3E>mouse + F<%3C>/kbd<%3E> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the selected tile"
+  helpPointerInstructions4: "<%3C>kbd<%3E>⌥ + click<%3C>/kbd<%3E> or <%3C>kbd<%3E>⌘ + click<%3C>/kbd<%3E> or <%3C>kbd<%3E>mouse + X<%3C>/kbd<%3E>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the selected tile"
+  helpTouchInstructionsHeader: Touch interactions
+  helpTouchInstructionsSubHeader: "Use the CLEAR and FLAG buttons to switch modes:"
+  helpTouchInstructions1: "<%3C>kbd<%3E>CLEAR<%3C>/kbd<%3E> mode, tap a covered tile: clears the selected tile, and adjacent tiles if mine count is zero"
+  helpTouchInstructions2: "<%3C>kbd<%3E>CLEAR<%3C>/kbd<%3E> mode, tap a cleared tile: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the selected tile"
+  helpTouchInstructions3: "<%3C>kbd<%3E>FLAG<%3C>/kbd<%3E> mode, tap a covered tile: Toggle flags to mark potential mines. For safety, you can’t clear a flagged tile"
+  helpTouchInstructions4: "<%3C>kbd<%3E>FLAG<%3C>/kbd<%3E> mode, tap a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the selected tile"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   helpKeyboardEscapePressed: "esc|: Close popups, etc."
@@ -503,8 +507,6 @@ strings:
   lostAlertTitle: You Lost
   lostAlertUndoButton: Undo
   mooActionDescription: mooooo
-  mousePointerNoun: Mouse
-  mousePointerNounInline: mouse
   newGameDialogStartButton: "Start"
   newGameDialogTitle: "New Game"
   newGameHeightInputLabelTemplate: "Height (<min>–<max>)"
@@ -575,8 +577,6 @@ strings:
   storyDialogTitle: "<possessive> Story"
   touchPointerNoun: Touch
   touchPointerNounInline: touch
-  tapAction: Tap
-  tapActionInline: tap
   touchControlRevealTiles: "◯ Clear"
   touchControlFlagTiles: "▲ Flag"
   trophiesDialogDismiss: Done

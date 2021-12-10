@@ -3364,12 +3364,7 @@ class UI {
     
     static getGameMetadata() {
         return {
-            appVersion: Game.appVersion,
-            mousePointerNounInline: Strings.str("mousePointerNounInline"),
-            pointerActionVerb: Strings.str(UI.isTouchFirst() ? "tapAction" : "clickAction"),
-            pointerActionVerbInline: Strings.str(UI.isTouchFirst() ? "tapActionInline" : "clickActionInline"),
-            pointerNoun: Strings.str(UI.isTouchFirst() ? "touchPointerNoun" : "mousePointerNoun"),
-            pointerNounInline: Strings.str(UI.isTouchFirst() ? "touchPointerNounInline" : "mousePointerNounInline")
+            appVersion: Game.appVersion
         };
     }
 }
