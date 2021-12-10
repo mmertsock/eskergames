@@ -98,6 +98,10 @@ header row {
     padding: 0.25em;
 }
 
+footer controls > row {
+    justify-content: flex-end;
+}
+
 header a.tool {
     margin: 0 0.75em;
 }
@@ -112,7 +116,20 @@ body > header a.tool {
     margin-top: 1px;
 }
 
-body > header a.tool.new:before {
+body > footer a.tool {
+    margin: 0 0.5em;
+    padding: 0.5em 0.75em;
+    border: 0.5pt solid var(--border-color-3);
+    border-radius: 1em;
+    color: var(--text-color-2);
+    background-color: var(--background-color-2);
+}
+
+body > footer a.tool.selected {
+    background-color: var(--background-color-highlight);
+}
+
+body > header a.tool.new:before, body > footer a.tool.new:before {
     content: "•";
     margin-right: 0.1em;
     font-size: 150%;
@@ -577,7 +594,7 @@ comment.position-2 {
     <board class="hidden"><canvas></canvas></board>
 </main>
 
-<footer></footer>
+<footer><message></message><controls><row></row></controls></footer>
 
 <moo class="ready"><moo>🐄</moo><span class="ready">❌</span><span class="m">💬</span><span class="mo">💡</span></moo>
 

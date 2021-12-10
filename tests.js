@@ -1151,7 +1151,7 @@ let missingStringsTests = async function() {
         let strings = content[a.rootKey];
         let keys = Object.getOwnPropertyNames(strings).filter(key => !key.startsWith("_"));
         otherLanguages.forEach(lang => {
-            if (!this.assertDefined(strings[lang], `Language dict ${lang} exists in ${a.rootKey}`)) {
+            if (!this.assertDefined(strings[lang], `Language dict ${lang} in ${a.rootKey}`)) {
                 return;
             }
             let langStrings = strings[lang];

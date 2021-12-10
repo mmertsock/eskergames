@@ -2909,7 +2909,7 @@ class PointInputSequence {
     get latestPoint() { return this._point(this.events[this.events.length - 1]); }
     get totalOffset() { return this.latestPoint.manhattanDistanceFrom(this.firstPoint); }
     get isSingleClick() {
-        return this.latestEvent.type == "mouseup"
+        return this.latestEvent.type == "pointerup"
             && this.latestPoint.manhattanDistanceFrom(this.firstPoint).magnitude <= PointInputSequence.singleClickMovementTolerance;
     }
     add(event) { this.events.push(event); }
@@ -2931,12 +2931,14 @@ class PointInputController {
         this.eventTarget = config.eventTarget; // DOM element
         this.delegates = []; //new _PointInputNoopDelegate()];
         this.sequence = null;
-        this.eventTarget.addEventListener("mousedown", this._mousedDown.bind(this));
-        this.eventTarget.addEventListener("mouseup", this._mousedUp.bind(this));
+        this.eventTarget.addEventListener("pointerdown", this._down.bind(this));
+        this.eventTarget.addEventListener("pointerup", this._up.bind(this));
+        // Disables tap-to-zoom in mobile Safari 🤨
+        this.eventTarget.addEventListener("dblclick", () => {});
         if (config.trackAllMovement) {
-            this.eventTarget.addEventListener("mousemove", this._moved.bind(this));
-            this.eventTarget.addEventListener("mouseenter", this._entered.bind(this));
-            this.eventTarget.addEventListener("mouseleave", this._left.bind(this));
+            this.eventTarget.addEventListener("pointermove", this._moved.bind(this));
+            this.eventTarget.addEventListener("pointerenter", this._entered.bind(this));
+            this.eventTarget.addEventListener("pointerleave", this._left.bind(this));
         }
     }
 
@@ -2955,7 +2957,7 @@ class PointInputController {
         return null;
     }
 
-    _mousedDown(evt) {
+    _down(evt) {
         this._buildSequence(evt, true, false);
     }
 
@@ -2971,7 +2973,7 @@ class PointInputController {
         this._buildSequence(evt, false, false);
     }
 
-    _mousedUp(evt) {
+    _up(evt) {
         this._buildSequence(evt, false, true);
     }
 
@@ -3001,22 +3003,32 @@ class PointInputController {
 } // end PointInputController
 
 class GameBoardController {
-    constructor(view) {
+    constructor(view, touchControlsView) {
         this.view = view;
+        this.touchControlsView = touchControlsView;
         this.session = view.session;
+        this.pixelScale = window.devicePixelRatio;
         this.controller = new PointInputController({
             eventTarget: view.canvas,
             trackAllMovement: false
         });
         this.controller.pushDelegate(this);
-        this.pixelScale = window.devicePixelRatio;
     }
 
     pointSessionChanged(inputSequence, inputController) {
         if (!inputSequence.isSingleClick) return;
         let point = new Point(inputSequence.latestPoint.x * this.pixelScale, inputSequence.latestPoint.y * this.pixelScale);
         let modelCoord = this.view.tilePlane.modelTileForScreenPoint(point);
-        if (modelCoord) {
+        if (!modelCoord) { return; }
+        if (inputSequence.latestEvent.pointerType != "mouse" && (this.touchControlsView?.isEnabled == true)) {
+            if (this.touchControlsView.mode == TouchControlsView.modes.revealTilesMode) {
+                let assertTrustingFlags = !this.session.game.board.tileAtCoord(modelCoord)?.isCovered;
+                let revealBehavior = assertTrustingFlags ? GameSession.revealBehaviors.assertTrustingFlags : GameSession.revealBehaviors.safe;
+                this.session.performAction(new RevealTileAction({ point: modelCoord, revealBehavior: revealBehavior }));
+            } else {
+                this.session.performAction(new FlaggingAction({ point: modelCoord }));
+            }
+        } else {
             if (inputSequence.latestEvent.shiftKey) {
                 this.session.performAction(new FlaggingAction({ point: modelCoord }));
             } else {
@@ -3046,15 +3058,17 @@ class HoverController {
     }
     
     pointSessionChanged(inputSequence, inputController) {
-        if (!(inputSequence.latestEvent.type == "mouseenter"
-            || inputSequence.latestEvent.type == "mousemove")) {
+        if (inputSequence.latestEvent.pointerType != "mouse") {
+            return;
+        }
+        if (!(inputSequence.latestEvent.type == "pointerenter"
+            || inputSequence.latestEvent.type == "pointermove")) {
             this.session.setHoverTileCoord(null);
             return;
         }
         
         let point = new Point(inputSequence.latestPoint.x * this.pixelScale, inputSequence.latestPoint.y * this.pixelScale);
         let modelCoord = this.view.tilePlane.modelTileForScreenPoint(point);
-        // debugLog(`setHover ${modelCoord?.x} ${modelCoord?.y}`);
         this.session.setHoverTileCoord(modelCoord);
     }
         
@@ -3230,6 +3244,50 @@ class GameControlsView {
     }
 } // end class GameControlsView
 
+class TouchControlsView {
+    constructor(a) {
+        this.session = a.session;
+        this.parent = a.elem;
+        this.isEnabled = UI.isTouchFirst();
+        this.parent.classList.toggle("hidden", !this.isEnabled);
+        this.elem = a.elem.querySelector("row");
+        this.elem.removeAllChildren();
+        if (this.isEnabled) {
+            this.revealTilesModeButton = new ToolButton({
+                parent: this.elem,
+                title: Strings.str("touchControlRevealTiles"),
+                click: () => this.revealTilesMode()
+            });
+            this.flagTilesModeButton = new ToolButton({
+                parent: this.elem,
+                title: Strings.str("touchControlFlagTiles"),
+                click: () => this.flagTilesMode()
+            });
+        }
+        this.mode = TouchControlsView.modes.revealTilesMode;
+    }
+    
+    get mode() { return this._mode; }
+    set mode(value) {
+        this._mode = (value == TouchControlsView.modes.revealTilesMode) ? TouchControlsView.modes.revealTilesMode : TouchControlsView.modes.flagTilesMode;
+        if (!this.isEnabled) { return; }
+        this.revealTilesModeButton.isSelected = (this._mode == TouchControlsView.modes.revealTilesMode);
+        this.flagTilesModeButton.isSelected = (this._mode == TouchControlsView.modes.flagTilesMode);
+    }
+    
+    revealTilesMode() {
+        this.mode = TouchControlsView.modes.revealTilesMode;
+    }
+    
+    flagTilesMode() {
+        this.mode = TouchControlsView.modes.flagTilesMode;
+    }
+}
+TouchControlsView.modes = {
+    revealTilesMode: 0,
+    flagTileMode: 1
+};
+
 class TabbedView {
     /// a.parent: DOM element TabbedView will append itself to.
     /// a.items: ordered array of tab content. Should have contentElem and .tabLabel properties.
@@ -3354,10 +3412,11 @@ class InteractiveSessionView {
         this.session = session;
         this.inputController = new InputController();
         this.controlsView = new GameControlsView({ session: this.session, elem: document.querySelector("header row") });
-        this.mostRecentActionView = new ActionDescriptionView({ session: this.session, elem: document.querySelector("message") });
+        this.touchControlsView = new TouchControlsView({ session: this.session, elem: document.querySelector("footer controls") });
+        this.mostRecentActionView = new ActionDescriptionView({ session: this.session, elem: document.querySelector("header message") });
         let boardContainer = document.querySelector("board");
-        this.boardView = new GameBoardView({ session: this.session, boardContainer: boardContainer, interactive: true });
-        this.statusView = new GameStatusView({ session: this.session, elem: document.querySelector("footer") });
+        this.boardView = new GameBoardView({ session: this.session, boardContainer: boardContainer, touchControlsView: this.touchControlsView, interactive: true });
+        this.statusView = new GameStatusView({ session: this.session, elem: document.querySelector("footer message") });
         this.storiesView = new SweepStoriesView({ session: this.session, elem: document.querySelector("stories") });
         this.moo = new Moo({ session: this.session, elem: document.querySelector("moo"), boardView: this.boardView, inputController: this.inputController });
         
@@ -3494,7 +3553,7 @@ class GameBoardView {
         this.canvas = config.boardContainer.querySelector("canvas");
         this.game = config.session.game;
         if (!!config.interactive) {
-            this.controller = new GameBoardController(this);
+            this.controller = new GameBoardController(this, config.touchControlsView);
             this.hoverController = new HoverController(this);
         } else {
             this.controller = null;

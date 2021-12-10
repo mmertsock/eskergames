@@ -480,7 +480,7 @@ strings:
   helpPointerInstructions1: "<%3C>kbd<%3E><pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + C<%3C>/kbd<%3E>: Clears the selected tile, and adjacent tiles if mine count is zero"
   helpPointerInstructions2: "<%3C>kbd<%3E>⇧ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + F<%3C>/kbd<%3E> on a covered tile: Toggle flags to mark potential mines. For safety, you can’t clear a flagged tile"
   helpPointerInstructions3: "<%3C>kbd<%3E>⇧ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + F<%3C>/kbd<%3E> on a cleared tile: Flags all adjacent covered tiles, if the number of remaining covered tiles matches the number on the selected tile"
-  helpPointerInstructions4: "<%3C>kbd<%3E>⌥ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E>⌘ + <pointerActionVerb><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + X<%3C>/kbd<%3E>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the selected tile"
+  helpPointerInstructions4: "<%3C>kbd<%3E>⌥ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E>⌘ + <pointerActionVerbInline><%3C>/kbd<%3E> or <%3C>kbd<%3E><mousePointerNounInline> + X<%3C>/kbd<%3E>: Shortcut to clear a tile and all its non-flagged neighbors. For safety, does nothing if any \"?\" flags are nearby, or if the number of flagged neighbors does match the number on the selected tile"
   helpDialogTitle: "Help"
   helpDismiss: "Thanks!"
   helpKeyboardEscapePressed: "esc|: Close popups, etc."
@@ -577,6 +577,8 @@ strings:
   touchPointerNounInline: touch
   tapAction: Tap
   tapActionInline: tap
+  touchControlRevealTiles: "◯ Clear"
+  touchControlFlagTiles: "▲ Flag"
   trophiesDialogDismiss: Done
   trophiesDialogTitle: "✷ Trophy Room ✷"
   undoLossAlertTitle: Undo Loss
