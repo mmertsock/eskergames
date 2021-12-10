@@ -3231,7 +3231,7 @@ class TextInputView extends InputView {
             elem.append(title);
         }
         var input = document.createElement("input");
-        input.type = "text";
+        input.type = config.inputType || "text";
         input.placeholder = config.placeholder || "";
         elem.append(input);
         return elem;

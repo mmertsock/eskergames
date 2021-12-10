@@ -3249,6 +3249,7 @@ class TouchControlsView {
         this.session = a.session;
         this.parent = a.elem;
         this.isEnabled = UI.isTouchFirst();
+        document.querySelector("body").classList.toggle("touch-input-enabled", this.isEnabled);
         this.parent.classList.toggle("hidden", !this.isEnabled);
         this.elem = a.elem.querySelector("row");
         this.elem.removeAllChildren();
@@ -4052,7 +4053,7 @@ class NewGameDialog extends GameDialog {
             click: () => this.validateAndStart()
         });
         this.contentElem = GameDialog.createContentElem();
-        var formElem = GameDialog.createFormElem();
+        let formElem = GameDialog.createFormElem();
 
         this.difficultyRules = Game.rules().difficulties.map(item => {
             return Object.assign({}, item, {
@@ -4093,6 +4094,7 @@ class NewGameDialog extends GameDialog {
             height: InputView.makeNumericRangeRule(customDifficulty.height)
         };
         this.customWidthInput = new TextInputView({
+            inputType: "number",
             title: Strings.template("newGameWidthInputLabelTemplate", customDifficulty.width),
             placeholder: Strings.str("newGameTileCountPlaceholder"),
             transform: InputView.integerTransform,
@@ -4101,8 +4103,14 @@ class NewGameDialog extends GameDialog {
                 if (isValid) { this.customMineCountInput.revalidate(); }
                 return isValid;
             }]
-        }).configure(input => input.value = lastCustomDifficultyConfig.width);
+        }).configure(input => {
+            input.value = lastCustomDifficultyConfig.width;
+            input.valueElem.autocapitalize = false;
+            input.valueElem.autocomplete = false;
+            input.valueElem.autocorrect = false;
+        });
         this.customHeightInput = new TextInputView({
+            inputType: "number",
             title: Strings.template("newGameHeightInputLabelTemplate", customDifficulty.height),
             placeholder: Strings.str("newGameTileCountPlaceholder"),
             transform: InputView.integerTransform,
@@ -4113,12 +4121,16 @@ class NewGameDialog extends GameDialog {
             }]
         }).configure(input => input.value = lastCustomDifficultyConfig.height);
         this.customMineCountInput = new TextInputView({
+            inputType: "number",
             title: Strings.template("newGameMineCountInputLabelTemplate", this.validMineCountRange),
             placeholder: Strings.str("newGameMineCountPlaceholder"),
             transform: InputView.integerTransform,
             validationRules: [(input) => this.validateMineCount(input)]
         }).configure(input => input.value = lastCustomDifficultyConfig.mineCount);
         this.customInputs = [this.customWidthInput, this.customHeightInput, this.customMineCountInput];
+        this.customInputs.forEach(input => {
+            input.valueElem.pattern = "\\d*";
+        });
 
         let next = this.difficulties.choices[customDifficultyIndex + 1].elem;
         this.customInputs.forEach(input => {
@@ -4390,7 +4402,13 @@ class SaveHighScoreDialog extends GameDialog {
                 transform: (value) => InputView.trimTransform(value).toLocaleUpperCase(),
                 // Count emoji as single characters
                 validationRules: [InputView.notEmptyOrWhitespaceRule, (input) => [...(input.value)].length <= 3]
-            }).configure(input => input.value = GameStorage.shared.lastPlayerName);
+            }).configure(input => {
+                input.value = GameStorage.shared.lastPlayerName;
+                input.valueElem.autocapitalize = false;
+                input.valueElem.autocomplete = false;
+                input.valueElem.autocorrect = false;
+                debugLog(input);
+            });
             this.allInputs = [this.playerNameInput];
         } else {
             this.allInputs = [];
