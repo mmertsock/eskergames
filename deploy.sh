@@ -2,6 +2,7 @@
 set -o pipefail
 
 DEST=$1
+mkdir -p "$DEST"
 
 cp charts.js "$DEST"
 cp city-content.yaml "$DEST"
@@ -48,7 +49,7 @@ cp sweep.js "$SWEEP_DEST"
 
 sed -i -e "s|./sweep.js|./$SWEEP_V_URL/sweep.js|g" -e "s|./g.css|./$SWEEP_V_URL/g.css|g" -e "s|./richard/|./$SWEEP_V_URL/|g" "$SWEEP_ROOT/index.html"
 
-V_CIV=$(cat version.txt)
+V_CIV=$(cat civ/version.txt)
 CIV_ROOT="$DEST/civ"
 CIV_V_LIB_URL="$V_CIV"
 CIV_V_APP_URL="$V_CIV/app"
@@ -58,6 +59,7 @@ CIV_APP_PATH="$CIV_ROOT/$CIV_V_APP_URL/"
 echo "Deploying civ version $V_CIV"
 
 mkdir -p "$CIV_APP_PATH"
+mkdir -p "$CIV_LIB_PATH"
 
 cd civ
 cp index.html "$CIV_ROOT/index.html"
