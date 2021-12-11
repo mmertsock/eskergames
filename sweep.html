@@ -177,16 +177,16 @@ main board canvas.richard {
     background-position: center;
 }
 
-main board canvas.richard.frame-0 { background-image: url('./richard/richard-0.jpg'); }
-main board canvas.richard.frame-1 { background-image: url('./richard/richard-1.jpg'); }
-main board canvas.richard.frame-2 { background-image: url('./richard/richard-2.jpg'); }
-main board canvas.richard.frame-3 { background-image: url('./richard/richard-3.jpg'); }
-main board canvas.richard.frame-4 { background-image: url('./richard/richard-4.jpg'); }
-main board canvas.richard.frame-5 { background-image: url('./richard/richard-5.jpg'); }
-main board canvas.richard.frame-6 { background-image: url('./richard/richard-4.jpg'); }
-main board canvas.richard.frame-7 { background-image: url('./richard/richard-3.jpg'); }
-main board canvas.richard.frame-8 { background-image: url('./richard/richard-2.jpg'); }
-main board canvas.richard.frame-9 { background-image: url('./richard/richard-1.jpg'); }
+.richard.frame-0, #preload-container-main-board.richard .frame-0 { background-image: url('./richard/richard-0.jpg'); }
+.richard.frame-1, #preload-container-main-board.richard .frame-1 { background-image: url('./richard/richard-1.jpg'); }
+.richard.frame-2, #preload-container-main-board.richard .frame-2 { background-image: url('./richard/richard-2.jpg'); }
+.richard.frame-3, #preload-container-main-board.richard .frame-3 { background-image: url('./richard/richard-3.jpg'); }
+.richard.frame-4, #preload-container-main-board.richard .frame-4 { background-image: url('./richard/richard-4.jpg'); }
+.richard.frame-5, #preload-container-main-board.richard .frame-5 { background-image: url('./richard/richard-5.jpg'); }
+.richard.frame-6 { background-image: url('./richard/richard-4.jpg'); }
+.richard.frame-7 { background-image: url('./richard/richard-3.jpg'); }
+.richard.frame-8 { background-image: url('./richard/richard-2.jpg'); }
+.richard.frame-9 { background-image: url('./richard/richard-1.jpg'); }
 
 board canvas {
     display: block;
@@ -690,6 +690,8 @@ comment.position-2 {
     import { initialize } from './sweep.js';
     initialize();
 </script>
+
+<span id="preload-container-main-board"><span class="frame-0"></span><span class="frame-1"></span><span class="frame-2"></span><span class="frame-3"></span><span class="frame-4"></span><span class="frame-5"></span></span>
 
 </body>
 </html>

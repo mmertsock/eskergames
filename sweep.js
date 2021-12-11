@@ -3648,6 +3648,7 @@ class GameBoardView {
             }
         }
         
+        document.querySelector(`#preload-container-main-board`).className = context.displayMode.id;
         if (Number.isInteger(context.displayMode.backgroundFrameCount)) {
             let frame = this.session.history.serializedMoves.length % context.displayMode.backgroundFrameCount;
             this.canvas.className = `${context.displayMode.id} frame-${frame}`;
