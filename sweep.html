@@ -141,8 +141,13 @@ body > footer a.tool.selected {
 body > header a.tool.new:before, body > footer a.tool.new:before {
     content: "•";
     margin-right: 0.1em;
-    font-size: 150%;
+    font-size: 15pt;
     color: var(--background-color-selected);
+    /* Don't grow taller than regular a.tool buttons. */
+    line-height: 11pt;
+    /* Adjust vertical alignment to account for artificial line-height. */
+    margin-top: 1pt;
+    margin-bottom: -1pt;
 }
 
 main {
