@@ -3248,7 +3248,7 @@ class TouchControlsView {
     constructor(a) {
         this.session = a.session;
         this.parent = a.elem;
-        this.isEnabled = UI.isTouchFirst();
+        this.isEnabled = UI.supportsTouch();
         document.querySelector("body").classList.toggle("touch-input-enabled", this.isEnabled);
         this.parent.classList.toggle("hidden", !this.isEnabled);
         this.elem = a.elem.querySelector("row");
@@ -3266,6 +3266,8 @@ class TouchControlsView {
             });
         }
         this.mode = TouchControlsView.modes.revealTilesMode;
+        
+        this.session.addDelegate(this);
     }
     
     get mode() { return this._mode; }
@@ -3282,6 +3284,10 @@ class TouchControlsView {
     
     flagTilesMode() {
         this.mode = TouchControlsView.modes.flagTilesMode;
+    }
+    
+    gameResumed(session, newGame, oldGame) {
+        this.mode = TouchControlsView.modes.revealTilesMode;
     }
 }
 TouchControlsView.modes = {
@@ -3344,8 +3350,8 @@ class UI {
         );
     }
     
-    static isTouchFirst() {
-        return !window.matchMedia("(any-pointer: fine)").matches;
+    static supportsTouch() {
+        return window.matchMedia("(any-pointer: coarse)").matches;
     }
     
     static isNarrowViewport() {
@@ -3530,7 +3536,7 @@ class GameStatusView {
 class GameBoardView {
     static initialize(config) {
         GameBoardView.metrics = config;
-        GameBoardView.metrics.inputAccomodationScale = UI.isTouchFirst() ? GameBoardView.metrics.touchScaleFactor : 1;
+        GameBoardView.metrics.inputAccomodationScale = UI.supportsTouch() ? GameBoardView.metrics.touchScaleFactor : 1;
     }
     
     static displayModes() {
@@ -4352,7 +4358,7 @@ class ShareDialog extends GameDialog {
             .cloneNode(true).addRemClass("hidden", false);
         
         let data = Sharing.gameBoardObject(session).toHexString();
-        if (!UI.isTouchFirst() && !UI.isNarrowViewport()) {
+        if (!UI.isNarrowViewport()) {
             data = data.hardWrap(64);
         }
         let stats = Object.assign({}, Game.formatStatistics(session.game.statistics), {
@@ -4451,7 +4457,6 @@ class SaveHighScoreDialog extends GameDialog {
 
 class HelpDialog extends GameDialog {
     static initialize() {
-        let isTouchFirst = UI.isTouchFirst();
         let elem = document.querySelector("body > help");
         if (!elem) { return; }
         
@@ -5222,6 +5227,4 @@ export let initialize = async function() {
     }
     Gaming.debugExpose("Sweep", { Game: Game, InteractiveSessionView: InteractiveSessionView, GameStorage: GameStorage });
     Gaming.debugExpose("Gaming", Gaming);
-    
-    debugLog(`Touch-first: ${UI.isTouchFirst()}. Narrow-viewport: ${UI.isNarrowViewport()}`);
 };

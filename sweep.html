@@ -104,11 +104,20 @@ header row {
 
 footer controls {
     position: fixed;
-    bottom: 8pt;
+    /* Padding rather than offset to prevent near-miss touches from hitting the game board instead of the controls. */
+    bottom: 0;
+    right: 0;
+    padding-top: 8px;
+    padding-right: 12px;
+    padding-bottom: 12px;
+    padding-left: 8px;
 }
 
-footer controls > row {
-    justify-content: flex-end;
+@supports (padding: env(safe-area-inset-bottom)) {
+    footer controls {
+        padding-bottom: calc(max(12px, env(safe-area-inset-bottom) + 8px));
+        padding-right: calc(max(12px, env(safe-area-inset-right) + 12px));
+    }
 }
 
 header a.tool {

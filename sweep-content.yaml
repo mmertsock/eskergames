@@ -97,10 +97,10 @@ gameTileView:
   coveredBevelStyle: "#eeeeee"
   coveredBevelWidth: 2
 gameTileViewState:
-  coveredColor: &COVEREDCOLOR "#c0c0c0"
+  coveredColor: &COVEREDCOLOR "hsl(0, 0%, 75%)"
   revealedColor: &REVEALEDCOLOR "hsl(0, 0%, 93%)"
   incorrectColor: &INCORRECTCOLOR "#ffcccc"
-  richard-coveredColor: &RICHARDCOVEREDCOLOR "hsl(0, 0%, 65%)"
+  richard-coveredColor: &RICHARDCOVEREDCOLOR "hsl(0, 0%, 70%)"
   richard-revealedColor: &RICHARDREVEALEDCOLOR "hsla(0, 0%, 93%, 0.3)"
   covered:
     fillColor: *COVEREDCOLOR
@@ -144,7 +144,7 @@ gameTileViewState:
         showsRainbow: true
       richard:
         fillColor: *RICHARDREVEALEDCOLOR
-        numberTextColors: ["#666666", "hsl(217, 50%, 30%)", "hsl(186, 50%, 30%)", "hsl(155, 50%, 30%)", "hsl(124, 50%, 30%)", "hsl(93, 50%, 30%)", "hsl(62, 50%, 30%)", "hsl(31, 50%, 30%)", "hsl(0, 50%, 30%)"]
+        numberTextColors: ["#666666", "hsl(217, 65%, 25%)", "hsl(186, 65%, 25%)", "hsl(155, 65%, 25%)", "hsl(124, 65%, 25%)", "hsl(93, 65%, 25%)", "hsl(62, 65%, 25%)", "hsl(31, 65%, 25%)", "hsl(0, 65%, 25%)"]
   mineTriggered:
     glyph: "✸"
     textColor: "#990000"
@@ -579,7 +579,7 @@ strings:
   touchPointerNounInline: touch
   touchControlRevealTiles: "◯ Clear"
   touchControlFlagTiles: "▲ Flag"
-  trophiesDialogDismiss: Done
+  trophiesDialogDismiss: "Yay!"
   trophiesDialogTitle: "✷ Trophy Room ✷"
   undoLossAlertTitle: Undo Loss
   undoLossAlertMessage: "Oops, let’s forget that happened. You can continue playing this game, but it won’t count toward high scores or achievements."
@@ -666,7 +666,7 @@ strings:
     saveHighScoreDisabledButton: OK
     saveHighScoreDisabledDialogTextTemplate: "Tu puntaje: <points>. Pero no puede guardar su puntaje alto porque recibió ayuda."
     showNewGameDialogButton: Nuevo
-    trophiesDialogDismiss: Hecho
+    trophiesDialogDismiss: "¡Hurra!"
 
 # arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
 pluralStrings:
