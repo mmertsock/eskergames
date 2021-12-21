@@ -99,6 +99,7 @@ export class ChartView {
         this.series = config.series; // [ChartDataSeriesPresentation]
         // ChartAxisPresentation objects
         this.axes = { x: config.axes.x, y: { primary: config.axes.y.primary, secondary: config.axes.y.secondary } };
+        this.pixelScale = config.pixelScale; // e.g. window.devicePixelRatio
         this.style = Object.assign({
             backgroundColor: "#ffffff",
             chartColor: null,
@@ -114,8 +115,7 @@ export class ChartView {
 
     render() {
         debugLog("~~~~~~~~~ render ChartView ~~~~~~~~~");
-
-        this.pixelScale = HTMLCanvasElement.getDevicePixelScale();
+        
         this.canvas.width = this.pixelScale * this.canvas.clientWidth;
         this.canvas.height = this.pixelScale * this.canvas.clientHeight;
 

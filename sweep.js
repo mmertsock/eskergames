@@ -10,7 +10,6 @@ const debugLog = Gaming.debugLog, debugWarn = Gaming.debugWarn, deserializeAsser
 
 const Dispatch = Gaming.Dispatch;
 const DispatchTarget = Gaming.DispatchTarget;
-const FlexCanvasGrid = Gaming.FlexCanvasGrid;
 const GameDialog = Gaming.GameDialog;
 const InputView = Gaming.FormValueView.InputView;
 const Point = Gaming.Point;
@@ -3007,7 +3006,7 @@ class GameBoardController {
         this.view = view;
         this.touchControlsView = touchControlsView;
         this.session = view.session;
-        this.pixelScale = window.devicePixelRatio;
+        this.pixelScale = view.pixelScale;
         this.controller = new PointInputController({
             eventTarget: view.canvas,
             trackAllMovement: false
@@ -3044,7 +3043,7 @@ class HoverController {
     constructor(view) {
         this.view = view;
         this.session = view.session;
-        this.pixelScale = window.devicePixelRatio;
+        this.pixelScale = view.pixelScale;
         this.inputController = new PointInputController({
             eventTarget: view.canvas,
             trackAllMovement: true
@@ -3362,9 +3361,19 @@ class UI {
         return !!Gaming.GameDialogManager.shared.currentDialog;
     }
     
-    // for any canvas where width = devicePixelRatio * clientWidth
-    static resolveCanvasFont(config, inputAccomodationScale) {
-        let size = config[1] * window.devicePixelRatio * (inputAccomodationScale ? inputAccomodationScale : 1);
+    static gameBoardPixelRatio() {
+        // devicePixelRatio > 2 produce canvas with raw pixel sizes larger than allowed on some devices.
+        // See https://github.com/mmertsock/eskergames/issues/4.
+        return Math.min(window.devicePixelRatio, 2);
+    }
+    
+    static devicePixelRatio() {
+        return window.devicePixelRatio;
+    }
+    
+    // for any canvas where width = pixelScale * clientWidth
+    static resolveCanvasFont(config, pixelScale, inputAccomodationScale) {
+        let size = config[1] * (pixelScale ? pixelScale : UI.devicePixelRatio()) * (inputAccomodationScale ? inputAccomodationScale : 1);
         let units = config[2];
         return String.fromTemplate(config[0], { size: `${size}${units}` });
     }
@@ -3553,6 +3562,7 @@ class GameBoardView {
         this.tileViews = [];
         this.boardContainer = config.boardContainer;
         this.canvas = config.boardContainer.querySelector("canvas");
+        this.pixelScale = UI.gameBoardPixelRatio();
         this.game = config.session.game;
         if (!!config.interactive) {
             this.controller = new GameBoardController(this, config.touchControlsView);
@@ -3597,7 +3607,6 @@ class GameBoardView {
         // tilePlane size = raw device pixel size (240)
         // canvas style width/height = 240
         // canvas.width/height == 240
-        this.pixelScale = window.devicePixelRatio;
         
         const tileDeviceWidth = GameBoardView.metrics.tileWidth * this.pixelScale * GameBoardView.metrics.inputAccomodationScale;
         this.tilePlane = new TilePlane(this.game.difficulty, tileDeviceWidth);
@@ -3697,7 +3706,7 @@ class GameBoardView {
 class GameTileView {
     static initialize(config) {
         GameTileView.config = config;
-        GameTileView.config.font = UI.resolveCanvasFont(GameTileView.config.font, GameBoardView.metrics.inputAccomodationScale);
+        GameTileView.config.font = UI.resolveCanvasFont(GameTileView.config.font, UI.gameBoardPixelRatio(), GameBoardView.metrics.inputAccomodationScale);
     }
 
     constructor(model, boardView) {
@@ -4607,6 +4616,7 @@ class GameAnalysisDialog extends GameDialog {
             title: Strings.str("analysisViewChartTitle"),
             series: presentation,
             axes: axes,
+            pixelScale: UI.devicePixelRatio(),
             style: metrics
         });
     }

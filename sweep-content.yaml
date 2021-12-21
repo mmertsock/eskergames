@@ -62,7 +62,7 @@ keyboard:
     - [KeyF, flagTileUnderPointer]
     - [KeyX, clearNeighborsUnderPointer]
 gameBoardView:
-  touchScaleFactor: 1.25
+  touchScaleFactor: 1.125
   tileWidth: 24
   displayModes:
     - id: plain
