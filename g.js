@@ -3483,6 +3483,7 @@ export class ToolButton {
             var subject = typeof(config.clickScriptSubject) === 'undefined' ? this : config.clickScriptSubject;
             this.elem.addGameCommandEventListener("click", true, config.clickScript, subject);
         }
+        this.elem.addEventListener("webkitmouseforcewillbegin", evt => { evt.preventDefault(); });
         if (config.parent) {
             config.parent.append(this.elem);
         }
