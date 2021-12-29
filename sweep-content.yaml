@@ -567,7 +567,10 @@ strings:
   showNewGameDialogButton: New
   showOptionsDialogButton: Options
   showTrophiesButton: Trophies
-  # solverConvolutionFilterActionDescription: "Solver: applied pattern ”%@“"
+  solverConvolutionFilterActionDescription: "Solver: applied pattern ”<fullName>“"
+  solverConvolutionPatternFullName: "<name> (<variation>)"
+  solverConvolutionPatternFlippedH: "Flipped-x"
+  solverConvolutionPatternFlippedV: "Flipped-y"
   solverClearFullyFlaggedTileActionDescription: "Solver: cleared neighborhood of fully flagged tile"
   solverClearHintedTileActionDescription: "Solver: cleared tile indicated by last hint"
   solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: <flaggedKnownMines#length#formattedLength>"
@@ -694,6 +697,7 @@ pluralStrings:
   mineCountCleared: ["0 mines cleared", "1 mine cleared", "# mines cleared"]
   minedNeighborCount: ["0 adjacent mines", "1 adjacent mine", "# adjacent mines"]
   flaggedKnownMines: ["Flagged 0 known mines", "Flagged a known mine", "Flagged # known mines"]
+  solverConvolutionPatternRotated: ["Rotated", "Rotated", "Rotated x#"]
   _es:
     clearedTileCountPhrase: ["descubierto 0 cuadrados", "descubierto un cuadrado", "descubierto # cuadrados"]
     gotPoints: ["obtuve 0 puntos", "obtuve 1 punto", "obtuve # puntos"]

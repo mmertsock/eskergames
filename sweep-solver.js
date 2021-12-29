@@ -313,7 +313,7 @@ class ConvolutionPatternSolver extends Solver {
     
     constructor(pattern) {
         super();
-        this.pattern= pattern;
+        this.pattern = pattern;
     }
     
     tryStep(session) {
@@ -335,7 +335,7 @@ class ConvolutionPatternSolver extends Solver {
             actionResult: new ActionResult({
                 action: actions[0],
                 tile: actions[0].tile,
-                description: `Solver: applied pattern “${this.pattern.fullName}”`, // TODO localize
+                description: Strings.template("solverConvolutionFilterActionDescription", { fullName: this.pattern.fullName }),
             })
         });
         debugLog(result);
@@ -343,7 +343,6 @@ class ConvolutionPatternSolver extends Solver {
     }
 }
 Solver.allTypes["ConvolutionPatternSolver"] = ConvolutionPatternSolver;
-
 
 export class ConvolutionPattern {
     // a.name: description text
@@ -380,7 +379,7 @@ export class ConvolutionPattern {
     
     get fullName() {
         if (this.variation) {
-            return `${this.name} (${this.variation})`;
+            return Strings.template("solverConvolutionPatternFullName", this);
         }
         return this.name;
     }
@@ -448,7 +447,7 @@ export class ConvolutionPattern {
     rotated(turns) {
         let a = {
             name: this.fullName,
-            variation: "Rotated" + (turns > 1 ? ` x${turns}` : ""),
+            variation: Strings.pluralize("solverConvolutionPatternRotated", turns),
             match: this.matchDescription.split(";").join("\n"),
             action: this.actionDescription.split(";").join("\n")
         };
@@ -465,7 +464,7 @@ export class ConvolutionPattern {
     flippedHorizontally() {
         let a = {
             name: this.fullName,
-            variation: "Flipped-x",
+            variation: Strings.str("solverConvolutionPatternFlippedH"),
             match: this.matchDescription.split(";")
                 .map(line => line.split("").reverse().join("")).join("\n"),
             action: this.actionDescription.split(";")
@@ -478,7 +477,7 @@ export class ConvolutionPattern {
     flippedVertically() {
         let a = {
             name: this.fullName,
-            variation: "Flipped-y",
+            variation: Strings.str("solverConvolutionPatternFlippedV"),
             match: this.matchDescription.split(";").reverse().join("\n"),
             action: this.actionDescription.split(";").reverse().join("\n")
         };
