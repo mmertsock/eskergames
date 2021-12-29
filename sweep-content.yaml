@@ -239,14 +239,22 @@ achievements:
     name: achievementsClearedTilesAllTimeName
     value: achievementsClearedTilesAllTimeValue
     clearedTileCount: 20000
-  Achievement.Won100MinesAllTime: &WONMINESALLTIME
+  Achievement.WonMinesAllTime1:
     name: achievementsWonMinesAllTimeName
     value: achievementsWonMinesAllTimeValue
-  Achievement.Won2000MinesAllTime: *WONMINESALLTIME
-  Achievement.TotalPlayTime10Hours: &TOTALPLAYTIME
+    totalMinesWon: 100
+  Achievement.WonMinesAllTime2:
+    name: achievementsWonMinesAllTimeName
+    value: achievementsWonMinesAllTimeValue
+    totalMinesWon: 2000
+  Achievement.TotalPlayTimeHours1:
     name: achievementsTotalPlayTimeName
     value: achievementsTotalPlayTimeValue
-  Achievement.TotalPlayTime100Hours: *TOTALPLAYTIME
+    hoursElapsed: 10
+  Achievement.TotalPlayTimeHours2:
+    name: achievementsTotalPlayTimeName
+    value: achievementsTotalPlayTimeValue
+    hoursElapsed: 100
 orderedAchievements:
   - "Achievement.Won1StarGame"
   - "Achievement.Won2StarGame"
@@ -266,10 +274,10 @@ orderedAchievements:
   - "Achievement.Won100Stars"
   - "Achievement.ClearedNTilesAllTime1"
   - "Achievement.ClearedNTilesAllTime2"
-  - "Achievement.Won100MinesAllTime"
-  - "Achievement.Won2000MinesAllTime"
-  - "Achievement.TotalPlayTime10Hours"
-  - "Achievement.TotalPlayTime100Hours"
+  - "Achievement.WonMinesAllTime1"
+  - "Achievement.WonMinesAllTime2"
+  - "Achievement.TotalPlayTimeHours1"
+  - "Achievement.TotalPlayTimeHours2"
 
 analysisView:
   historyChart:

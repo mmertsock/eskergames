@@ -2271,8 +2271,8 @@ export class Achievement {
             "Achievement.HighestScoreInFiveStarGame": Achievement.HighestScoreInFiveStarGame,
             "Achievement.HighestScoreWithoutFlags": Achievement.HighestScoreWithoutFlags,
             "Achievement.LongestGamePlayed": Achievement.LongestGamePlayed,
-            "Achievement.TotalPlayTime10Hours": Achievement.TotalPlayTime10Hours,
-            "Achievement.TotalPlayTime100Hours": Achievement.TotalPlayTime100Hours,
+            "Achievement.TotalPlayTimeHours1": Achievement.TotalPlayTimeHours1,
+            "Achievement.TotalPlayTimeHours2": Achievement.TotalPlayTimeHours2,
             "Achievement.Uncovered7NeighborCountTile": Achievement.Uncovered7NeighborCountTile, // TODO why not working?
             "Achievement.Uncovered8NeighborCountTile": Achievement.Uncovered8NeighborCountTile,
             "Achievement.Won1StarGame": Achievement.Won1StarGame,
@@ -2281,8 +2281,8 @@ export class Achievement {
             "Achievement.Won4StarGame": Achievement.Won4StarGame,
             "Achievement.Won5StarGame": Achievement.Won5StarGame,
             "Achievement.Won100Stars": Achievement.Won100Stars,
-            "Achievement.Won100MinesAllTime": Achievement.Won100MinesAllTime,
-            "Achievement.Won2000MinesAllTime": Achievement.Won2000MinesAllTime,
+            "Achievement.WonMinesAllTime1": Achievement.WonMinesAllTime1,
+            "Achievement.WonMinesAllTime2": Achievement.WonMinesAllTime2,
         };
         AchievementStorage.shared = new AchievementStorage.Local();
         let data = AchievementStorage.shared.loadAll();
@@ -2740,6 +2740,11 @@ class WonMinesAllTime extends Achievement {
         return { value: Number.uiInteger(achievement.value) };
     }
     
+    setDefaultConfig() {
+        this.value = Game.content.achievements[`Achievement.${this.constructor.name}`].totalMinesWon;
+        this.status = Achievement.Status.hidden;
+    }
+    
     isValid(session) {
         return session.isClean
             && (this.status != Achievement.Status.achieved)
@@ -2754,18 +2759,10 @@ class WonMinesAllTime extends Achievement {
     }
 }
 
-Achievement.Won100MinesAllTime = class Won100MinesAllTime extends WonMinesAllTime {
-    setDefaultConfig() {
-        this.value = 100;
-        this.status = Achievement.Status.hidden;
-    }
+Achievement.WonMinesAllTime1 = class WonMinesAllTime1 extends WonMinesAllTime {
 };
 
-Achievement.Won2000MinesAllTime = class Won2000MinesAllTime extends WonMinesAllTime {
-    setDefaultConfig() {
-        this.value = 2000;
-        this.status = Achievement.Status.hidden;
-    }
+Achievement.WonMinesAllTime2 = class WonMinesAllTime2 extends WonMinesAllTime {
 };
 
 class WonStars extends Achievement {
@@ -2859,13 +2856,17 @@ Achievement.Won100Stars = class Won100Stars extends Achievement {
 };
 
 class TotalPlayTimeAchievement extends Achievement {
+    static hoursElapsed() {
+        return Game.content.achievements[`Achievement.${this.name}`].hoursElapsed;
+    }
+    
     static formatValue(achievement) {
         return { value: Number.uiInteger(achievement.value) };
     }
     
     setDefaultConfig() {
         super.setDefaultConfig();
-        this.value = this.constructor.hours();
+        this.value = this.constructor.hoursElapsed();
         this.status = Achievement.Status.hidden;
     }
     
@@ -2877,19 +2878,17 @@ class TotalPlayTimeAchievement extends Achievement {
     
     gameCompleted(session, date) {
         let duration = session.statsHistory.summary.totalActiveTimeElapsed;
-        let hours = duration / (3600000.0);
-        if (hours >= this.value) {
+        let hoursElapsed = duration / (3600000.0);
+        if (hoursElapsed >= this.value) {
             this.achieved(this.value, date);
         }
     }
 }
 
-Achievement.TotalPlayTime10Hours = class TotalPlayTime10Hours extends TotalPlayTimeAchievement {
-    static hours() { return 10; }
+Achievement.TotalPlayTimeHours1 = class TotalPlayTimeHours1 extends TotalPlayTimeAchievement {
 };
 
-Achievement.TotalPlayTime100Hours = class TotalPlayTime100Hours extends TotalPlayTimeAchievement {
-    static hours() { return 100; }
+Achievement.TotalPlayTimeHours2 = class TotalPlayTimeHours2 extends TotalPlayTimeAchievement {
 };
 
 function mark__User_Input() {} // ~~~~~~ User Input ~~~~~~
