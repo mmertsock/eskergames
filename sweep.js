@@ -2261,8 +2261,8 @@ function mark__Achievement() {} // ~~~~~~ Achievement ~~~~~~
 export class Achievement {
     static initialize(content) {
         Achievement.allTypes = {
-            "Achievement.Cleared1000TilesAllTime": Achievement.Cleared1000TilesAllTime,
-            "Achievement.Cleared20000TilesAllTime": Achievement.Cleared20000TilesAllTime,
+            "Achievement.ClearedNTilesAllTime1": Achievement.ClearedNTilesAllTime1,
+            "Achievement.ClearedNTilesAllTime2": Achievement.ClearedNTilesAllTime2,
             "Achievement.HighestScoreInAnyGame": Achievement.HighestScoreInAnyGame,
             "Achievement.Moo": Achievement.Moo,
             "Achievement.MostClearedInSingleMove": Achievement.MostClearedInSingleMove,
@@ -2704,19 +2704,34 @@ class ClearedTilesAllTime extends Achievement {
             this.achieved(this.value, date);
         }
     }
-}
-
-Achievement.Cleared1000TilesAllTime = class Cleared1000TilesAllTime extends ClearedTilesAllTime {
+    
     setDefaultConfig() {
-        this.value = 1000;
+        this.value = Game.content.achievements[`Achievement.${this.constructor.name}`].clearedTileCount;
         this.status = Achievement.Status.hidden;
     }
+}
+
+Achievement.ClearedNTilesAllTime1 = class ClearedNTilesAllTime1 extends ClearedTilesAllTime {
 };
 
-Achievement.Cleared20000TilesAllTime = class Cleared1000TilesAllTime extends ClearedTilesAllTime {
-    setDefaultConfig() {
-        this.value = 20000;
-        this.status = Achievement.Status.hidden;
+Achievement.ClearedNTilesAllTime2 = class ClearedNTilesAllTime2 extends ClearedTilesAllTime {
+    constructor(config) {
+        super(config);
+        this.target.register(Achievement.achievementUpdatedEvent, (e, achievement) => {
+            this.unlockIfReady(achievement);
+        });
+    }
+    
+    // achieve ClearedNTilesAllTime1: un-hide ClearedNTilesAllTime2
+    unlockIfReady(trigger) {
+        if ((this.status == Achievement.Status.hidden)
+            && (trigger != this)
+            && (trigger instanceof Achievement.ClearedNTilesAllTime1)
+            && (trigger.status == Achievement.Status.achieved)) {
+            debugLog(`unlockIfReady: trigger=${trigger.debugDescription} this=${this.debugDescription}`);
+            this.status = Achievement.Status.none;
+            this.save();
+        }
     }
 };
 
@@ -4423,7 +4438,7 @@ class SaveHighScoreDialog extends GameDialog {
                 input.valueElem.autocapitalize = false;
                 input.valueElem.autocomplete = false;
                 input.valueElem.autocorrect = false;
-                debugLog(input);
+                // debugLog(input);
             });
             this.allInputs = [this.playerNameInput];
         } else {

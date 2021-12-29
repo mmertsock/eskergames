@@ -220,7 +220,7 @@ achievements:
     name: achievementsMostClearedInSingleMoveName
   Achievement.MostPointsPerMinute:
     name: achievementsMostPointsPerMinuteName
-    minimumDurationMS: 5000
+    minimumDurationMS: 20000
   Achievement.Moo:
     name: achievementsMooName
     formattedValue: "🐄"
@@ -231,10 +231,14 @@ achievements:
   Achievement.Won100Stars:
     name: achievementsWonAllTimeStarsName
     value: achievementsWonAllTimeStarsValue
-  Achievement.Cleared1000TilesAllTime: &CLEAREDALLTIME
+  Achievement.ClearedNTilesAllTime1:
     name: achievementsClearedTilesAllTimeName
     value: achievementsClearedTilesAllTimeValue
-  Achievement.Cleared20000TilesAllTime: *CLEAREDALLTIME
+    clearedTileCount: 2000
+  Achievement.ClearedNTilesAllTime2:
+    name: achievementsClearedTilesAllTimeName
+    value: achievementsClearedTilesAllTimeValue
+    clearedTileCount: 20000
   Achievement.Won100MinesAllTime: &WONMINESALLTIME
     name: achievementsWonMinesAllTimeName
     value: achievementsWonMinesAllTimeValue
@@ -260,8 +264,8 @@ orderedAchievements:
   - "Achievement.Uncovered7NeighborCountTile"
   - "Achievement.Uncovered8NeighborCountTile"
   - "Achievement.Won100Stars"
-  - "Achievement.Cleared1000TilesAllTime"
-  - "Achievement.Cleared20000TilesAllTime"
+  - "Achievement.ClearedNTilesAllTime1"
+  - "Achievement.ClearedNTilesAllTime2"
   - "Achievement.Won100MinesAllTime"
   - "Achievement.Won2000MinesAllTime"
   - "Achievement.TotalPlayTime10Hours"
