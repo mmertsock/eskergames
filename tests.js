@@ -1157,7 +1157,7 @@ let missingStringsTests = async function() {
             let langStrings = strings[lang];
             let keysNotFound = [];
             keys.forEach(key => {
-                if (!langStrings.hasOwnProperty(key)) {
+                if (!langStrings.hasOwnProperty(key) || langStrings[key] == "TODO") {
                     keysNotFound.push(key);
                 }
             });

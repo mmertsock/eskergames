@@ -427,6 +427,7 @@ export class Game {
         data.totalTileCount = Game.integerFormatObject(data.totalTileCount);
         data.assertMineFlagCount = Game.integerFormatObject(data.assertMineFlagCount);
         data.clearedTileCount = Game.integerFormatObject(data.clearedTileCount);
+        data.points = Game.integerFormatObject(data.points);
         data.starCount = Game.integerFormatObject(data.starCount);
         return data;
     }
