@@ -1161,7 +1161,7 @@ let missingStringsTests = async function() {
                     keysNotFound.push(key);
                 }
             });
-            if (!this.assertEqual(keysNotFound.length, 0, `Keys not found in ${a.rootKey}/${lang}: ${keysNotFound.length}`)) {
+            if (!this.assertEqual(keysNotFound.length, 0, `Keys not found in ${a.rootKey}/${lang}: ${keysNotFound.length} out of ${keys.length}`)) {
                 logTestMsg(keysNotFound.join("\n"));
             }
             

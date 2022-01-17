@@ -198,13 +198,15 @@ storiesView:
       # loses
       displayMoves: [99, 77, 76, 85]
 achievements:
-  Achievement.Won1StarGame: &WONSTARS
-    name: achievementsWonStarsName
+  Achievement.Won1StarGame:
+    name: achievementsWonStarsName1
     value: achievementsWonStarsValue
-  Achievement.Won2StarGame: *WONSTARS
-  Achievement.Won3StarGame: *WONSTARS
-  Achievement.Won4StarGame: *WONSTARS
-  Achievement.Won5StarGame: *WONSTARS
+  Achievement.Won2StarGame: &WONSTARSN
+    name: achievementsWonStarsNameN
+    value: achievementsWonStarsValue
+  Achievement.Won3StarGame: *WONSTARSN
+  Achievement.Won4StarGame: *WONSTARSN
+  Achievement.Won5StarGame: *WONSTARSN
   Achievement.HighestScoreInAnyGame:
     name: achievementsHighestScoreInAnyGameName
   Achievement.HighestScoreInFiveStarGame:
@@ -445,7 +447,8 @@ strings:
   achievementsUncoveredNeighborCountTileValue: "<minedNeighborCount>✷"
   achievementsWonAllTimeStarsName: "Won games totaling <value> difficulty stars"
   achievementsWonAllTimeStarsValue: "<value>★"
-  achievementsWonStarsName: "Won a <value>-star difficulty game"
+  achievementsWonStarsName1: "Won a 1-star difficulty game"
+  achievementsWonStarsNameN: "Won a <value>-star difficulty game"
   achievementsWonStarsValue: "<value>★"
   achievementsWonMinesAllTimeName: "Cleared <value> total mines in all winning games"
   achievementsWonMinesAllTimeValue: "<value>✷"
@@ -461,7 +464,6 @@ strings:
   difficultyChoiceLabelTemplate: "<name>"
   displayOptionsDebugModeToggleLabel: "👾 Debug Mode"
   displayOptionsDisplayModeLabel: Display Mode
-  displayOptionsRainbowToggleLabel: "🌈 Rainbow Mode!"
   displayOptionsStoriesToggleLabel: "📀 Show Stories"
   displayOptionsTabLabel: Display
   errorAlertDismissButton: Bummer
@@ -688,6 +690,102 @@ strings:
     saveHighScoreDisabledDialogTextTemplate: "Tu puntaje: <points>. Pero no puede guardar su puntaje alto porque recibió ayuda."
     showNewGameDialogButton: Nuevo
     trophiesDialogDismiss: "¡Hurra!"
+    achievementsClearedTilesAllTimeName: "Descubierto <value> cuadrados en total en todos los juegos (gane o pierda)"
+    achievementsClearedTilesAllTimeValue: "<value>"
+    achievementsDialogTitle: Logros
+    achievementsHighestScoreInFiveStarGameName: "Puntaje más alto en dificultad de 5 estrellas (gane o pierda)"
+    achievementsHighestScoreInAnyGameName: "Puntaje más alto en cualquier juego (gane o pierda)"
+    achievementsHighestScoreWithoutFlags: "Puntaje más alto sin usar marcadores de minas"
+    achievementsLongestGamePlayedName: "El juego más largo que jugaste"
+    achievementsLongestGamePlayedValue: "<minutes>m <seconds>s"
+    achievementsMooName: "¡Desplegaste a la vaca para que se comiera una mina!"
+    achievementsMostClearedInSingleMoveName: "Área más grande despejada con un solo movimiento"
+    achievementsMostPointsInSingleMoveName: "La mayoría de los puntos que ganó en un solo movimiento"
+    achievementsMostPointsPerMinuteName: "La mayor cantidad de puntos por minuto que ganó en un juego ganador"
+    achievementsTotalPlayTimeName: "Tiempo total de juego de <value> horas"
+    achievementsTotalPlayTimeValue: "<value>h"
+    achievementsUncoveredNeighborCountTileName: "¡Descubriste un cuadrado con <minedNeighborCount#minedNeighborCount#formattedMinedNeighborCount>!"
+    achievementsUncoveredNeighborCountTileValue: "<minedNeighborCount>✷"
+    achievementsWonAllTimeStarsName: "Has ganado juegos con un total de <value> estrellas de dificultad"
+    achievementsWonAllTimeStarsValue: "<value>★"
+    achievementsWonStarsName1: "Ganaste un juego de dificultad de 1 estrella"
+    achievementsWonStarsNameN: "Ganaste un juego de dificultad de <value> estrellas"
+    achievementsWonStarsValue: "<value>★"
+    achievementsWonMinesAllTimeName: "Descubriste <value> minas en total en todos los juegos ganadores"
+    achievementsWonMinesAllTimeValue: "<value>✷"
+    displayOptionsDebugModeToggleLabel: "👾 Modo de Depuración"
+    displayOptionsDisplayModeLabel: "Modo de Visualización"
+    displayOptionsStoriesToggleLabel: "📀 Mostrar Historias"
+    displayOptionsTabLabel: "Presentación"
+    failedToParseGame: "Clave de juego no válido :("
+    gameBoardViewDisplayModePlain: "🕴 Normal"
+    gameBoardViewDisplayModeRainbow: "🌈 ¡Modo Arco Iris!"
+    gameBoardViewDisplayModeRichard: "🖼 ¡Imagen!"
+    gameDifficultyImport: Importar una Clave
+    gameVersionLabelTemplate: "Sweep <appVersion>"
+    helpContentHowToPlayHeader: Instrucciones para jugar
+    helpContentHowToPlay1: Descubre todas los cuadrados mientras evitas las minas
+    helpContentHowToPlay2: "Un cuadrado descubierta tiene un número que indica cuántas de los ocho cuadrados adyacentes tienen minas. Ningún número significa que ninguna de los cuadrados adyacentes tiene minas"
+    helpContentHowToPlay3: "Trabaje incrementalmente desde el borde de los cuadrados que ha descubierto, deduciendo qué cuadrados son seguras en función de la disposición de los números"
+    helpContentShortcutsHeader: "Atajos de teclado"
+    helpPointerInstructionsHeader: "Interacciones con el ratón"
+    helpPointerInstructionsSubHeader: "Haga clic para actuar directamente sobre un cuadrado, o use el comando de teclado indicado mientras apunta el cursor a un cuadrado. Hay tres grupos de teclas de teclado disponibles: <kbd>SDF</kbd>, <kbd>JKL</kbd>, y <kbd>XCV</kbd>."
+    helpPointerInstructions1: "<kbd>clic</kbd> o <kbd>ratón + D/K/C</kbd>: Descubre el cuadrado seleccionado y los cuadrados adyacentes si el recuento de minas es cero"
+    helpPointerInstructions2: "<kbd>⇧ + clic</kbd> o <kbd>ratón + F/J/V</kbd> en un cuadrado cubierto: Alterna banderas para marcar posibles minas. Por seguridad, no puedes descubrir un cuadrado con bandera"
+    helpPointerInstructions3: "<kbd>⇧ + clic</kbd> o <kbd>ratón + F/J/V</kbd> en un cuadrado descubierto: Marca todos los cuadrados cubiertos adyacentes, si el número de cuadrados cubiertos restantes coincide con el número del cuadrado seleccionado"
+    helpPointerInstructions4: "<kbd>⌥ + clic</kbd> o <kbd>⌘ + clic</kbd> o <kbd>ratón + S/L/X</kbd>: Acceso directo para descubrir un cuadrado y todos sus vecinos no bandera. Por seguridad, no hace nada si es que hay banderas \"?\" cerca, o si el número de vecinos marcados coincide con el número en el cuadrado seleccionado"
+    helpTouchInstructionsHeader: "Interacciones táctiles"
+    helpTouchInstructionsSubHeader: "Utilice los botones DESCUBRIR y MARCAR para cambiar de modo:"
+    helpTouchInstructions1: "Modo <kbd>DESCUBRIR</kbd>, toque un cuadrado cubierto: Descubre el cuadrado seleccionado y los cuadrados adyacentes si el recuento de minas es cero"
+    helpTouchInstructions2: "Modo <kbd>DESCUBRIR</kbd>, toque un cuadrado descubierto: Acceso directo para descubrir un cuadrado y todos sus vecinos no bandera. Por seguridad, no hace nada si es que hay banderas \"?\" cerca, o si el número de vecinos marcados coincide con el número en el cuadrado seleccionado"
+    helpTouchInstructions3: "Modo <kbd>MARCAR</kbd>, toque un cuadrado cubierto: Alterna banderas para marcar posibles minas. Por seguridad, no puedes descubrir un cuadrado con bandera"
+    helpTouchInstructions4: "Modo <kbd>MARCAR</kbd>, toque un cuadrado descubierto: Marca todos los cuadrados cubiertos adyacentes, si el número de cuadrados cubiertos restantes coincide con el número del cuadrado seleccionado"
+    helpKeyboardMoo: "🐄|: moo"
+    helpKeyboardMooTooltip: "%> moo ⏎"
+    helpKeyboardShowTrophies: "*|: Mostrar sala de trofeos"
+    helpKeyboardShowOptionsDialog: ",|: Mostrar opciones"
+    importCodeTitle: Clave
+    importCodePlaceholder: "Pega el clave del juego aquí"
+    importCodeValidMessage: "¡Se reconoce el clave del juego!"
+    lostAlertUndoButton: Desabrochar
+    mooActionDescription: mooooo
+    optionsDialogTitle: Opciones
+    optionsDialogDismiss: Muy bien
+    schemaVersionUnsupported: "Versión del juego no compatible"
+    setFlagAssertMineActionDescription: Marcado una mina
+    setFlagMaybeMineActionDescription: Marcado como una posible mina
+    setFlagNoneActionDescription: "Se eliminó un marcador de mina"
+    shareButton: "Compartir" # TODO should it be Reparto instead?
+    shareDialogDismiss: Hecho
+    shareDialogInstructions: "Copie y comparta/guarde el siguiente clave. Para usarlo, vaya a Nuevo, seleccione Importar y pegue el clave."
+    shareDialogTitle: "Compartición"
+    shareGameBoardCodeTemplate: "-- Prueba este juego Sweep: <width>x<height>, <mineCount#mineCount#formattedMineCount>, <starCount>/<maxStarCount> de dificultad --\n<data>"
+    showAnalysisButton: "Estadísticas"
+    showHelpButton: Ayuda
+    showHintActionDescription: Tienes un indicio
+    showHintButton: Indicio
+    showHintErrorText: "No puedo encontrar ninguno indicio para mostrar"
+    showOptionsDialogButton: Opciones
+    showTrophiesButton: Trofeos
+    # TODO: Solver
+    solverConvolutionFilterActionDescription: "Solver: patrón aplicado <fullName>"
+    solverConvolutionPatternFullName: "<name> (<variation>)"
+    solverConvolutionPatternFlippedH: "Volteado-x"
+    solverConvolutionPatternFlippedV: "Volteado-y"
+    solverClearFullyFlaggedTileActionDescription: "Solver: vecinos descubiertos de cuadrados completamente marcados"
+    solverClearHintedTileActionDescription: "Solver: cuadrado descubierto indicado por lo último indicio" # TODO ficha == thin flat piece used in board games. So use that intsead of cuadrado?
+    solverFlaggedExactCoveredTileMatchActionDescriptionTemplate: "Solver: <flaggedKnownMines#length#formattedLength>"
+    solverGotStuckMessage: "¡No sé qué hacer!"
+    solverGuessAtStartActionDescription: "Adiviné una ficha para empezar el juego"
+    solverNameClearBehind1Gate: "Clear behind a 1-gate"
+    solverNameClearFullyFlaggedTileSolver: "Descubre a todos los vecinos restantes de una ficha totalmente de bandera"
+    randomNames:
+      - { full: "Stumbleduckle", possessive: "Stumbleduckle’s", initials: S }
+      - { full: "Honeystring", possessive: "Honeystring’s", initials: H }
+      - { full: "Ringo Shuffles", possessive: "Ringo Shuffles’", initials: R }
+      - { full: "Ponny Stonecharle", possessive: "Ponny Stonecharle’s", initials: P }
+      - { full: "Desert Cat", possessive: "Desert Cat’s", initials: D }
+      - { full: "Annata Shortscale", possessive: "Annata Shortscale’s", initials: A }
 
 # arrays for [zero, one, many] cases. Optional fourth element is placeholder character, default is '#'
 pluralStrings:
@@ -700,7 +798,7 @@ pluralStrings:
   solverConvolutionPatternRotated: ["Rotated", "Rotated", "Rotated x#"]
   _es:
     clearedTileCountPhrase: ["descubierto 0 cuadrados", "descubierto un cuadrado", "descubierto # cuadrados"]
-    gotPoints: ["obtuve 0 puntos", "obtuve 1 punto", "obtuve # puntos"]
+    gotPoints: ["ganaste 0 puntos", "ganaste 1 punto", "ganaste # puntos"]
     mineCount: ["0 minas", "1 mina", "# minas"]
     mineCountCleared: ["0 minas despejadas", "1 mina despejada", "# minas despejadas"]
     flaggedKnownMines: ["Marcado 0 minas conocidas", "Marcado una mina conocida", "Marcado # minas conocidas"]
