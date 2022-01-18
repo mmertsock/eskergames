@@ -2923,11 +2923,13 @@ class PointInputSequence {
     get latestPoint() { return this._point(this.events[this.events.length - 1]); }
     get totalOffset() { return this.latestPoint.manhattanDistanceFrom(this.firstPoint); }
     get isSingleClick() {
+        // Gecko reports offsetX/Y == 0 for some events, so use clientX/Y for the movement threshold test.
         return this.latestEvent.type == "pointerup"
-            && this.latestPoint.manhattanDistanceFrom(this.firstPoint).magnitude <= PointInputSequence.singleClickMovementTolerance;
+            && this._clientPoint(this.latestEvent).manhattanDistanceFrom(this._clientPoint(this.firstEvent)).magnitude <= PointInputSequence.singleClickMovementTolerance;
     }
     add(event) { this.events.push(event); }
     _point(event) { return new Point(event.offsetX, event.offsetY); }
+    _clientPoint(event) { return new Point(event.clientX, event.clientY); }
 }
 PointInputSequence.singleClickMovementTolerance = 3;
 
