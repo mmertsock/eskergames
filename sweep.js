@@ -5229,7 +5229,16 @@ class StoryGamePlayer {
 }
 
 export let initialize = async function() {
-    let version = import.meta.url.match(/sweep\/([0-9.]+)\//);
+    // Set automatically upon packaging for Itch.
+    Game.isItch = false;
+    
+    let version = null;
+    if (Game.isItch) {
+        version = import.meta.url.match(/\/([0-9.]+)\//);
+    } else {
+        version = import.meta.url.match(/sweep\/([0-9.]+)\//);
+    }
+    
     if (version && version.length == 2) {
         Game.isProduction = true;
         Game.appVersion = version[1];
