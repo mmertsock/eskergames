@@ -4671,15 +4671,16 @@ class DisplayOptionsSection {
             this.setGameBoardViewDisplayMode();
         });
         
-        this.storiesToggle = new Gaming.FormValueView.ToggleInputView({
-            parent: this.contentElem,
-            title: Strings.str("displayOptionsStoriesToggleLabel"),
-            value: true,
-            selected: GameStorage.shared.storiesVisible
-        });
-        this.storiesToggle.kvo.selected.addObserver(this.kvoTokens.storiesToggle, () => {
-            this.setStoriesMode();
-        });
+        // Disabling for now.
+        // this.storiesToggle = new Gaming.FormValueView.ToggleInputView({
+        //     parent: this.contentElem,
+        //     title: Strings.str("displayOptionsStoriesToggleLabel"),
+        //     value: true,
+        //     selected: GameStorage.shared.storiesVisible
+        // });
+        // this.storiesToggle.kvo.selected.addObserver(this.kvoTokens.storiesToggle, () => {
+        //     this.setStoriesMode();
+        // });
         
         if (Game.rules().allowDebugMode) {
             this.debugModeToggle = new Gaming.FormValueView.ToggleInputView({
@@ -4710,7 +4711,7 @@ class DisplayOptionsSection {
     }
 
     setStoriesMode() {
-        GameScriptEngine.shared.execute("setStoriesVisible", this.storiesToggle.selected, null);
+        // GameScriptEngine.shared.execute("setStoriesVisible", this.storiesToggle.selected, null);
     }
     
     setDebugMode() {
