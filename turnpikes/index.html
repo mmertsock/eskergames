@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Turnpikes!</title>
+    <script defer src="//cdnjs.cloudflare.com/ajax/libs/js-yaml/3.14.1/js-yaml.min.js"></script>
+    
+    <style type="text/css">
+        :root {
+            --font-face-display: ui-rounded, ui-sans-serif, system-ui, sans-serif;
+            --foreground-color-main: hsl(0, 0%, 28%);
+            --shadow-1: 2pt 2pt 0px hsla(0, 0%, 0%, 0.25);
+        }
+        
+        body {
+            color: var(--foreground-color-main);
+            background-color: hsl(47, 100%, 95%);
+        }
+        
+        h1 {
+            margin: 0.5em auto;
+            font-family: var(--font-face-display);
+            text-align: center;
+            text-transform: uppercase;
+            text-shadow: var(--shadow-1);
+        }
+        
+        main {
+            width: 400px;
+            height: 400px;
+            margin: 0 auto;
+            border: 2px solid var(--foreground-color-main);
+            box-shadow: var(--shadow-1);
+        }
+        
+        main canvas {
+            display: block;
+            width: 400px;
+            height: 400px;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body>
+
+<header><h1>Turnpikes!</h1></header>
+
+<main></main>
+
+<nav></nav>
+
+<script type="module">
+    import { initialize } from './turnpikes-ui.js';
+    initialize();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,146 @@
+# For YML vars:
+_constants:
+  # Keep in sync with `class NetworkLevel`.
+  networkLevel:
+    ground:
+      index: &LEV_IDX_GROUND 0
+      elevation: &LEV_ELE_GROUND 0
+    overpass1:
+      index: &LEV_IDX_OVER1 1
+      elevation: &LEV_ELE_OVER1 4
+    overpass2:
+      index: &LEV_IDX_OVER2 2
+      elevation: &LEV_ELE_OVER2 8
+  # Various angle constants, in radians.
+  angle:
+    E:  &RAD_E  0.0
+    NE: &RAD_NE 0.78539816
+    N:  &RAD_N  1.57079632
+    NW: &RAD_NW 2.35619449
+    W:  &RAD_W  3.14159265
+    SW: &RAD_SW 3.92699081
+    S:  &RAD_S  4.71238898
+    SE: &RAD_SE 5.49778714
+
+##### ENGINE #####
+
+parcel:
+  # size in meters.
+  width: &W_PARCEL 800
+  height: &H_PARCEL 800
+  coords:
+    # Typical x-coords for edge-positioned endpoints
+    endpoint_w: &ENDP_POS_W 20
+    endpoint_e: &ENDP_POS_E 780
+    # Typical y-coords for edge-positioned endpoints
+    endpoint_n: &ENDP_POS_N 20
+    endpoint_s: &ENDP_POS_S 780
+segment:
+  stub:
+    length: &STUB_LEN 20
+
+agentTypes:
+  - id: moped
+
+##### UI #####
+# Reference:
+# Color: MUTCD 23 CFR Part 655, Appendix to Subpart F https://www.ecfr.gov/current/title-23/chapter-I/subchapter-G/part-655/subpart-F/appendix-Appendix%20to%20Subpart%20F%20of%20Part%20655
+# https://dot.ca.gov/programs/safety-programs/camutcd/camutcd-files
+# https://easyrgb.com/en/convert.php#inputFORM - use Yxy with Y = 92.7?
+
+viewport:
+  debug:
+    showNodeBounds: false
+segmentDrawable:
+  # TODO: different styles per NetworkLevel
+  surface:
+    halfWidth: 8
+    style:
+      fillStyle: "hsl(0, 0%, 45%)"
+  shoulder:
+    style:
+      strokeStyle: "white"
+      lineWidth: 2
+  median:
+    style:
+      strokeStyle: "hsla(45, 100%, 68%)"
+      lineWidth: 2
+
+##### ASSETS #####
+
+shapes:
+  - label: house
+    height: *LEV_ELE_OVER1
+    path: [0, 0,  30, 0,  30, 30,  15, 45,  0, 30]
+    style:
+      fillStyle: green
+  - label: blueHouse
+    basis: house
+    scaled: 0.5
+    style:
+      fillStyle: blue
+  - label: another
+    basis: blueHouse
+    scaled: 7
+    style:
+      fillStyle: red
+  # Rectangular two-digit sign post
+  # TODO: remembering the convex-polygons-only thing, for simplified collision checking. Signposts could be fine, their collision area can be a simple rectangular bounds. But larger non-convex objects would be better off as multiple layered convex polygons. Still no need for true composite shapes though: seems those would all be decorative things and can just be multiple independent structures/features.
+  - label: signpost-rect-2
+    # 2-8-4-8-2 margin-char-space-char-margin = 24 wide
+    # x+-12 = outer edges
+    # y-20 = bottom of legs. y-2 = bottom of rect.
+    # y+14 = outer top edge
+    # font size: 12h 8w. character spacing: 4.
+    path: [-12, -20, -10, -20, -10, -2,  10, -2, 10, -20, 12, -20,  12, 14, -12, 14]
+    instructions: [stroke, fill, text]
+    textOffset: [0, 10]
+    style:
+      fillStyle: black
+      strokeStyle: orange
+      lineWidth: 2
+      textStyle: white
+      textSize: 12
+  # composite shapes:
+  # - label: signpost-2digit
+  #   basis: [signpost-2digit-back, signpost-label]
+
+##### SCENARIOS #####
+
+scenarios:
+  - id: s1
+    name: blah
+    # rules: blah
+    style:
+      # Do the photographic-background-image thing as a CSS thing instead? Just do this one time: document.querySelector("main").style.backgroundImage = blah
+      backgroundImage: "some url to a local image file"
+      theme: "ID of some color theme thing?"
+    landscapeFeatures: []
+    structures:
+      - coord: [20, 250]
+        # TODO: tap this structure to see status/destinations for that endpoint
+        endpoint: i95-wb-end
+        shape:
+          basis: signpost-rect-2
+          text: "95"
+      - coord: [570, 250]
+        shape:
+          basis: house
+          scaled: 0.75
+          style:
+            fillStyle: red
+      - coord: [250, 50]
+        shape: house
+    endpoints:
+      - id: i95-wb-end
+        end: [0, 200]
+        angle: 180
+        level: *LEV_IDX_GROUND # optional, ground is the default.
+      - id: i95-wb
+        start: [803, 350]
+        angle: 150
+        timeline:
+          - count: 5
+            duration: 5
+            destination: i95-wb-end
+            pattern: [moped]

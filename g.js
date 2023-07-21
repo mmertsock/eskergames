@@ -160,6 +160,14 @@ if (Array.prototype.removeItemAtIndex) {
         return this;
     }
 }
+if (Array.prototype.insertItemAtIndex) {
+    console.log("Array.prototype.insertItemAtIndex exists");
+} else {
+    Array.prototype.insertItemAtIndex = function(item, index) {
+        this.splice(index, 0, item);
+        return this;
+    }
+}
 Array.prototype.clearWithVisitor = function(block) {
     for (let i = this.length - 1; i >= 0; i -= 1) {
         block(this[i], i);
@@ -1843,8 +1851,18 @@ export class Rect {
 }
 
 export class Vector extends XYValue {
+    static degreesToRadians(degrees) {
+        return degrees * 0.01745329252; // deg*pi/180
+    }
+    
     static betweenPoints(a, b) {
         return new Vector(b.x - a.x, b.y - a.y);
+    }
+    
+    /// polar(1, 0) -> Vector(1, 0)
+    /// polar(1, 90) -> Vector(0, 1)
+    static polar(magnitude, radians) {
+        return new Vector(Math.cos(radians) * magnitude, Math.sin(radians) * magnitude);
     }
 
     constructor(x, y) {
@@ -2453,6 +2471,7 @@ class KvoProperty {
         this._token = 0;
     }
     get token() { return this._token; }
+    get value() { return this.kvo._obj[this.key]; }
     addObserver(target, block) {
         if (!target._kvoDT) { target._kvoDT = new DispatchTarget(); }
         target._kvoDT.register(this.eventName, (eventName, item) => {
