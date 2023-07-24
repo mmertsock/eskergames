@@ -4,6 +4,11 @@ import * as Gaming from '../g.js';
 import { GameContent } from '../game-content.js';
 import * as Engine from './turnpikes-engine.js';
 
+Math.Radian = {
+    /// Radians for 90° rotation CCW.
+    ccw90: 1.5707963267948966
+};
+
 class Viewport {
     canvas; // HTMLCanvasElement
     #config;
@@ -38,7 +43,7 @@ class Viewport {
         
         let context = new RenderContext({
             canvas: this.canvas,
-            flipY: true,
+            flipY: false,
             debug: this.#config.debug
         });
         let view = new ParcelView(parcel);
@@ -214,6 +219,12 @@ export class DrawOrder {
 
 /// Lifetime == Parcel lifetime. Subscribes to Parcel state changes and creates/manages all Drawables for objects within the Parcel.
 class ParcelView extends Drawable {
+    static config; // YML data. Set once at app startup.
+    
+    static setConfig(a) {
+        ParcelView.config = a;
+    }
+    
     parcel; // &Parcel
     #children; // [Drawable]: sorted by drawing order.
     
@@ -240,7 +251,7 @@ class ParcelView extends Drawable {
     
     render(context) {
         let timer = new Gaming.PerfTimer("ParcelView.render").start();
-        context.clear("hsl(94, 50%, 65%)");
+        context.clear(ParcelView.config.surface.fillStyle);
         this.#children.forEach(drawable => {
             drawable.render(context);
         });
@@ -328,8 +339,8 @@ class SegmentDrawable extends Drawable {
     
     /// Pre-calculate the rendered shape, edges, decoration, etc., based on the segment's centerline path.
     #buildRenderData() {
-        let rPath = [];
         let lPath = [];
+        let rPath = [];
         
         for (let i = 0; i < this.node.path.length; i += 1) {
             // Mean longitudinal angle: derive from concatenating the incoming and outgoing path vectors.
@@ -338,9 +349,9 @@ class SegmentDrawable extends Drawable {
             let next = (i < this.node.path.length - 1) ? this.node.path[i + 1] : center;
             let longitudinal = Gaming.Vector.betweenPoints(next, prev);
             // Shoulder/median points: project 90° left/right from center point.
-            let vRight = Gaming.Vector.polar(SegmentDrawable.config.surface.halfWidth, longitudinal.theta + 1.5707963267948966);
-            rPath.push(center.adding(vRight).integral());
-            lPath.push(center.adding(vRight.scaled(-1)).integral());
+            let vLeft = Gaming.Vector.polar(SegmentDrawable.config.surface.halfWidth, longitudinal.theta + Math.Radian.ccw90);
+            lPath.push(center.adding(vLeft).integral());
+            rPath.push(center.adding(vLeft.scaled(-1)).integral());
         }
         
         // Use RHD/LHD config to map r/l paths to shoulder/median, and determine order of concatenation for the surface polygon.
@@ -404,6 +415,7 @@ class TurnpikesApp {
         Engine.Shape.setConfig(config.shapes);
         Engine.AgentType.setConfig(config.agentTypes);
         Engine.Scenario.setConfig(config.scenarios);
+        ParcelView.setConfig(config.parcelView);
         SegmentDrawable.setConfig(config.segmentDrawable);
         
         this.viewport = new Viewport(this);

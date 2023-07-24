@@ -51,6 +51,9 @@ agentTypes:
 viewport:
   debug:
     showNodeBounds: false
+parcelView:
+  surface:
+    fillStyle: "hsl(94, 45%, 70%)"
 segmentDrawable:
   # TODO: different styles per NetworkLevel
   surface:
@@ -71,7 +74,8 @@ segmentDrawable:
 shapes:
   - label: house
     height: *LEV_ELE_OVER1
-    path: [0, 0,  30, 0,  30, 30,  15, 45,  0, 30]
+    # size: 30w 35h
+    path: [-15, 15,  15, 15,  15, -10,  0, -20,  -15, -10]
     style:
       fillStyle: green
   - label: blueHouse
@@ -92,9 +96,9 @@ shapes:
     # y-20 = bottom of legs. y-2 = bottom of rect.
     # y+14 = outer top edge
     # font size: 12h 8w. character spacing: 4.
-    path: [-12, -20, -10, -20, -10, -2,  10, -2, 10, -20, 12, -20,  12, 14, -12, 14]
+    path: [-12, 20, -10, 20, -10, 2,  10, 2, 10, 20, 12, 20,  12, -14, -12, -14]
     instructions: [stroke, fill, text]
-    textOffset: [0, 10]
+    textOffset: [0, -10]
     style:
       fillStyle: black
       strokeStyle: orange
@@ -117,7 +121,7 @@ scenarios:
       theme: "ID of some color theme thing?"
     landscapeFeatures: []
     structures:
-      - coord: [20, 250]
+      - coord: [20, 210]
         # TODO: tap this structure to see status/destinations for that endpoint
         endpoint: i95-wb-end
         shape:
@@ -133,14 +137,17 @@ scenarios:
         shape: house
     endpoints:
       - id: i95-wb-end
-        end: [0, 200]
+        end: [0, 260]
         angle: 180
         level: *LEV_IDX_GROUND # optional, ground is the default.
       - id: i95-wb
-        start: [803, 350]
+        start: [803, 330]
         angle: 150
         timeline:
           - count: 5
             duration: 5
             destination: i95-wb-end
             pattern: [moped]
+      - id: i95-eb-end
+        end: [803, 358]
+        angle: 330
