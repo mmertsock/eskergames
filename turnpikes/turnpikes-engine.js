@@ -128,6 +128,12 @@ export class Parcel {
         return UniqueID.findInArray(id, this.#nodes);
     }
     
+    /// Returns an array copy of all nodes that match the filter callback.
+    filterNodes(block) {
+        return this.#nodes.filter(block);
+    }
+    
+    /// Simple forEach-style iterator.
     forEachNode(block) {
         this.#nodes.forEach(block);
     }

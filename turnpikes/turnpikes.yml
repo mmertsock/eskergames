@@ -1,5 +1,8 @@
 # For YML vars:
 _constants:
+  style:
+    messageFont: &FONT_MESSAGE "18pt ui-rounded"
+    signpostFont: &FONT_SIGNPOST "8pt ui-rounded"
   # Keep in sync with `class NetworkLevel`.
   networkLevel:
     ground:
@@ -51,6 +54,17 @@ agentTypes:
 viewport:
   debug:
     showNodeBounds: false
+loadingLayer:
+  background:
+    fillStyle: black
+  message: # Shape
+    instructions: [text]
+    # Would be neat for a coordinates units: raw canvas px vs canvas size percentage vs relative to a separate size property for the shape.
+    path: [0, 0,  0, *H_PARCEL,  *W_PARCEL, *H_PARCEL,  *W_PARCEL, 0]
+    text: "Loading…"
+    style:
+      font: *FONT_MESSAGE
+      textStyle: white
 parcelView:
   surface:
     fillStyle: "hsl(94, 45%, 70%)"
@@ -104,7 +118,7 @@ shapes:
       strokeStyle: orange
       lineWidth: 2
       textStyle: white
-      textSize: 12
+      font: *FONT_SIGNPOST
   # composite shapes:
   # - label: signpost-2digit
   #   basis: [signpost-2digit-back, signpost-label]

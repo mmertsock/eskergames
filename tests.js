@@ -26,6 +26,7 @@ import { GameContent, GameScriptEngine } from './game-content.js';
 // import * as CivDrawables from './civ/ui-drawables.js';
 // import * as Assembly from './assembly.js';
 import * as TurnpikesEngine from './turnpikes/turnpikes-engine.js';
+import * as TurnpikesUI from './turnpikes/turnpikes-ui.js';
 
 window.Gaming = { Point: Point, Rect: Rect, Vector: Vector };
 
@@ -398,6 +399,7 @@ class turnpikes {
             parcel.addNode(node2);
             
             parcel.forEachNode(node => watcher.events.push(`forEachNode:${node.id}`));
+            this.assertElementsEqual(parcel.filterNodes(n => n.id == "struct2").map(n => n.id), ["struct2"], "filterNodes");
             
             parcel.removeNode(node1);
             this.assertEqual(node1.parcel, null);
@@ -848,7 +850,81 @@ class turnpikes {
             segmentStub.tearDown();
         }).buildAndRun();
     }
+    
+    static drawOrderTests() {
+        new UnitTest("turnpikes.DrawOrder", function() {
+            const DrawOrder = TurnpikesUI.DrawOrder;
+            
+            let d120 = new DrawOrder([1, 2, 0]);
+            let d123 = new DrawOrder([1, 2, 3]);
+            let d13 = new DrawOrder([1, 3]);
+            
+            this.assertTrue(d120.drawsBefore(d123), "d120 < d123");
+            this.assertTrue(!d123.drawsBefore(d120), "d123 > d120");
+            this.assertTrue(d120.drawsBefore(d13), "d123 < d13");
+            this.assertTrue(!d120.drawsBefore(d120), "identity");
+            this.assertTrue(d120.drawsBefore(DrawOrder.end), "any < end");
+            this.assertTrue(!DrawOrder.end.drawsBefore(d120), "end > any");
+            
+            let draw120 = new turnpikes.drawableStub("d120", d120);
+            let draw123 = new turnpikes.drawableStub("d123", d123);
+            let draw13 = new turnpikes.drawableStub("d13", d13);
+            
+            let events = [];
+            function logEvent(drawable) {
+                events.push(drawable.name);
+            }
+            let list = new TurnpikesUI.OrderedDrawableSet();
+            this.assertTrue(list.isEmpty, "initially empty");
+            list.forEach(logEvent);
+            this.assertEqual(events.length, 0, "empty set, forEach is noop");
+            
+            events.splice(0);
+            list.insert(draw123);
+            this.assertTrue(!list.isEmpty, "not empty after inserting");
+            this.assertEqual(list.find(draw123.id)?.item, draw123, "finds draw123");
+            list.forEach(logEvent);
+            this.assertElementsEqual(events, ["d123"], "one item");
+            
+            events.splice(0);
+            list.remove(draw123);
+            this.assertTrue(list.isEmpty, "empty after removing");
+            this.assertEqual(list.find(draw123.id), null, "does not find draw123");
+            list.forEach(logEvent);
+            this.assertEqual(events.length, 0, "empty set after removal, forEach is noop");
+            
+            events.splice(0);
+            list.insert(draw13);
+            list.insert(draw120);
+            this.assertEqual(list.find(draw123.id), null, "does not find draw123 yet");
+            list.insert(draw123);
+            this.assertTrue(!list.isEmpty, "not empty after inserting");
+            this.assertEqual(list.find(draw120.id)?.item, draw120, "finds draw120");
+            this.assertEqual(list.find(draw123.id)?.item, draw123, "finds draw123");
+            this.assertEqual(list.find(draw13.id)?.item, draw13, "finds draw13");
+            list.forEach(logEvent);
+            this.assertElementsEqual(events, ["d120", "d123", "d13"], "three events");
+            
+            events.splice(0);
+            // duplicate insert
+            list.insert(draw123);
+            // removing item that doesn't exist
+            list.remove(new turnpikes.drawableStub("bogus", d13));
+            list.remove(draw120);
+            this.assertEqual(list.find(draw123.id)?.item, draw123, "after dupe insert/failed remove: finds draw123");
+            list.forEach(logEvent);
+            this.assertElementsEqual(events, ["d123", "d13"], "after changes: two events");
+        }).buildAndRun();
+    }
 } // end class turnpikes
+
+turnpikes.drawableStub = class DrawableStub extends TurnpikesUI.Drawable {
+    constructor(name, _drawOrder) {
+        super(name);
+        this.name = name;
+        this._drawOrder = _drawOrder;
+    }
+};
 
 turnpikes.classStub = class {
     constructor(type, config) {
@@ -893,7 +969,8 @@ function turnpikesSuite() { return new TestSession([
     turnpikes.shapeTests,
     turnpikes.pulseTests,
     turnpikes.agentTests,
-    turnpikes.scenarioTests
+    turnpikes.scenarioTests,
+    turnpikes.drawOrderTests
 ]); }
 
 // swept.initialized = false;

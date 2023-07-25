@@ -9,27 +9,70 @@ Math.Radian = {
     ccw90: 1.5707963267948966
 };
 
-class Viewport {
-    canvas; // HTMLCanvasElement
-    #config;
+const _Protocols = {};
+
+/// Top-level Views, each one is given control of an HTMLCanvasElement and assigned as an AnimationLoop delegate.
+/// Layers do not own the provided ViewportLayer, etc.
+_Protocols.Layer = class {
+    didAttach(viewportLayer) { }
+    willDetach(viewportLayer) { }
+    /// Optional. If implemented, the layer will be assigned as an AnimationLoop delegate. Otherwise, layers should set up/tear down their own rendering in didAttach/willDetach.
+    processFrame(frame) { }
+};
+
+/// Interactions are the top-level UI modalities of the app. The Viewport has a single active Interaction at all times.
+class Interaction {
+    #viewport; // Initially null, and null whenever it's detached.
     
-    constructor(app) {
-        this.#config = app.config.viewport;
-        this.canvas = document.createElement("canvas");
-        let container = document.querySelector("main");
-        this.canvas.configureSize(container, HTMLCanvasElement.getDevicePixelScale());
-        container.append(this.canvas);
-        
-        this.testRender();
+    constructor() {
+        this.#viewport = null;
     }
     
-    testRender() {
-        // TODO: hmm we need a fixed world size for Parcels
-        // so they always render the same regardless of dpi,
-        // and so there are consistent coords.
-        // And some parcels might look more "zoomed-in" than others maybe, if they're simpler?
-        // So maybe the Parcel is some large number of world units, a fixed size for all devices, and it's rendered at some other scale independent of the canvas CSS size. Yeah.
-        // But we want to render at high dpi when possible.
+    // [Layer]: Ordered list of top-level views. First element is lowest in the z-stack, last element is highest.
+    get layers() { return []; }
+    
+    get isAttached() {
+        return this.#viewport != null;
+    }
+    
+    get viewport() {
+        return this.#viewport;
+    }
+    
+    set viewport(newValue) {
+        this.#viewport = newValue;
+    }
+}
+
+class LoadingInteraction extends Interaction {
+    #layer;
+    
+    constructor() {
+        super();
+        this.#layer = new LoadingLayer();
+    }
+    
+    get layers() { return [this.#layer]; }
+}
+
+class LoadingLayer {
+    didAttach(viewportLayer) {
+        // Just render one time immediately.
+        let config = viewportLayer.viewport.app.config.loadingLayer;
+        let context = new RenderContext({ canvas: viewportLayer.canvas });
+        let shape = Engine.Shape.fromConfig(config.message);
+        context.clear(config.background.fillStyle);
+        context.renderShape(shape);
+    }
+    willDetach(viewportLayer) { }
+}
+
+class ScenarioInteraction extends Interaction {
+    #layers;
+    
+    constructor() {
+        super();
+        
         let scenario = Engine.Scenario.fromConfig("s1");
         let parcel = scenario.makeParcel();
         
@@ -41,14 +84,121 @@ class Viewport {
         });
         parcel.addNode(testSeg);
         
+        this.#layers = [
+            new ParcelLayer(parcel),
+            new NetworkLayer(parcel)
+        ];
+    }
+    
+    get layers() { return this.#layers; }
+}
+
+/// For scenarios. The permanent structures and landscape of the parcel.
+class ParcelLayer {
+    #parcel; // &Parcel
+    
+    constructor(parcel) {
+        this.#parcel = parcel;
+    }
+    
+    didAttach(viewportLayer) {
+        // One-time rendering.
+        this.render(viewportLayer);
+    }
+    
+    willDetach(viewportLayer) { }
+    
+    render(viewportLayer) {
         let context = new RenderContext({
-            canvas: this.canvas,
+            canvas: viewportLayer.canvas,
             flipY: false,
-            debug: this.#config.debug
+            debug: viewportLayer.viewport.app.config.viewport.debug
         });
-        let view = new ParcelView(parcel);
+        let view = new ParcelView(this.#parcel);
         view.render(context);
         view.deconstruct();
+    }
+}
+
+/// For scenarios. The network and agents.
+class NetworkLayer {
+    #view; // NetworkView
+    #viewportLayer; // &ViewportLayer
+    
+    constructor(parcel) {
+        this.#view = new NetworkView(parcel);
+        this.#viewportLayer = null;
+    }
+    
+    didAttach(viewportLayer) {
+        this.#viewportLayer = viewportLayer;
+        this.#view.setNeedsRender();
+    }
+    
+    willDetach(viewportLayer) {
+        this.#viewportLayer = null;
+    }
+    
+    // Active on the animation loop: network can change, and agents animate.
+    processFrame(frame) {
+        if (!this.#viewportLayer || !this.#view.needsRender) { return; }
+        
+        let context = new RenderContext({
+            canvas: this.#viewportLayer.canvas,
+            flipY: false,
+            debug: this.#viewportLayer.viewport.app.config.viewport.debug
+        });
+        this.#view.render(context);
+    }
+}
+
+class ViewportLayer {
+    viewport;
+    layer;
+    canvas;
+    
+    constructor(viewport, layer) {
+        this.viewport = viewport;
+        this.layer = layer;
+        this.canvas = document.createElement("canvas");
+        this.canvas.configureSize(viewport.container, HTMLCanvasElement.getDevicePixelScale());
+        viewport.container.append(this.canvas);
+        
+        this.layer.didAttach(this);
+        if (typeof this.layer.processFrame == "function") {
+            this.viewport.app.loop.addDelegate(this.layer);
+        }
+    }
+    
+    deconstruct() {
+        if (typeof this.layer.processFrame == "function") {
+            this.viewport.app.loop.removeDelegate(this.layer);
+        }
+        this.layer.willDetach(this);
+        this.canvas.remove();
+        this.viewport = null;
+        this.layer = null;
+    }
+}
+
+/// Single instance attaches to a well-known HTML element and lives for the life of the app.
+class Viewport {
+    #config;
+    app; // TurnpikesApp
+    container; // HTML element.
+    #layers; // [ViewportLayer]
+    
+    constructor(app, interaction) {
+        this.#config = app.config.viewport;
+        this.app = app;
+        this.container = document.querySelector("main");
+        this.#layers = [];
+        this.attach(interaction);
+    }
+    
+    attach(interaction) {
+        this.#layers.forEach(layer => layer.deconstruct());
+        this.#layers = interaction.layers.map(layer => new ViewportLayer(this, layer));
     }
 }
 
@@ -72,6 +222,10 @@ class RenderContext {
         } else {
             this.#yMinuend = 0;
         }
+    }
+    
+    get visibleRect() {
+        return new Gaming.Rect(0, 0, this.canvas.width, this.canvas.height);
     }
     
     /// CanvasRenderingContext2D origin is top left.
@@ -127,8 +281,8 @@ class RenderContext {
             case Engine.ShapeInstruction.text:
                 if (!String.isEmpty(shape.text)) {
                     this.ctx.fillStyle = shape.style.textStyle;
+                    this.ctx.font = shape.style.font;
                     let rect = shape.bounds.offsetBy(shape.textOffset);
-                    // TODO: textSize
                     this.ctx.fillTextCentered(shape.text, this.canvasRect(rect));
                     this.debugNodeBounds(rect, "orange");
                 }
@@ -161,7 +315,7 @@ class RenderContext {
 /// Naming:
 /// - SomeDrawable: short-lived, lightweight/no internal state, doesn't need explicit deconstruction. But ok to be long-lived.
 /// - SomeView: long-lived, not shared, internal state, needs explicit deconstruction.
-class Drawable {
+export class Drawable {
     /// Factory method to produce appropriate drawables for a Node.
     static forNode(node) {
         switch (node.constructor) {
@@ -172,6 +326,12 @@ class Drawable {
         default:
             return null;
         }
+    }
+    
+    id; // unique string
+    
+    constructor(id) {
+       this.id = id || Engine.UniqueID.make(); 
     }
     
     get debugDescription() {
@@ -217,74 +377,150 @@ export class DrawOrder {
     }
 }
 
-/// Lifetime == Parcel lifetime. Subscribes to Parcel state changes and creates/manages all Drawables for objects within the Parcel.
-class ParcelView extends Drawable {
+/// Maintains a list of Drawables sorted by their drawOrder.
+/// Primary reference for object lifetime of Drawables: deconstructing an OrderedDrawableSet deconstructs its children.
+export class OrderedDrawableSet {
+    #drawables; // [Drawable]
+    
+    constructor() {
+        this.#drawables = [];
+    }
+    
+    deconstruct() {
+        this.#drawables.forEach(drawable => drawable.deconstruct());
+        this.#drawables.splice(0);
+    }
+    
+    get isEmpty() { return this.#drawables.length == 0; }
+    
+    find(id) {
+        return Engine.UniqueID.findInArray(id, this.#drawables);
+    }
+    
+    insert(drawable) {
+        let found = this.find(drawable.id);
+        if (found) { return; }
+        
+        let drawOrder = drawable.drawOrder;
+        let drawIndex = this.#drawables.findIndex(c => drawOrder.drawsBefore(c.drawOrder));
+        if (drawIndex < 0) {
+            // Draws after every other child.
+            Gaming.debugLog(`Adding @end: ${drawable.debugDescription}`);
+            this.#drawables.push(drawable);
+        } else {
+            Gaming.debugLog(`Adding @${drawIndex}: ${drawable.debugDescription}`);
+            this.#drawables.insertItemAtIndex(drawable, drawIndex);
+        }
+    }
+    
+    remove(drawable) {
+        let found = this.find(drawable.id);
+        if (!found) { return; }
+        this.#drawables.removeItemAtIndex(found.index);
+    }
+    
+    forEach(block) {
+        this.#drawables.forEach(block);
+    }
+}
+
+/// Renders a snapshot of the current "permanent" elements of a Parcel: the surface, Structures, LandscapeFeatures, etc.
+class ParcelView {
     static config; // YML data. Set once at app startup.
     
     static setConfig(a) {
         ParcelView.config = a;
     }
     
-    parcel; // &Parcel
-    #children; // [Drawable]: sorted by drawing order.
-    
-    get debugDescription() {
-        return `<ParcelView children#${this.#children.length}>`;
-    }
+    #parcel; // &Parcel
     
     constructor(parcel) {
-        super();
+        this.#parcel = parcel;
+    }
+    
+    deconstruct() { }
+    
+    render(context) {
+        let drawables = new OrderedDrawableSet();
+        this.#parcel
+            .filterNodes(node => this.shouldContain(node))
+            .map(node => Drawable.forNode(node))
+            .forEach(drawable => {
+                if (drawable) { drawables.insert(drawable); }
+            });
+        
+        context.clear(ParcelView.config.surface.fillStyle);
+        drawables.forEach(drawable => {
+            drawable.render(context);
+        });
+    }
+    
+    shouldContain(node) {
+        return (node.constructor == Engine.Structure)
+            || (node.constructor == Engine.LandscapeFeature);
+    }
+}
+
+/// Lifetime == Parcel lifetime. Subscribes to Parcel state changes and creates/manages all Drawables for objects within the Parcel.
+class NetworkView extends Drawable {
+    parcel; // &Parcel
+    #children; // OrderedDrawableSet
+    #dirty; // true if needs to redraw
+    
+    get debugDescription() {
+        return `<NetworkView children#${this.#children.length}>`;
+    }
+    
+    get needsRender() { return this.#dirty; }
+    setNeedsRender() { this.#dirty = true; }
+    
+    constructor(parcel) {
+        super("NetworkView");
         this.parcel = parcel;
-        this.#children = [];
+        this.#children = new OrderedDrawableSet();
+        this.#dirty = false;
         this.parcel.forEachNode(node => this.#addChild(node));
         
-        // TODO: observers also mark ParcelView as dirty.
+        // TODO: observers also mark NetworkView as dirty.
         this.parcel.kvo.addNode.addObserver(this, p => this.#addChild(p.kvo.addNode.value));
         this.parcel.kvo.removeNode.addObserver(this, p => this.#removeChild(p.kvo.removeNode.value));
+        
+        this.#dirty = false;
     }
     
     deconstruct() {
         Gaming.debugLog(`deconstruct: ${this.debugDescription}`);
         Gaming.Kvo.stopAllObservations(this);
-        this.#children.forEach(drawable => drawable.deconstruct());
+        this.#children.deconstruct();
+    }
+    
+    shouldContain(node) {
+        return (node.constructor == Engine.Segment);
     }
     
     render(context) {
-        let timer = new Gaming.PerfTimer("ParcelView.render").start();
-        context.clear(ParcelView.config.surface.fillStyle);
+        if (!this.#dirty) { return; }
+        this.#dirty = false;
+        
+        // TODO: move to a DebugLayer that renders the AnimationLoop's last total render time on-screen.
+        let timer = new Gaming.PerfTimer("NetworkView.render").start();
         this.#children.forEach(drawable => {
             drawable.render(context);
         });
         Gaming.debugLog(timer.end().summary);
     }
     
-    findChild(id) {
-        return UniqueID.findInArray(id, this.#children);
-    }
-    
     #addChild(node) {
+        if (!this.shouldContain(node)) { return; }
         let drawable = Drawable.forNode(node);
-        if (!drawable) {
-            Gaming.debugLog(`addChild: no drawable for ${node.debugDescription}`);
-            return;
-        }
-        let drawOrder = drawable.drawOrder;
-        let drawIndex = this.#children.findIndex(c => drawOrder.drawsBefore(c.drawOrder));
-        if (drawIndex < 0) {
-            // Draws after every other child.
-            Gaming.debugLog(`Adding child @end: ${drawable.debugDescription}`);
-            this.#children.push(drawable);
-        } else {
-            Gaming.debugLog(`Adding child @${drawIndex}: ${drawable.debugDescription}`);
-            this.#children.insertItemAtIndex(drawable, drawIndex);
-        }
+        if (!drawable) { return; }
+        this.#children.insert(drawable);
+        this.setNeedsRender();
     }
     
     #removeChild(node) {
-        let result = this.findChild(node.id);
-        if (!result) { return; }
-        Gaming.debugLog(`Removing child: ${result.item.debugDescription}`);
-        this.#children.removeItemAtIndex(result.index);
+        // TODO: yeah
+        // this.#children.remove();
     }
 }
 
@@ -293,7 +529,7 @@ class StructureDrawable extends Drawable {
     _drawOrder; // DrawOrder
     
     constructor(node) {
-        super();
+        super(node.id);
         this.node = node;
         this._drawOrder = new DrawOrder([
             node.shape?.height || 0,
@@ -326,7 +562,7 @@ class SegmentDrawable extends Drawable {
     medianShape; // Shape: left edge of the segment when RHD. Ordered in direction of travel.
     
     constructor(node) {
-        super();
+        super(node.id);
         this.node = node;
         this.#buildRenderData();
         
@@ -406,6 +642,7 @@ class TurnpikesApp {
     static isProduction = false;
     
     config; // entire YAML config.
+    loop; // AnimationLoop.
     viewport; // Viewport: lifetime == app lifetime.
     
     constructor(config) {
@@ -418,7 +655,15 @@ class TurnpikesApp {
         ParcelView.setConfig(config.parcelView);
         SegmentDrawable.setConfig(config.segmentDrawable);
         
-        this.viewport = new Viewport(this);
+        this.loop = new Gaming.AnimationLoop(window);
+        this.loop.resume();
+        
+        this.viewport = new Viewport(this, new ScenarioInteraction());
+        // this.viewport = new Viewport(this, new LoadingInteraction());
+        // 
+        // setTimeout(() => {
+        //     this.viewport.attach(new ScenarioInteraction())
+        // }, 3000);
     }
 }
 
