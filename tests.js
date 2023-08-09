@@ -9,7 +9,8 @@ import {
     FlexCanvasGrid,
     GameTask,
     Kvo,
-    PerfTimer, PeriodicRandomComponent, Point,
+    MovementGesture,
+    PerfTimer, PeriodicRandomComponent, Point, PointerGesture, PointerInputController,
     RandomComponent, RandomBlobGenerator, RandomLineGenerator, Rect, Rng,
     SaveStateItem, SelectableList, SaveStateCollection, Serializer,
     TaskQueue, TilePlane,
@@ -59,7 +60,7 @@ function logTestFail(msg) {
 }
 
 function pointArrayDesc(poly) {
-    return poly.map(p => p.debugDescription);
+    return poly.map(p => p?.debugDescription);
 };
 
 export class TestSession {
@@ -359,6 +360,125 @@ class assembly {
     }
 } // end class assembly
 
+// TODO: refinements:
+// - mousedown > move > leave > enter > move > mouseup. The leave cancels the gesture, then the first move after enter starts a new gesture with buttons=1. Should we always ignore buttons=1 in that case and call it a move rather than drag? Maybe the listener is responsible for this check (via gesture.firstEvent.evt.type), unless we make things more abstract and have addDragGestureListener and addHoverGestureListener, or we add a type = drag|hover property to MovementGesture.
+// - selectionListener: add a class SelectionGesture for that? Yeah, mousedown can be candidate, mouseup can be complete/cancel depending on movement tolerance. Note that this means multiple gesture types can become candidates upon mousedown, but only one should be active at any time (e.g. if movement gesture accepts+consumes a mousemove, it should cancel the selection)?
+// Yeah. PIC tracks an array #allGestures, and a single #activeGesture.
+// Events like mousedown and mousemove generate candidate gestures + update the active gesture. And events like mouseup can complete gestures. With each event, determine whether to discard candidate gestures, or promote a candidate to active which cancels the current active gesture, or to complete a gesture.
+
+class g {
+    static pointerInputControllerTests() {
+        const setUp = function() {
+            const canvas = document.createElement("canvas");
+            canvas.width = 200;
+            canvas.height = 100;
+            let pic = new PointerInputController({elem: canvas, pixelScale: 2, selectionMovementTolerance: 3});
+            let events = [];
+            pic.addSelectionListener({ repetitions: 1, buttons: 1 }, info => events.push({ listener: "selection-single-btn1", info: info }));
+            pic.addSelectionListener({ repetitions: 2, buttons: 1 }, info => events.push({ listener: "selection-double-btn1", info: info }));
+            pic.addSelectionListener({ repetitions: 1, buttons: 2 }, info => events.push({ listener: "selection-single-btn2", info: info }));
+            pic.addSelectionListener({ repetitions: 2, buttons: 2 }, info => events.push({ listener: "selection-double-btn2", info: info }));
+            pic.addMovementGestureListener({ buttons: 0 }, (gesture, info) => events.push({
+                listener: "gesture-0",
+                gesture: gesture,
+                state: gesture.state,
+                modelPoint: gesture.latestEvent.modelPoint,
+                info: info
+            }));
+            pic.addMovementGestureListener({ buttons: 1 }, (gesture, info) => events.push({
+                listener: "gesture-1",
+                gesture: gesture,
+                state: gesture.state,
+                modelPoint: gesture.latestEvent.modelPoint,
+                info: info
+            }));
+            return {
+                canvas: canvas,
+                events: events,
+                pic: pic
+            };
+        };
+        const stubMouseEvent = class stubMouseEvent extends MouseEvent {
+            constructor(type, a) { super(type, a); this.a = a; }
+            get detail() { return this.a.detail; }
+            get offsetX() { return this.a.offsetX; }
+            get offsetY() { return this.a.offsetY; }
+        };
+        
+        new UnitTest("g.PointerInputController.selection", function() {
+            const a = setUp();
+            // TODO: set up movement gesture listener, should not fire
+            let singleClick = new stubMouseEvent("click", { buttons: 1, detail: 1, offsetX: 10, offsetY: 30});
+            let doubleClick2 = new stubMouseEvent("click", { buttons: 2, detail: 2, offsetX: 13, offsetY: 3});
+            a.canvas.dispatchEvent(singleClick);
+            a.canvas.dispatchEvent(doubleClick2);
+            
+            this.assertEqual(a.events.length, 2);
+            if (a.events.length == 2) {
+                this.assertEqual(a.events[0].listener, "selection-single-btn1");
+                this.assertEqual(a.events[0].info.evt, singleClick);
+                this.assertEqual(a.events[0].info.modelPoint, new Point(20, 60));
+                this.assertEqual(a.events[1].listener, "selection-double-btn2");
+                this.assertEqual(a.events[1].info.evt, doubleClick2);
+                this.assertEqual(a.events[1].info.modelPoint, new Point(26, 6));
+            }
+        }).buildAndRun();
+        
+        // Simple one-button drag.
+        new UnitTest("g.PointerInputController.movement: 1btn drag", function() {
+            const a = setUp();
+            a.canvas.dispatchEvent(new stubMouseEvent("mousedown", { buttons: 1, detail: 1, offsetX: 10, offsetY: 30}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 1, detail: 1, offsetX: 15, offsetY: 30}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mouseup", { buttons: 1, detail: 1, offsetX: 25, offsetY: 32}));
+            
+            let coords = [new Point(20, 60), new Point(30, 60), new Point(50, 64)];
+            this.assertElementsEqual(a.events.map(evt => evt.listener), ["gesture-1", "gesture-1", "gesture-1"]);
+            this.assertElementsEqual(pointArrayDesc(a.events.map(evt => evt.info.modelPoint)), pointArrayDesc(coords), "info.modelPoint");
+            this.assertElementsEqual(pointArrayDesc(a.events.map(evt => evt.modelPoint)), pointArrayDesc(coords), "gesture.latestEvent.modelPoint");
+            this.assertElementsEqual(a.events.map(evt => evt.state), [PointerGesture.State.candidate, PointerGesture.State.active, PointerGesture.State.complete], "gesture.state");
+        }).buildAndRun();
+        
+        // Simple no-buttons move.
+        new UnitTest("g.PointerInputController.movement: 0btn move", function() {
+            const a = setUp();
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 0, detail: 1, offsetX: 10, offsetY: 30}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 0, detail: 1, offsetX: 15, offsetY: 30}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 0, detail: 1, offsetX: 20, offsetY: 31}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 0, detail: 1, offsetX: 25, offsetY: 32}));
+            
+            let coords = [new Point(20, 60), new Point(30, 60), new Point(40, 62), new Point(50, 64)];
+            this.assertElementsEqual(a.events.map(evt => evt.listener), ["gesture-0", "gesture-0", "gesture-0", "gesture-0"]);
+            this.assertElementsEqual(pointArrayDesc(a.events.map(evt => evt.info.modelPoint)), pointArrayDesc(coords), "info.modelPoint");
+            this.assertElementsEqual(pointArrayDesc(a.events.map(evt => evt.modelPoint)), pointArrayDesc(coords), "gesture.latestEvent.modelPoint");
+            this.assertElementsEqual(a.events.map(evt => evt.state), [PointerGesture.State.candidate, PointerGesture.State.active, PointerGesture.State.active, PointerGesture.State.active], "gesture.state");
+        }).buildAndRun();
+        
+        // Changing gestures:
+        // move (begin move gesture), mousedown (cancel move gesture, begin drag gesture), drag, move, mouseup (complete drag gesture), move (begin move gesture)
+        new UnitTest("g.PointerInputController.movement: move-drag-move", function() {
+            const a = setUp();
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 0, detail: 1, offsetX: 10, offsetY: 30}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 0, detail: 1, offsetX: 15, offsetY: 30}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousedown", { buttons: 1, detail: 1, offsetX: 20, offsetY: 31}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 1, detail: 1, offsetX: 25, offsetY: 32}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mouseup", { buttons: 1, detail: 1, offsetX: 25, offsetY: 35}));
+            a.canvas.dispatchEvent(new stubMouseEvent("mousemove", { buttons: 0, detail: 1, offsetX: 25, offsetY: 36}));
+            
+            let coords = [new Point(20, 60), new Point(30, 60), new Point(40, 62), new Point(40, 62), new Point(50, 64), new Point(50, 70), new Point(50, 72)];
+            this.assertElementsEqual(a.events.map(evt => evt.listener), ["gesture-0", "gesture-0", "gesture-0", "gesture-1", "gesture-1", "gesture-1", "gesture-0"]);
+            this.assertElementsEqual(pointArrayDesc(a.events.map(evt => evt.info.modelPoint)), pointArrayDesc(coords), "info.modelPoint");
+            this.assertElementsEqual(pointArrayDesc(a.events.map(evt => evt.modelPoint)), pointArrayDesc(coords), "gesture.latestEvent.modelPoint");
+            this.assertElementsEqual(a.events.map(evt => evt.state), [PointerGesture.State.candidate, PointerGesture.State.active, PointerGesture.State.canceled, PointerGesture.State.candidate, PointerGesture.State.active, PointerGesture.State.complete, PointerGesture.State.candidate], "gesture.state");
+        }).buildAndRun();
+        
+        // (4) Leaving canvas:
+        // mousedown (begin g1), drag, leave (cancel g1), enter, drag, mouseup (complete g2)
+        
+        // (5) Single click within movement tolerance
+        // mousedown, move tiny amount, mouseup
+    }
+}
+
 class turnpikes {
     static parcelTests() {
         new UnitTest("turnpikes.Parcel", function() {
@@ -411,11 +531,51 @@ class turnpikes {
             ]);
             Kvo.stopAllObservations(watcher);
         }).buildAndRun();
+        
+        new UnitTest("turnpikes.Parcel.findNodesIntersectingPoint", function() {
+            let parcel = new TurnpikesEngine.Parcel({ width: 200, height: 200 });
+            let p50_50 = new Point(50, 50);
+            this.assertEqual(parcel.findNodesIntersectingPoint(p50_50, 1).length, 0, "Empty parcel");
+            
+            let strTopLeft = new TurnpikesEngine.Structure({
+                id: "strTopLeft",
+                coord: new Point(10, 10),
+                shapeSpec: new TurnpikesEngine.Shape({ height: TurnpikesEngine.NetworkLevel.overpass1.elevation - 1, path: TurnpikesEngine.YML.parsePath([10, 10, 20, 10, 20, 20, 10, 20]) })
+            });
+            let strMiddle = new TurnpikesEngine.Structure({
+                id: "strMiddle",
+                coord: new Point(40, 40),
+                shapeSpec: new TurnpikesEngine.Shape({ height: TurnpikesEngine.NetworkLevel.overpass1.elevation, path: TurnpikesEngine.YML.parsePath([0, 0, 20, 0, 20, 20, 0, 20]) })
+            });
+            let strNearMiddle = new TurnpikesEngine.Structure({
+                id: "strNearMiddle",
+                coord: new Point(55, 55),
+                shapeSpec: new TurnpikesEngine.Shape({ height: TurnpikesEngine.NetworkLevel.overpass1.elevation, path: TurnpikesEngine.YML.parsePath([0, 0, 20, 0, 20, 20, 0, 20]) })
+            });
+            
+            let segTopRight = new TurnpikesEngine.Segment({ id: "segTopRight", coord: new Point(10, 190), path: TurnpikesEngine.YML.parsePath([]), start: null, end: null });
+            let segCrossMiddle = new TurnpikesEngine.Segment({ id: "segCrossMiddle", coord: new Point(20, 20), path: TurnpikesEngine.YML.parsePath([20, 20, 25, 25, 30, 30, 35, 35, 40, 40, 45, 45, 50, 50, 55, 55, 60, 60, 65, 65]), start: null, end: null });
+            let segCrossMiddleStart = TurnpikesEngine.Junction.segmentStart(segCrossMiddle);
+            let segStartAtMiddle = new TurnpikesEngine.Segment({ id: "segStartAtMiddle", coord: new Point(50, 50), path: TurnpikesEngine.YML.parsePath([50, 50, 55, 55, 60, 60]), start: null, end: null });
+            let segStartAtMiddleStart = TurnpikesEngine.Junction.segmentStart(segStartAtMiddle);
+            [strTopLeft, strMiddle, strNearMiddle, segTopRight, segCrossMiddle, segCrossMiddleStart, segStartAtMiddle, segStartAtMiddleStart].forEach(node => parcel.addNode(node));
+            
+            let matches = parcel.findNodesIntersectingPoint(p50_50, 1);
+            this.assertElementsEqual(matches.map(node => node.id), ["strMiddle", "segCrossMiddle", "segStartAtMiddle", segStartAtMiddleStart.id]);
+            
+            console.log("YOOO");
+            console.log(matches);
+            
+            // TODO: segment near 1-point radius test, within the hit test width of the segment path
+            
+            // TODO: increase radius
+            // TODO: elevation testing
+        }).buildAndRun();
     }
     
     static structureTests() {
-        new UnitTest("turnpikes.Structure", function() {
-        }).buildAndRun();
+        // new UnitTest("turnpikes.Structure", function() {
+        // }).buildAndRun();
         
         new UnitTest("turnpikes.Structure.fromConfig", function() {
             const Structure = TurnpikesEngine.Structure;
@@ -462,6 +622,7 @@ class turnpikes {
             this.assertElementsEqual(pointArrayDesc(seg.path), pointArrayDesc([new Point(5, 25), new Point(20, 25)]));
             this.assertEqual(seg.start, null);
             this.assertEqual(seg.end, null);
+            this.assertFalse(seg.isPartial);
             
             seg = Segment.stub("e2", null, new Point(100, 200), 120);
             this.assertEqual(seg.id, "e2");
@@ -469,6 +630,7 @@ class turnpikes {
             this.assertElementsEqual(pointArrayDesc(seg.path), pointArrayDesc([new Point(108, 187), new Point(100, 200)]));
             this.assertEqual(seg.start, null);
             this.assertEqual(seg.end, null);
+            this.assertFalse(seg.isPartial);
             
             segmentStub.tearDown();
         }).buildAndRun();
@@ -538,6 +700,163 @@ class turnpikes {
             segmentStub.tearDown();
             agentTypeStub.tearDown();
         }).buildAndRun();
+    }
+    
+    static networkBuilderTests() {
+        let p = (x, y) => { return new Point(x, y); };
+        
+        new UnitTest("turnpikes.NetworkBuilder: simple/empty parcel", function() {
+            let networkBuilderStub = turnpikes.classStub.networkBuilder();
+            let parcel = new TurnpikesEngine.Parcel({ width: 200, height: 200 });
+            let builder = new TurnpikesEngine.NetworkBuilder(parcel.network);
+            this.assertTrue(builder.partialSegment == null, "begins with null partialSegment");
+            
+            builder.tryBuild(p(50, 50));
+            let p1 = builder.partialSegment;
+            this.assertTrue(!!p1, "build1 (empty Parcel): started a segment");
+            if (p1) {
+                this.assertEqual(p1.parcel, parcel, "build1: partial added to Parcel");
+                this.assertTrue(p1.isPartial, "build1: partial marked isPartial");
+                this.assertEqual(p1.end, null, "build1: partial has no endpoint yet")
+                this.assertElementsEqual(pointArrayDesc(p1.path), pointArrayDesc([p(50, 50)]), "build1: path with one point");
+            }
+            let jStart1 = p1?.start;
+            this.assertTrue(!!jStart1, "build1: created junction for partial's start");
+            if (jStart1) {
+                this.assertEqual(jStart1.parcel, parcel, "build1: junction added to parcel");
+                this.assertEqual(jStart1.coord, p(50, 50), "build1: start junction coord");
+                this.assertElementsEqual(jStart1.leaving, [p1], "build1: start junction has partial leaving");
+                this.assertEqual(jStart1.entering.length, 0, "build1: junction has no entering segs");
+            }
+            
+            builder.tryBuild(p(80, 50));
+            let p2 = builder.partialSegment;
+            this.assertEqual(p2, p1, "build2: partialSegment retained");
+            if (p2) {
+                this.assertElementsEqual(pointArrayDesc(p2.path), pointArrayDesc([p(50, 50), p(80, 50)]), "build2: one point added to path");
+                this.assertTrue(p2.isPartial, "build2: still isPartial");
+                this.assertEqual(p2.start, jStart1, "build2: start junction unchanged");
+                this.assertEqual(p2.end, null, "build2: end junction still null");
+            }
+            
+            builder.commit();
+            this.assertEqual(builder.partialSegment, null, "commit: null partialSegment");
+            let jEnd1 = p1?.end;
+            if (p1) {
+                this.assertFalse(p1.isPartial, "commit: segment !isPartial");
+                this.assertEqual(p1.parcel, parcel, "commit: segment still in parcel");
+                this.assertEqual(p1.start, jStart1, "commit: start junction unchanged");
+            }
+            this.assertTrue(!!jEnd1, "commit: end junction created");
+            if (jEnd1) {
+                this.assertTrue(jEnd1 != jStart1, "commit: end junction is unique");
+                this.assertEqual(jEnd1.parcel, parcel, "commit: end junction in parcel");
+                this.assertEqual(jEnd1.coord, p(80, 50), "commit: end junction coord");
+                this.assertElementsEqual(jEnd1.entering, [p1], "build1: start junction has partial entering");
+                this.assertEqual(jEnd1.leaving.length, 0, "build1: junction has no leaving segs");
+            }
+            networkBuilderStub.tearDown();
+        }).buildAndRun();
+        
+        new UnitTest("turnpikes.NetworkBuilder: commit failures", function() {
+            let networkBuilderStub = turnpikes.classStub.networkBuilder();
+            let parcel = new TurnpikesEngine.Parcel({ width: 200, height: 200 });
+            let builder = new TurnpikesEngine.NetworkBuilder(parcel.network);
+            
+            builder.commit();
+            this.assertEqual(parcel.filterNodes(n => true).length, 0, "commit() empty: nothing added to parcel");
+            
+            builder.tryBuild(p(25, 57));
+            this.assertTrue(!!builder.partialSegment, "setup 1-point partial: exists");
+            this.assertEqual(parcel.filterNodes(n => true).length, 2, "setup 1-point partial: junction and partial segment in Parcel");
+            
+            builder.commit();
+            this.assertEqual(builder.partialSegment, null, "commit 1-point partial: partialSegment null");
+            let nodes = parcel.filterNodes(n => true);
+            this.assertEqual(nodes.length, 1, "commit 1-point partial: aborted segment removed from Parcel; start junction remains");
+            if (nodes.length == 1) {
+                this.assertEqual(nodes[0].constructor, TurnpikesEngine.Junction, "left one Junction in Parcel");
+                this.assertEqual(nodes[0].coord, p(25, 57), "Junction coord");
+            }
+            networkBuilderStub.tearDown();
+        }).buildAndRun();
+        
+        new UnitTest("turnpikes.NetworkBuilder: collision failures", function() {
+            let networkBuilderStub = turnpikes.classStub.networkBuilder();
+            // TODO: attempt start on a structure or landscapeFeature
+            // TODO: attempt append on a structure/landscapeFeature
+            networkBuilderStub.tearDown();
+        }).buildAndRun();
+        
+        new UnitTest("turnpikes.NetworkBuilder: start from existing", function() {
+            let networkBuilderStub = turnpikes.classStub.networkBuilder();
+            let setup = (label) => {
+                let parcel = new TurnpikesEngine.Parcel({ width: 200, height: 200 });
+                let segment = new TurnpikesEngine.Segment({
+                    coord: p(50, 50),
+                    path: [p(50, 50), p(70, 50), p(90, 50), p(90, 70), p(90, 90)]
+                });
+                parcel.addNode(segment);
+                parcel.addNode(TurnpikesEngine.Junction.segmentStart(segment));
+                parcel.addNode(TurnpikesEngine.Junction.segmentEnd(segment));
+                logTestMsg(`${label}:`);
+                return {
+                    prefix: label + ": ",
+                    segment: segment,
+                    start: segment.start,
+                    end: segment.end,
+                    parcel: parcel,
+                    builder: new TurnpikesEngine.NetworkBuilder(parcel.network)
+                };
+            };
+            
+            let ctx = setup("start on seg.end");
+            ctx.builder.tryBuild(p(90, 90));
+            let p1 = ctx.builder.partialSegment;
+            this.assertTrue(!!p1, ctx.prefix + "started partial");
+            if (p1) {
+                this.assertEqual(p1.parcel, ctx.parcel, ctx.prefix + "added partial to Parcel");
+                this.assertEqual(p1.coord, p(90, 90), ctx.prefix + "partial's coord");
+                this.assertEqual(p1.start, ctx.segment.end, ctx.prefix + "partial's start Junction == existing");
+                this.assertEqual(p1.end, null, ctx.prefix + "partial's end == null");
+            }
+            this.assertEqual(ctx.parcel.filterNodes(n => true).length, 4, ctx.prefix + "Parcel contains: partial + existing seg/junctions");
+            this.assertEqual(ctx.segment.path.length, 5, ctx.prefix + "Exsiting segment path not modified");
+            this.assertEqual(ctx.segment.start, ctx.start, ctx.prefix + "Exsiting segment start not modified");
+            this.assertEqual(ctx.segment.end, ctx.end, ctx.prefix + "Exsiting segment end not modified");
+            
+            ctx = setup("start on seg.start");
+            ctx.builder.tryBuild(p(50, 50));
+            p1 = ctx.builder.partialSegment;
+            this.assertTrue(!!p1, ctx.prefix + "started partial");
+            if (p1) {
+                this.assertEqual(p1.parcel, ctx.parcel, ctx.prefix + "added partial to Parcel");
+                this.assertEqual(p1.coord, p(50, 50), ctx.prefix + "partial's coord");
+                this.assertEqual(p1.start, ctx.segment.start, ctx.prefix + "partial's start Junction == existing");
+                this.assertEqual(p1.end, null, ctx.prefix + "partial's end == null");
+            }
+            this.assertEqual(ctx.parcel.filterNodes(n => true).length, 4, ctx.prefix + "Parcel contains: partial + existing seg/junctions");
+            this.assertEqual(ctx.segment.path.length, 5, ctx.prefix + "Exsiting segment path not modified");
+            this.assertEqual(ctx.segment.start, ctx.start, ctx.prefix + "Exsiting segment start not modified");
+            this.assertEqual(ctx.segment.end, ctx.end, ctx.prefix + "Exsiting segment end not modified");
+            
+            // ctx = setup("start on seg.path[1]");
+            // ctx.builder.tryBuild(p(70, 50));
+            // p1 = ctx.builder.partialSegment;
+            // - splits the segment, makes a junction
+            
+            // TODO: start _near_ a junction, start _near_ a segment path -- don't go too deep with this here, have a separate unit test for general hit-testing behavior (finding nodes within a radius)
+            
+            // TODO: start between two points on a segment path
+            networkBuilderStub.tearDown();
+        }); //.buildAndRun();
+        
+        new UnitTest("turnpikes.NetworkBuilder: append into existing", function() {
+            let networkBuilderStub = turnpikes.classStub.networkBuilder();
+        // TODO: append colliding with structure
+        // TODO: append colliding with segment/junction
+            networkBuilderStub.tearDown();
+        });
     }
     
     static shapeTests() {
@@ -928,13 +1247,19 @@ turnpikes.drawableStub = class DrawableStub extends TurnpikesUI.Drawable {
 
 turnpikes.classStub = class {
     constructor(type, config) {
+        this.type = type;
         this.oldConfig = type.config;
         type.setConfig(config);
     }
     
     tearDown() {
-        this.config = this.oldConfig;
+        this.type.config = this.oldConfig;
     }
+};
+turnpikes.classStub.networkBuilder = () => {
+    return new turnpikes.classStub(TurnpikesEngine.NetworkBuilder, {
+        attachmentRadius: 5
+    });
 };
 
 turnpikes.agentTypeStub = class {
@@ -961,11 +1286,13 @@ function assemblySuite() { return new TestSession([
 ]); }
 
 function turnpikesSuite() { return new TestSession([
+    g.pointerInputControllerTests,
     turnpikes.parcelTests,
     turnpikes.structureTests,
     // turnpikes.landscapeFeatureTests,
     turnpikes.segmentTests,
     turnpikes.junctionTests,
+    turnpikes.networkBuilderTests,
     turnpikes.shapeTests,
     turnpikes.pulseTests,
     turnpikes.agentTests,

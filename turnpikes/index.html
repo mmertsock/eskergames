@@ -8,8 +8,12 @@
     
     <style type="text/css">
         :root {
+            --main-width: 400px;
+            --main-height: 400px;
             --font-face-display: ui-rounded, ui-sans-serif, system-ui, sans-serif;
+            --font-face-technical: ui-monospace;
             --foreground-color-main: hsl(0, 0%, 28%);
+            --foreground-color-secondary: hsl(0, 0%, 38%);
             --shadow-1: 2pt 2pt 0px hsla(0, 0%, 0%, 0.25);
         }
         
@@ -27,8 +31,8 @@
         }
         
         main {
-            width: 400px;
-            height: 400px;
+            width: var(--main-width);
+            height: var(--main-height);
             margin: 0 auto;
             border: 2px solid var(--foreground-color-main);
             box-shadow: var(--shadow-1);
@@ -37,10 +41,20 @@
         main canvas {
             display: block;
             position: absolute;
-            width: 400px;
-            height: 400px;
+            width: var(--main-width);
+            height: var(--main-height);
             margin: 0;
             padding: 0;
+        }
+        
+        footer {
+            width: var(--main-width);
+            margin: 1em auto;
+            font-family: var(--font-face-technical);
+            font-size: 7pt;
+            color: var(--foreground-color-main);
+            text-align: right;
+            text-transform: uppercase;
         }
     </style>
 </head>
@@ -51,6 +65,8 @@
 <main></main>
 
 <nav></nav>
+
+<footer></footer>
 
 <script type="module">
     import { initialize } from './turnpikes-ui.js';

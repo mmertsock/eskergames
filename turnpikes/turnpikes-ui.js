@@ -39,8 +39,12 @@ class Interaction {
         return this.#viewport;
     }
     
-    set viewport(newValue) {
-        this.#viewport = newValue;
+    didAttach(viewport) {
+        this.#viewport = viewport;
+    }
+    
+    willDetach(viewport) {
+        this.#viewport = null;
     }
 }
 
@@ -69,12 +73,14 @@ class LoadingLayer {
 
 class ScenarioInteraction extends Interaction {
     #layers;
+    #builder;
     
     constructor() {
         super();
         
         let scenario = Engine.Scenario.fromConfig("s1");
         let parcel = scenario.makeParcel();
+        this.#builder = new SegmentBuilder(parcel);
         
         let testSeg = new Engine.Segment({
             id: "test-seg",
@@ -91,6 +97,72 @@ class ScenarioInteraction extends Interaction {
     }
     
     get layers() { return this.#layers; }
+    
+    didAttach(viewport) {
+        super.didAttach(viewport);
+        viewport.pointerInputController.addMovementGestureListener({ buttons: 1 }, (gesture, info) => this.#movementGesture(gesture, info));
+    }
+    
+    #movementGesture(gesture, info) {
+        switch (gesture.state) {
+        case Gaming.MovementGesture.State.candidate:
+        case Gaming.MovementGesture.State.active:
+            if (gesture.firstEvent.evt.type == "mousedown") {
+                this.#builder.receive(info.modelPoint);
+            }
+            break;
+        case Gaming.MovementGesture.State.complete:
+            if (gesture.firstEvent.evt.type == "mousedown") {
+                this.#builder.receive(info.modelPoint);
+                this.#builder.commit();
+            } else {
+                console.log("completed but didn't start with a mousedown");
+            }
+            break;
+        case Gaming.MovementGesture.State.canceled:
+            this.#builder.abort();
+            console.log("canceled");
+            break;
+        }
+    }
+}
+
+// Really hacked together, needs YML config, etc.
+class SegmentBuilder {
+    #parcel;
+    #path;
+    
+    constructor(parcel) {
+        this.#parcel = parcel;
+        this.#path = [];
+    }
+    
+    receive(point) {
+        if (this.#path.length > 0) {
+            let lastPoint = this.#path[this.#path.length - 1];
+            let delta = Gaming.Vector.betweenPoints(point, lastPoint).magnitude;
+            if (delta < 10) {
+                return;
+            }
+        }
+        this.#path.push(point);
+    }
+    
+    abort() {
+        this.#path = [];
+    }
+    
+    commit() {
+        if (this.#path.length < 2) {
+            return this.abort();
+        }
+        let segment = new Engine.Segment({
+            path: this.#path
+        });
+        // Gaming.debugLog(`commit ${segment.debugDescription}`);
+        this.#parcel.addNode(segment);
+        this.#path = [];
+    }
 }
 
 /// For scenarios. The permanent structures and landscape of the parcel.
@@ -111,8 +183,7 @@ class ParcelLayer {
     render(viewportLayer) {
         let context = new RenderContext({
             canvas: viewportLayer.canvas,
-            flipY: false,
-            debug: viewportLayer.viewport.app.config.viewport.debug
+            flipY: false
         });
         let view = new ParcelView(this.#parcel);
         view.render(context);
@@ -145,8 +216,7 @@ class NetworkLayer {
         
         let context = new RenderContext({
             canvas: this.#viewportLayer.canvas,
-            flipY: false,
-            debug: this.#viewportLayer.viewport.app.config.viewport.debug
+            flipY: false
         });
         this.#view.render(context);
     }
@@ -156,12 +226,14 @@ class ViewportLayer {
     viewport;
     layer;
     canvas;
+    pixelScale;
     
     constructor(viewport, layer) {
         this.viewport = viewport;
         this.layer = layer;
+        this.pixelScale = HTMLCanvasElement.getDevicePixelScale();
         this.canvas = document.createElement("canvas");
-        this.canvas.configureSize(viewport.container, HTMLCanvasElement.getDevicePixelScale());
+        this.canvas.configureSize(viewport.container, this.pixelScale);
         viewport.container.append(this.canvas);
         
         this.layer.didAttach(this);
@@ -187,18 +259,43 @@ class Viewport {
     app; // TurnpikesApp
     container; // HTML element.
     #layers; // [ViewportLayer]
+    pointerInputController;
+    #interaction; // &Interaction. Always non-null.
     
     constructor(app, interaction) {
         this.#config = app.config.viewport;
         this.app = app;
         this.container = document.querySelector("main");
         this.#layers = [];
+        this.pointerInputController = null;
         this.attach(interaction);
     }
     
+    get topLayer() {
+        return this.#layers.length > 0 ? this.#layers[this.#layers.length - 1] : null;
+    }
+    
     attach(interaction) {
-        this.#layers.forEach(layer => layer.deconstruct());
+        // Only null when called from constructor.
+        if (this.#interaction) { this.#detach(); }
+        
+        this.#interaction = interaction;
         this.#layers = interaction.layers.map(layer => new ViewportLayer(this, layer));
+        
+        if (this.topLayer) {
+            this.pointerInputController = new Gaming.PointerInputController({
+                elem: this.topLayer.canvas,
+                pixelScale: this.topLayer.pixelScale
+            });
+        }
+        
+        this.#interaction.didAttach(this);
+    }
+    
+    #detach() {
+        this.#interaction.willDetach(this);
+        this.#layers.forEach(layer => layer.deconstruct());
+        this.pointerInputController = null;
     }
 }
 
@@ -208,13 +305,9 @@ class RenderContext {
     ctx; // &CanvasRenderingContext2D
     flipY; // bool
     #yMinuend;
-    debug; // dictionary
     
     constructor(a) {
         this.canvas = a.canvas;
-        this.debug = Object.assign({
-            showNodeBounds: false
-        }, a.debug)
         this.ctx = this.canvas.getContext("2d");
         this.flipY = a.flipY || false;
         if (this.flipY) {
@@ -303,7 +396,7 @@ class RenderContext {
     }
     
     debugNodeBounds(bounds, strokeStyle) {
-        if (!this.debug.showNodeBounds) { return; }
+        if (!TurnpikesApp.debug.showNodeBounds) { return; }
         if (!bounds) { return; }
         this.ctx.strokeStyle = strokeStyle;
         this.ctx.lineWidth = 1;
@@ -636,19 +729,61 @@ class SegmentDrawable extends Drawable {
     }
 }
 
+class DebugView {
+    #elem;
+    #timer;
+    #frameCount;
+    
+    constructor(loop) {
+        this.#elem = document.querySelector("footer");
+        this.#timer = null;
+        this.#frameCount = 0;
+        loop.addDelegate(this);
+    }
+    
+    processFrame(frame) {
+        if (!this.#timer) {
+            this.#timer = new Gaming.PerfTimer("FPS").start();
+            this.#frameCount = 0;
+        }
+        this.#frameCount += 1;
+        
+        if (this.#frameCount > 100) {
+            let ms = this.#timer.end().summaryInfo.ms;
+            if (ms < 10) {
+                this.render("--");
+            } else {
+                let fps =  Math.round((1000 * this.#frameCount) / ms);
+                this.render(fps);
+            }
+            this.#timer = null;
+        }
+    }
+    
+    render(fps) {
+        this.#elem.innerText = `${fps} FPS`;
+    }
+}
+
 class TurnpikesApp {
     /// TurnpikesApp singleton: lifetime == web page lifetime.
     static shared = null;
     static isProduction = false;
+    static debug = null;
     
+    // lifetime == app lifetime for all vars below.
     config; // entire YAML config.
     loop; // AnimationLoop.
-    viewport; // Viewport: lifetime == app lifetime.
+    viewport; // Viewport
+    debugView; // DebugView
     
+    // config: YML data.
     constructor(config) {
         this.config = config;
+        TurnpikesApp.debug = config.debug;
         Engine.Parcel.setConfig(config.parcel);
         Engine.Segment.setConfig(config.segment);
+        Engine.NetworkBuilder.setConfig(config.networkBuilder);
         Engine.Shape.setConfig(config.shapes);
         Engine.AgentType.setConfig(config.agentTypes);
         Engine.Scenario.setConfig(config.scenarios);
@@ -659,6 +794,13 @@ class TurnpikesApp {
         this.loop.resume();
         
         this.viewport = new Viewport(this, new ScenarioInteraction());
+        
+        if (config.debug.showDiagnostics) {
+            this.debugView = new DebugView(this.loop);
+        } else {
+            this.debugView = null;
+        }
+        
         // this.viewport = new Viewport(this, new LoadingInteraction());
         // 
         // setTimeout(() => {

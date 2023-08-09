@@ -1767,6 +1767,13 @@ export class Rect {
         return e1.min.x <= e2.min.x && e1.max.x >= e2.max.x
             && e1.min.y <= e2.min.y && e1.max.y >= e2.max.y;
     }
+    containsPoint(x, y) {
+        if (typeof y === 'undefined') {
+            return x.x >= this.x && x.y >= this.y && x.x <= (this.x + this.width) && x.y <= (this.y + this.height);
+        } else {
+            return   x >= this.x &&   y >= this.y &&   x <= (this.x + this.width) &&   y <= (this.y + this.height);
+        }
+    }
     containsTile(x, y) {
         if (typeof y === 'undefined') {
             return x.x >= this.x && x.y >= this.y && x.x < (this.x + this.width) && x.y < (this.y + this.height);
@@ -3159,6 +3166,284 @@ Mixins.Gaming.DelegateSet(KeyInputController);
 // if (!self.isWorkerScope) {
 //     KeyInputController.shared = new KeyInputController();
 // }
+
+function mark__Point_Input() {} // ~~~~~~ Point Input ~~~~~~
+
+export class PointerGesture {
+    /// Enum.
+    static State = {
+        candidate: 0,
+        active: 1,
+        complete: 2,
+        canceled: 3
+    };
+    
+    firstEvent; // PointerInputController.Event
+    latestEvent; // PointerInputController.Event. == firstEvent upon first construction.
+    state; // PointerGesture.State.
+    
+    constructor(firstEvent) {
+        this.firstEvent = firstEvent;
+        this.latestEvent = firstEvent;
+        this.state = PointerGesture.State.candidate;
+    }
+    
+    get isReady() {
+        return this.state == PointerGesture.State.candidate
+            || this.state == PointerGesture.State.active;
+    }
+    
+    get debugDescription() {
+        return `<${this.constructor.name}$${this.state} ${this.firstEvent.evt.type}:${this.firstEvent.evt.buttons}>`;
+    }
+    
+    accepts(event, allGestures) {
+        return this.isReady && this.acceptsWhenReady(event, allGestures);
+    }
+    
+    // Subclasses must implement.
+    acceptsWhenReady(event, allGestures) { return false; }
+    
+    consume(event) {
+        if (!this.isReady) { return; }
+        this.latestEvent = event;
+        this.state = PointerGesture.State.active;
+    }
+    
+    complete(event) {
+        this.consume(event);
+        this.state = PointerGesture.State.complete;
+    }
+    
+    cancel(event) {
+        this.consume(event);
+        this.state = PointerGesture.State.canceled;
+    }
+}
+
+export class SelectionGesture extends PointerGesture {
+    constructor(firstEvent) {
+        super(firstEvent);
+    }
+    
+    acceptsWhenReady(event, allGestures) {
+        return false;
+    }
+}
+
+/// A contiguous stream of pointer movement events with identical features.
+/// PointerInputController listeners receive a callback every time a MovementGesture consumes an event or changes state; because MovementGesture itself only stores state, the listener callback is responsible for processing or storing the gesture's intermediate events as they arrive.
+export class MovementGesture extends PointerGesture {
+    constructor(firstEvent) {
+        super(firstEvent);
+    }
+
+    acceptsWhenReady(event, allGestures) {
+        return event.evt.buttons == this.firstEvent.evt.buttons;
+    }
+}
+
+export class GestureController {
+    /// [PointerGesture]: all gestures that finished the previous event with an isReady state.
+    #readyGestures;
+    
+    /// At most one gesture is active at a time.
+    get activeGesture() {
+        return null; // this.#readyGestures.find(g => g.state == PointerGesture.State.active);
+    }
+    
+    constructor() {
+        this.#readyGestures = [];
+    }
+}
+
+export class PointerInputController {
+    /// Enum.
+    static InputOption = {
+        optional: 0,
+        required: 1,
+        prohibited: 2
+    };
+    
+    /// Spec for add___Listener parameters.
+    static ListenerOptions = {
+        repetitions: undefined, // int: required number of clicks/touches. 1 for single, 2 for double, etc. If specified, ignores all other events
+        buttons: undefined // int: if defined, must match MouseEvent.buttons value
+    }
+    
+    /// Spec for the struct passed into callbacks.
+    static Event = {
+        /// DOM event that immediately triggered this callback.
+        evt: "MouseEvent",
+        /// The location, in world coordinates (i.e. scaled by pixelScale) relative to the "viewport" of the HTML element.
+        modelPoint: "Point",
+        timestamp: "Date.now()"
+    };
+    
+    /// Cartesian distance, in DOM points, between two MouseEvents. Assumes the two events have the same target.
+    static distanceBetweenEvents(evt1, evt2) {
+        return Vector.betweenPoints(new Point(evt1.offsetX, evt1.offsetY), new Point(evt2.offsetX, evt2.offsetY)).magnitude;
+    }
+    
+    #elem; // &HTMLElement
+    #pixelScale; // int
+    #selectionMovementTolerance; // int
+    #domEvents; // Set<String>
+    #lastEvent; // Self.Event
+    #listeners; // {string: Array}
+    #gesture; // PointerGesture, optional.
+    
+    constructor(config) {
+        this.#elem = config.elem;
+        this.#pixelScale = config.pixelScale;
+        this.#selectionMovementTolerance = config.selectionMovementTolerance;
+        this.#domEvents = new Set();
+        this.#listeners = {
+            select: [],
+            movementGesture: []
+            // movement: [],
+            // movementEnd: [],
+            // movementReset: []
+        };
+        this.#lastEvent = null;
+        this.#gesture = null;
+    }
+    
+    /// Click/tap gesture on a single point.
+    /// Triggers once per gesture, at the end (e.g. mouseup) of the gesture. Exclusive with movement gestures: if movement is less than `selectionMovementTolerance`, activates selection gesture and cancels movement gesture, and vice versa.
+    /// `options`: number of buttons or repeated clicks/taps on a given point.
+    addSelectionListener(options, callback) {
+        this.#trackDOMEvent("click", evt => this.#handleEvent(evt, this.#listeners.select));
+        this.#listeners.select.push({ options: options, callback: callback });
+    }
+    
+    /// Pointer movement without any buttons activated. For simple cursor tracking.
+    /// Gesture never "completes", but it can be canceled upon mouseleave or transition to a drag gesture.
+    addHoverGestureListener(callback) {
+        
+    }
+    
+    /// Pointer movement with buttons activated.
+    /// Candidate state upon mousedown, active state during movement, completion upon mouseup.
+    /// Cancels upon mouseleave, etc.
+    addDragGestureListener(options, callback) {
+        
+    }
+    
+    addMovementGestureListener(options, callback) {
+        this.#trackDOMEvent("mousedown", evt => this.#mousedown(evt));
+        this.#trackDOMEvent("mousemove", evt => this.#mousemove(evt));
+        this.#trackDOMEvent("mouseup", evt => this.#mouseup(evt));
+        this.#trackDOMEvent("mouseleave", evt => this.#mouseEnterLeave(evt));
+        this.#trackDOMEvent("mouseenter", evt => this.#mouseEnterLeave(evt));
+        this.#listeners.movementGesture.push({ options: options, callback: callback });
+    }
+    
+    #trackDOMEvent(type, callback) {
+        if (this.#domEvents.has(type)) return;
+        this.#domEvents.add(type);
+        this.#elem.addEventListener(type, callback);
+    }
+    
+    #mousedown(evt) {
+        let info = this.#infoForEvent(evt);
+        this.#lastEvent = info;
+        this.#beginGesture(info);
+    }
+    
+    #mousemove(evt) {
+        let info = this.#infoForEvent(evt);
+        this.#lastEvent = info;
+        // dragging with buttons>0: the last mousemove often has buttons==0 before the mouseup, so this `accepts` test was canceling lots of gestures.
+        // if (this.#gesture?.accepts(info)) {
+        if (this.#gesture) {
+            this.#gesture.consume(info);
+            this.#invokeGestureCallbacks(this.#listeners.movementGesture, this.#gesture, info);
+        } else {
+            this.#beginGesture(info);
+        }
+    }
+    
+    #mouseup(evt) {
+        let info = this.#infoForEvent(evt);
+        this.#lastEvent = info;
+        let invokeSelection = true;
+        
+        if (this.#gesture) {
+            let totalMovement = PointerInputController.distanceBetweenEvents(this.#gesture.firstEvent.evt, evt);
+            invokeSelection = (totalMovement <= this.#selectionMovementTolerance);
+            
+            if (invokeSelection) {
+                this.#cancelGesture(info);
+            } else {
+                this.#gesture.complete(info);
+                this.#invokeGestureCallbacks(this.#listeners.movementGesture, this.#gesture, info);
+            }
+            this.#gesture = null;
+        }
+        
+        if (invokeSelection) {
+            this.#invokeCallbacks(this.#listeners.select, info);
+        }
+    }
+    
+    #mouseEnterLeave(evt) {
+        let info = this.#infoForEvent(evt);
+        this.#lastEvent = info;
+        this.#cancelGesture(info);
+    }
+    
+    #beginGesture(info) {
+        this.#cancelGesture(info);
+        this.#gesture = new MovementGesture(info);
+        this.#invokeGestureCallbacks(this.#listeners.movementGesture, this.#gesture, info);
+    }
+    
+    #cancelGesture(info) {
+        if (this.#gesture) {
+            this.#gesture.cancel(info);
+            this.#invokeGestureCallbacks(this.#listeners.movementGesture, this.#gesture, info);
+            this.#gesture = null;
+        }
+    }
+    
+    #handleEvent(evt, listeners) {
+        let info = this.#infoForEvent(evt);
+        this.#lastEvent = info;
+        this.#invokeCallbacks(listeners, info);
+    }
+    
+    #infoForEvent(evt) {
+        let point = new Point(evt.offsetX * this.#pixelScale, evt.offsetY * this.#pixelScale);
+        return {
+            evt: evt,
+            modelPoint: point,
+            timestamp: Date.now()
+        };
+    }
+
+    #invokeCallbacks(listeners, info) {
+        for (let i = 0; i < listeners.length; i += 1) {
+            if (this.#isEventValid(info.evt, listeners[i].options))
+                listeners[i].callback(info);
+        }
+    }
+    
+    #invokeGestureCallbacks(listeners, gesture, info) {
+        for (let i = 0; i < listeners.length; i += 1) {
+            if (this.#isEventValid(gesture.firstEvent.evt, listeners[i].options))
+                listeners[i].callback(gesture, info);
+        }
+    }
+
+    #isEventValid(evt, options) {
+        if ((typeof(options.repetitions) != 'undefined') && (evt.detail != options.repetitions))
+            return false;
+        if ((typeof(options.buttons) != 'undefined') && (evt.buttons != options.buttons))
+            return false;
+        return true;
+    }
+}
 
 function mark__User_Interface() {} // ~~~~~~ User Interface ~~~~~~
 

@@ -25,6 +25,10 @@ _constants:
     S:  &RAD_S  4.71238898
     SE: &RAD_SE 5.49778714
 
+debug:
+  showDiagnostics: true
+  showNodeBounds: false
+
 ##### ENGINE #####
 
 parcel:
@@ -41,6 +45,12 @@ parcel:
 segment:
   stub:
     length: &STUB_LEN 20
+networkBuilder:
+  # Hit-testing params:
+  attachmentRadius: 5
+  # Validation for committing partial Segments:
+  minPathElementCount: 2
+  minPathElementLength: 10
 
 agentTypes:
   - id: moped
@@ -51,9 +61,6 @@ agentTypes:
 # https://dot.ca.gov/programs/safety-programs/camutcd/camutcd-files
 # https://easyrgb.com/en/convert.php#inputFORM - use Yxy with Y = 92.7?
 
-viewport:
-  debug:
-    showNodeBounds: false
 loadingLayer:
   background:
     fillStyle: black

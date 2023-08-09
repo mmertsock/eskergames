@@ -92,12 +92,19 @@ export class Parcel {
     }
     
     size; // {width:, height:}: meters.
+    network; // Network
     #nodes; // [Node]
     
     constructor(size) {
         this.size = size;
         this.#nodes = [];
+        this.network = new Network(this);
         this.kvo = new Gaming.Kvo(this);
+    }
+    
+    deconstruct() {
+        this.network.deconstruct();
+        this.network = null;
     }
 
     /// Creating a Node object instance does not immediately add it to a Parcel. It's just an object floating in space. Note this is useful for e.g. proposed Segments. Call `addNode` when it's time to commit a node to the Parcel.
@@ -136,6 +143,82 @@ export class Parcel {
     /// Simple forEach-style iterator.
     forEachNode(block) {
         this.#nodes.forEach(block);
+    }
+    
+    /// Finds all Nodes that declare that they intersect a given coord within a tolerance.
+    /// Returns: [Node] that intersect.
+    findNodesIntersectingPoint(coord, radius) {
+        return this.#nodes.filter(node => node.intersectsPoint(coord, radius));
+    }
+}
+
+export class Network {
+    parcel; // unowned &Parcel
+    
+    constructor(parcel) {
+        this.parcel = parcel;
+    }
+    
+    deconstruct() {
+        this.parcel = null;
+    }
+}
+
+export class NetworkBuilder {
+    static config;
+    
+    static setConfig(a) {
+        NetworkBuilder.config = a;
+    }
+    
+    #partialSegment; // nullable, unowned &Segment in the Parcel's node collection.
+    #network; // unowned &Network;
+    
+    constructor(network) {
+        this.#network = network;
+        this.#partialSegment = null;
+    }
+    
+    deconstruct() {
+        this.#network = null;
+        this.#partialSegment = null;
+    }
+    
+    get partialSegment() { return this.#partialSegment; }
+    
+    /// Attempts starting or extending a Segment at the given coordinate. May create or modify one or more Segments/Junctions in the Parcel in addition to creating or modifying `partialSegment`. UI should always redraw the partialSegment after tryBuild(), in addition to KVO-observing the rest of the Parcel for changes.
+    /// Returns: TBD
+    tryBuild(coord) {
+        if (!this.#partialSegment) {
+            this.#startNewPartial(coord);
+        } else {
+            this.#partialSegment.path.push(coord);
+        }
+    }
+    
+    commit() {
+        if (!this.#partialSegment) { return; }
+        if (this.#partialSegment.path.length < 2) {
+            return this.abort();
+        }
+        
+        let end = Junction.segmentEnd(this.#partialSegment);
+        this.#network.parcel.addNode(end);
+        this.#partialSegment.isPartial = false;
+        this.#partialSegment = null;
+    }
+    
+    abort() {
+        if (!this.#partialSegment) { return; }
+        this.#network.parcel.removeNode(this.#partialSegment);
+        this.#partialSegment = null;
+    }
+    
+    #startNewPartial(coord) {
+        this.#partialSegment = Segment.newPartial(coord);
+        let start = Junction.segmentStart(this.#partialSegment);
+        this.#network.parcel.addNode(this.#partialSegment);
+        this.#network.parcel.addNode(start);
     }
 }
 
@@ -178,6 +261,16 @@ export class Node {
     
     // Override in subclasses to react to parcel changes.
     didSetParcel(newValue, oldValue) { }
+    
+    intersectsPoint(coord, radius) {
+        if (this.shape) {
+            return this.shape.intersectsPoint(coord, radius);
+        } else if (this.coord) {
+            return Gaming.Vector.betweenPoints(this.coord, coord).magnitude <= radius;
+        } else {
+            return false;
+        }
+    }
     
     blocksNetworks(level) {
         return false;
@@ -252,17 +345,31 @@ export class Segment extends Node {
         });
     }
     
+    static newPartial(coord) {
+        return new Segment({
+            coord: new Gaming.Point(coord),
+            path: [coord],
+            start: null,
+            end: null,
+            isPartial: true
+        });
+    }
+    
     /// [Point]: centerline of the network segment, in order of travel.
     path;
     start; // &Junction
     end; // &Junction
+    isPartial; // bool
     #bounds; // Rect
+    
+    // TODO: the name "isPartial" may end up being ambiguous/overloaded, when we look at route building and the concept of traversable segments (part of a complete path between endpoints, vs dead ends).
     
     constructor(a) {
         super(a);
         this.path = a.path;
         this.start = a.start || null;
         this.end = a.end || null;
+        this.isPartial = !!a.isPartial;
         // TODO: add an outset parameter to boundsOfPolygon, which is Segment.config.thickness or whatever.
         this.#bounds = Shape.boundsOfPolygon(this.path);
     }
@@ -277,13 +384,95 @@ export class Segment extends Node {
     get debugDescription() {
         let start = this.start?.debugDescription || "X";
         let end = this.end?.debugDescription || "X";
-        return `<Seg#${this.id} ${start}-${this.path.length}-${end}>`;
+        let label = this.isPartial ? "PSeg" : "Seg";
+        return `<${label}#${this.id} ${start}-${this.path.length}-${end}>`;
+    }
+    
+    intersectsPoint(coord, radius) {
+        // TODO: consider each point along the path plus each line segment between points, with a given thickness parameter.
+        // TODO: maybe make this generic?
+        return false;
     }
     
     /// Ramps can only be made on points in existing segments.
     /// Creates a new collection of segments/junctions, and `this` segment is no longer usable.
     /// Eh probably move this to Parcel? Or: a Network class that is the abstract network graph and all the related logic, lives at the same level as Parcel.
     ramp(point) { }
+}
+
+class HitTestable {
+    // Note: no radius param. The radius concept is owned by the HitTestable itself.
+    intersectsPoint(coord) { return false; }
+    intersectsOther(hitTestable) { return false; }
+}
+class CompositeHitTest extends HitTestable {
+    #elements; // [HitTestable]
+    constructor(elements) {
+        this.#elements = elements;
+    }
+    intersectsPoint(coord) {
+        let found = this.#elements.find(elem => elem.intersectsPoint(coord));
+        return !!found;
+    }
+    intersectsOther(hitTestable) {
+        let found = this.#elements.find(elem => elem.intersectsOther(hitTestable));
+        return !!found;
+    }
+}
+
+/// Test along the line segments of the path with padding along each segment.
+class PathHitTest extends HitTestable {
+    #path; // [Point]
+    #padding; // double. Distance from centerline for each line segment. Also determines circular radius of each point along the segment to test.
+    constructor(path, padding) {
+        this.#path = path;
+        this.#padding = padding;
+    }
+    // Look up algorithm: distance from point to line.
+    // Something to do with the y = mx + b equation.
+    // But, would be distance from point to line *segment*.
+    // https://stackoverflow.com/a/6853926/795339
+    // https://stackoverflow.com/a/27737081/795339
+    intersectsPoint(coord) {
+        // First, check if this.#lazyCalculatedBoundsOutsetByPadding.containsPoint(coord) to see if it's a candidate before doing N more expensive calculations.
+        // That could be quite coarse for a long or diagonal path (big bounding box). Could instead lazy-build one bounding box for every k consecutive points in the path, and then make a CompositeHitTest-of-RectHitTest for those bounding boxes, and test that first.
+        // Then if that passes, do the line segment algorithm. For that, could be a CompositeHitTest of N-1 LineSegmentHitTests and N CircularHitTests.
+        // (Or actually the LineSegment algorithm might automatically handle a circular region at each endpoint of the line segment, eliminating the need for the CircularHitTests).
+        if (!this.boundingBoxHitTest.intersectsPoint(coord)) {
+            return false;
+        }
+        // TODO: degenerate case: single-element path. In that case, whole thing devolves to a CircularHitTest on the single point. Could just set #lineSegmentsHitTest = CircularHitTest instead of = CompositeHitTest, then the code here doesn't change at all.
+        // TODO: edge case: closed paths, instead of open paths. Add an extra line segment at the end.
+        return this.#lineSegmentsHitTest.intersectsPoint(coord);
+    }
+    
+    get boundingBoxHitTest() {
+        if (!this.#boundingBoxHitTest) {
+            
+        }
+        return this.#boundingBoxHitTest;
+    }
+}
+
+class RectHitTest extends HitTestable {
+    #rect; // Gaming.Rect
+    constructor(rect) {
+        this.#rect = rect;
+    }
+    intersectsPoint(coord) {
+        return this.#rect.containsPoint(coord);
+    }
+}
+class CircularHitTest extends HitTestable {
+    #coord; // Gaming.Point
+    #radius;
+    constructor(coord, radius) {
+        this.#coord = coord;
+        this.#radius = radius;
+    }
+    intersectsPoint(coord) {
+        return Gaming.Vector.betweenPoints(this.#coord, coord).magnitude <= this.#radius;
+    }
 }
 
 /// Immutable.
@@ -320,6 +509,30 @@ export class Junction extends Node {
                 timeline: timeline
             });
         }
+    }
+    
+    static segmentStart(segment) {
+        return new Junction({
+            coord: segment.coord,
+            level: NetworkLevel.ground,
+            entering: [],
+            leaving: [segment],
+            timeline: []
+        });
+    }
+    
+    static segmentEnd(segment) {
+        let coord = segment.path[segment.path.length - 1];
+        return new Junction({
+            coord: coord,
+            level: NetworkLevel.ground,
+            entering: [segment],
+            leaving: [],
+            timeline: []
+        });
+    }
+    
+    static splittingSegment(segment, hitTestMatch) {
     }
     
     level; // &NetworkLevel
@@ -453,14 +666,14 @@ export class Shape {
             this.#bounds = Shape.boundsOfPolygon(this.path);
         }
         return this.#bounds;
-        // let rect = new Gaming.Rect();
-        // delete this.bounds;
-        // this.bounds = rect;
-        // return this.bounds;
     }
     
     get debugDescription() {
         return `<Shape:${this.label} [${this.bounds.debugDescription}] path#${this.path.length}>`;
+    }
+    
+    intersectsPoint(coord, radius) {
+        return this.bounds.intersects(Gaming.Rect.withCenter(coord.x, coord.y, radius, radius));
     }
     
     intersectsSegment(proposedSegment) {
